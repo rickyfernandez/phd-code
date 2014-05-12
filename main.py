@@ -29,6 +29,9 @@ volume = mesh.volume_center_mass(particles, neighbor_graph, particles_index, fac
 # convert data to mass, momentum, and energy
 reconstruction.conservative_variables(data, volume[0,:])
 
+# set riemann solver
+solver = solvers.pvrs()
+
 for k in range(10):
 
     print "from main: loop", k
@@ -72,7 +75,7 @@ for k in range(10):
     right = primitive[:, faces_info[5,:].astype(int)]
 
     # calculate state at edge
-    fluxes = solvers.pvrs(left, right, faces_info, gamma)
+    fluxes = solver.flux(left, right, faces_info, gamma)
 
     # update conserved variables
     solvers.update(data, fluxes, dt, faces_info, particles_index)
@@ -93,32 +96,32 @@ for k in range(10):
     #plt.clf()
     
 #if not k%10:
-#    l = []
-#    for i in particles_index["real"]:
-#
-#        verts_indices = np.unique(np.asarray(face_graph[i]).flatten())
-#        verts = voronoi_vertices[verts_indices]
-#
-#        # coordinates of neighbors relative to particle p
-#        xc = verts[:,0] - particles[i,0]
-#        yc = verts[:,1] - particles[i,1]
-#
-#        # sort in counter clock wise order
-#        sorted_vertices = np.argsort(np.angle(xc+1j*yc))
-#        verts = verts[sorted_vertices]
-#
-#        l.append(Polygon(verts, True))
-#
-#    # add colormap
-#    colors = []
-#    for i in particles_index["real"]:
-#        colors.append(data[0,i]/volume[0,i])
-#
-#    fig, ax = plt.subplots()
-#    p = PatchCollection(l, cmap=matplotlib.cm.jet, edgecolors='none', alpha=0.4)
-#    p.set_array(np.array(colors))
-#    p.set_clim([0, 4.1])
-#    ax.add_collection(p)
-#    plt.colorbar(p)
-#    plt.savefig("Sedov_"+`k`.zfill(4))
-#    plt.clf()
+    l = []
+    for i in particles_index["real"]:
+
+        verts_indices = np.unique(np.asarray(face_graph[i]).flatten())
+        verts = voronoi_vertices[verts_indices]
+
+        # coordinates of neighbors relative to particle p
+        xc = verts[:,0] - particles[i,0]
+        yc = verts[:,1] - particles[i,1]
+
+        # sort in counter clock wise order
+        sorted_vertices = np.argsort(np.angle(xc+1j*yc))
+        verts = verts[sorted_vertices]
+
+        l.append(Polygon(verts, True))
+
+    # add colormap
+    colors = []
+    for i in particles_index["real"]:
+        colors.append(data[0,i]/volume[0,i])
+
+    fig, ax = plt.subplots()
+    p = PatchCollection(l, cmap=matplotlib.cm.jet, edgecolors='none', alpha=0.4)
+    p.set_array(np.array(colors))
+    p.set_clim([0, 4.1])
+    ax.add_collection(p)
+    plt.colorbar(p)
+    plt.savefig("Sedov_"+`k`.zfill(4))
+    plt.clf()
