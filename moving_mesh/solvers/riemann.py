@@ -65,27 +65,27 @@ class riemann(object):
         G = np.zeros((4, rho.size))
 
         # rotate state back to labrotary frame
-        u = np.cos(theta)*u - np.sin(theta)*v
-        v = np.sin(theta)*u + np.cos(theta)*v
+        u_lab = np.cos(theta)*u - np.sin(theta)*v
+        v_lab = np.sin(theta)*u + np.cos(theta)*v
 
         # unboost
-        u = u + wx
-        v = v + wy
+        u_lab += wx
+        v_lab += wy
 
         # calculate energy density in lab frame
-        E = 0.5*rho*(u**2 + v**2) + rhoe
+        E = 0.5*rho*(u_lab**2 + v_lab**2) + rhoe
 
         # flux component in the x-direction
-        F[0,:] = rho*(u - wx)
-        F[1,:] = rho*u*(u-wx) + p
-        F[2,:] = rho*v*(u-wx)
-        F[3,:] = E*(u-wx) + p*u
+        F[0,:] = rho*(u_lab - wx)
+        F[1,:] = rho*u_lab*(u_lab-wx) + p
+        F[2,:] = rho*v_lab*(u_lab-wx)
+        F[3,:] = E*(u_lab-wx) + p*u_lab
 
         # flux component in the y-direction
-        G[0,:] = rho*(v - wy)
-        G[1,:] = rho*u*(v-wy)
-        G[2,:] = rho*v*(v-wy) + p
-        G[3,:] = E*(v-wy) + p*v
+        G[0,:] = rho*(v_lab - wy)
+        G[1,:] = rho*u_lab*(v_lab-wy)
+        G[2,:] = rho*v_lab*(v_lab-wy) + p
+        G[3,:] = E*(v_lab-wy) + p*v_lab
 
         # dot product flux in orientation of face
         return np.cos(theta)*F + np.sin(theta)*G
