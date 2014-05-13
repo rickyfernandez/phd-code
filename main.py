@@ -7,7 +7,7 @@ import moving_mesh.reconstruction as reconstruction
 import moving_mesh.test_problems as test_problems
 import moving_mesh.boundary as boundary
 import moving_mesh.mesh as mesh
-import moving_mesh.solvers as solvers
+import moving_mesh.riemann as riemann
 
 
 import numpy as np
@@ -17,11 +17,16 @@ import copy
 # cfl condition
 CFL = 0.5
 
+# set classes
+# set riemann solver
+solver = riemann.pvrs()
+mesh = mesh.voronoi_mesh()
+
 # initial sod shock tube problem
 data, particles, gamma, particles_index, boundary_dic = test_problems.sedov()
 
 # make initial teselation
-neighbor_graph, face_graph, voronoi_vertices = mesh.tessellation(particles)
+neighbor_graph, face_graph, voronoi_vertices = mesh.tessellate(particles)
 
 # calculate volume of real particles 
 volume = mesh.volume_center_mass(particles, neighbor_graph, particles_index, face_graph, voronoi_vertices)
@@ -29,10 +34,8 @@ volume = mesh.volume_center_mass(particles, neighbor_graph, particles_index, fac
 # convert data to mass, momentum, and energy
 reconstruction.conservative_variables(data, volume[0,:])
 
-# set riemann solver
-solver = solvers.pvrs()
 
-for k in range(10):
+for k in range(50):
 
     print "from main: loop", k
 
@@ -40,7 +43,7 @@ for k in range(10):
     particles = boundary.reflect(particles, particles_index, neighbor_graph, boundary_dic)
 
     # make tesselation returning graph of neighbors graph of faces and voronoi vertices
-    neighbor_graph, face_graph, voronoi_vertices = mesh.tessellation(particles)
+    neighbor_graph, face_graph, voronoi_vertices = mesh.tessellate(particles)
 
     # calculate volume of all real particles 
     volume = mesh.volume_center_mass(particles, neighbor_graph, particles_index, face_graph, voronoi_vertices)
@@ -78,7 +81,7 @@ for k in range(10):
     fluxes = solver.flux(left, right, faces_info, gamma)
 
     # update conserved variables
-    solvers.update(data, fluxes, dt, faces_info, particles_index)
+    riemann.update(data, fluxes, dt, faces_info, particles_index)
 
     # move particles
     particles[particles_index["real"],:] += dt*np.transpose(w[:, particles_index["real"]])
