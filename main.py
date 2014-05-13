@@ -21,6 +21,7 @@ CFL = 0.5
 # set riemann solver
 solver = riemann.pvrs()
 mesh = mesh.voronoi_mesh()
+boundary = boundary.reflect_boundary()
 
 # initial sod shock tube problem
 data, particles, gamma, particles_index, boundary_dic = test_problems.sedov()
@@ -60,7 +61,7 @@ for k in range(50):
         primitive[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
 
     # reverse velocities
-    boundary.reverse_velocities_boundary(particles, primitive, particles_index, boundary_dic)
+    boundary.reverse_velocities(particles, primitive, particles_index, boundary_dic)
 
     # mesh regularization
     w = reconstruction.mesh_regularization(primitive, particles, gamma, volume, particles_index)
@@ -121,7 +122,8 @@ for k in range(50):
         colors.append(data[0,i]/volume[0,i])
 
     fig, ax = plt.subplots()
-    p = PatchCollection(l, cmap=matplotlib.cm.jet, edgecolors='none', alpha=0.4)
+    #p = PatchCollection(l, cmap=matplotlib.cm.jet, edgecolors='none', alpha=0.4)
+    p = PatchCollection(l, cmap=matplotlib.cm.jet)
     p.set_array(np.array(colors))
     p.set_clim([0, 4.1])
     ax.add_collection(p)
