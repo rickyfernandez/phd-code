@@ -5,7 +5,7 @@ class boundary_base(object):
     def update(self, particles, particles_index, neighbor_graph):
         pass
 
-    def find_boundary_particles(neighbor_graph, ghost_indices, total_ghost_indices):
+    def find_boundary_particles(self, neighbor_graph, ghost_indices, total_ghost_indices):
 
         # find border particles, two layers, and return their indicies 
 
