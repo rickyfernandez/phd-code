@@ -1,9 +1,17 @@
 import numpy as np
-from find_boundary_particles import find_boundary_particles
+from boundary_base import boundary_base
 
-class reflect_boundary(object):
+class reflect(boundary_base):
 
-    def reflect(self, particles, particles_index, neighbor_graph, boundary):
+    def __init__(self, left, right, bottom, top):
+        self.boundary = {}
+
+        self.boundary["left"] = left
+        self.boundary["right"] = right
+        self.boundary["bottom"] = bottom
+        self.boundary["top"] = top
+
+    def update(self, particles, particles_index, neighbor_graph):
 
         ghost_indices = particles_index["ghost"]
 
@@ -20,13 +28,13 @@ class reflect_boundary(object):
         # neighbors of border cells, then remove ghost particles leaving two layers
 
         # grab domain values
-        left   = boundary["left"];   right = boundary["right"]
-        bottom = boundary["bottom"]; top   = boundary["top"]
+        left   = self.boundary["left"];   right = self.boundary["right"]
+        bottom = self.boundary["bottom"]; top   = self.boundary["top"]
 
 
         # left boundary
         i = np.where(right < xg)[0]
-        right_border = find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        right_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
 
         # reflect particles across right boundary
         x_right_ghost = 2.0*right - x[right_border]
@@ -42,7 +50,7 @@ class reflect_boundary(object):
 
         # left boundary 
         i = np.where(xg < left)[0]
-        left_border = find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        left_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
 
         # reflect particles across left boundary
         x_left_ghost = 2.*left - x[left_border]
@@ -58,7 +66,7 @@ class reflect_boundary(object):
 
         # top boundary 
         i = np.where(yg > top)[0]
-        top_border = find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        top_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
 
         # reflect particles across top boundary
         x_top_ghost = x[top_border]
@@ -74,7 +82,7 @@ class reflect_boundary(object):
 
         # bottom boundary 
         i = np.where(yg < bottom)[0]
-        bottom_border = find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        bottom_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
 
         # reflect particles across bottom boundary
         x_bottom_ghost = x[bottom_border]
@@ -112,14 +120,14 @@ class reflect_boundary(object):
 
         return  np.array(zip(x_new_particles, y_new_particles))
 
-    def reverse_velocities(self, particles, primitive, particles_index, boundary_dic):
+    def reverse_velocities(self, particles, primitive, particles_index):
 
         # grab domain values
-        left = boundary_dic["left"]
-        right = boundary_dic["right"]
+        left = self.boundary["left"]
+        right = self.boundary["right"]
 
-        bottom = boundary_dic["bottom"]
-        top = boundary_dic["top"]
+        bottom = self.boundary["bottom"]
+        top = self.boundary["top"]
 
         ghost_indices = particles_index["ghost"]
 

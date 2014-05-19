@@ -1,6 +1,11 @@
 import numpy as np
 from find_boundary_particles import find_boundary_particles
-
+#
+#
+#
+#  # CODE DOES NOT WORK RIGHT NOW!!!!
+#
+#
 
 def periodic(particles, particles_index, old_data, neighbor_graph, boundary):
     """

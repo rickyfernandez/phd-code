@@ -1,7 +1,7 @@
 import numpy as np
-from riemann import riemann
+from riemann_base import riemann_base
 
-class pvrs(riemann):
+class pvrs(riemann_base):
 
     def flux(self, ql, qr, faces_info, gamma):
 
