@@ -12,23 +12,31 @@ import matplotlib
 
 class moving_mesh(object):
 
-    def __init__(self, gamma = 1.4, CFL = 0.5):
+    def __init__(self, gamma = 1.4, CFL = 0.5, max_steps=100, max_time=None,
+            output_name="simulation_"):
+
+        # simulation parameters
         self.CFL = CFL
         self.gamma = gamma
+        self.max_steps = max_steps
+        self.max_time = max_time
+        self.output_name = output_name
 
         # particle information
         self.particles = None
         self.data = None
         self.cell_info = None
 
+        #
         self.particles_index = None
         self.neighbor_graph = None
         self.face_graph = None
         self.voronoi_vertices = None
 
-        # classes
+        # simulation classes
         self.mesh = voronoi_mesh()
         self.boundary = None
+        self.reconstruction = None
         self.riemann_solver = None
 
 
@@ -65,7 +73,7 @@ class moving_mesh(object):
 
 
 
-    def set_boundary(self, boundary):
+    def set_boundary_condition(self, boundary):
 
         if isinstance(boundary, boundary_base):
             self.boundary = boundary
@@ -107,24 +115,28 @@ class moving_mesh(object):
         else:
             raise TypeError
 
+    def set_parameter(self, parameter_name, parameter):
 
-    def solve(self, final_time):
-        """
-        Evolve the simulation from time zero to the specified final time.
+        if parameter_name in self.__dict__.keys():
+            setattr(self, parameter_name, parameter)
+        else:
+            raise ValueError("Unknown parameter: %s" % parameter_name)
 
-        Parameters
-        ----------
-        final_time : the final time of the simulation
+    def solve(self):
         """
-        k=0
+        Evolve the simulation from time zero to the specified max time.
+        """
         time = 0.0
-        while time < final_time:
+        num_steps = 0
 
-            print "sovling for step:", k
+        while time < self.max_time and num_steps < self.max_steps:
 
-            time += self._solve_one_step(time, final_time)
+            print "sovling for step:", num_steps
 
-            # debugging plot
+            time += self._solve_one_step(time)
+
+
+            # debugging plot --- turn to a routine later ---
             l = []
             for i in self.particles_index["real"]:
 
@@ -152,14 +164,14 @@ class moving_mesh(object):
             p.set_clim([0, 3.1])
             ax.add_collection(p)
             plt.colorbar(p)
-            plt.savefig("Sedov_"+`k`.zfill(4))
+            plt.savefig(self.output_name+`num_steps`.zfill(4))
             plt.clf()
 
-            k+=1
+            num_steps+=1
 
 
 
-    def _solve_one_step(self, time, max_time):
+    def _solve_one_step(self, time):
         """
         Evolve the simulation for one time step.
         """
@@ -182,8 +194,8 @@ class moving_mesh(object):
         # calculate global time step from real particles
         dt = self._get_dt(primitive, volume)
 
-        if time + dt > max_time:
-            dt = max_time - time
+        if time + dt > self.max_time:
+            dt = self.max_time - time
 
         # copy values for ghost particles
         ghost_map = self.particles_index["ghost_map"]

@@ -43,25 +43,42 @@ def sedov():
 
     particles = np.array(zip(x_particles, y_particles))
 
-    return data, particles, gamma, particles_index, boundary_dic
+    return data, particles, particles_index
 
+
+#-------------------------------------------------------------------------------
 import PHD.simulation as simulation
 import PHD.boundary as boundary
 import PHD.riemann as riemann
+
+# parameters for the simulation
+CFL = 0.5
+gamma = 1.4
+max_steps = 50
+max_time = 0.1
+output_name = "Sedov_"
 
 # create boundary and riemann objects
 boundary_condition = boundary.reflect(0.,1.,0.,1.)
 riemann_solver = riemann.pvrs()
 
 # create initial state of the system
-data, particles, gamma, particles_index, boundary_dic = sedov()
+data, particles, particles_index = sedov()
 
-# setup the simulation
+# setup the moving mesh simulation
 simulation = simulation.moving_mesh()
-simulation.set_boundary(boundary_condition)
+
+# set runtime parameters for the simulation
+simulation.set_parameter("CFL", CFL)
+simulation.set_parameter("gamma", gamma)
+simulation.set_parameter("max_steps", max_steps)
+simulation.set_parameter("max_time", max_time)
+simulation.set_parameter("output_name", output_name)
+
+# set the boundary, riemann solver, and initial state of the simulation 
+simulation.set_boundary_condition(boundary_condition)
 simulation.set_riemann_solver(riemann_solver)
 simulation.set_initial_state(particles, data, particles_index)
 
 # run the simulation
-time_final = 0.2
-simulation.solve(time_final)
+simulation.solve()
