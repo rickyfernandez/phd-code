@@ -1,5 +1,6 @@
 from scipy.spatial import Voronoi
 import numpy as np
+import itertools
 import copy
 
 class voronoi_mesh(object):
@@ -62,6 +63,14 @@ class voronoi_mesh(object):
 
             face_graph[p1].append(vor.ridge_vertices[i])
             face_graph[p2].append(vor.ridge_vertices[i])
+
+        # sizes for 1d graphs
+        neighbor_graph_sizes = np.array([len(n) for n in neighbor_graph]
+        neighbor_graph_sizes = np.array([len(n) for n in face_graph]
+
+        # graphs in 1d
+        neighbor_graph = np.array(list(itertools.chain.from_iterable(neighbor_graph)))
+        face_graph = np.array(list(itertools.chain.from_iterable(face_graph)))
 
         return neighbor_graph, face_graph, vor.vertices
     
