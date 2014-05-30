@@ -1,3 +1,8 @@
 
 *.png
 *.pyc
+*.c
+*.html
+*.so
+*.Rhistory
+build/

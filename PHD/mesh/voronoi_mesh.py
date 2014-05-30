@@ -52,6 +52,7 @@ class voronoi_mesh(object):
         # create neighbor and face graph
         face_graph = [[] for i in xrange(num_particles)]
         neighbor_graph = [[] for i in xrange(num_particles)]
+        face_graph2 = [[] for i in xrange(num_particles)]
 
         # loop through each face collecting the two particles
         # that made that face as well as the face itself
@@ -64,15 +65,19 @@ class voronoi_mesh(object):
             face_graph[p1].append(vor.ridge_vertices[i])
             face_graph[p2].append(vor.ridge_vertices[i])
 
+            face_graph2[p1] += vor.ridge_vertices[i]
+            face_graph2[p2] += vor.ridge_vertices[i]
+
         # sizes for 1d graphs
-        neighbor_graph_sizes = np.array([len(n) for n in neighbor_graph]
-        neighbor_graph_sizes = np.array([len(n) for n in face_graph]
+        neighbor_graph_sizes = np.array([len(n) for n in neighbor_graph], dtype=np.int32)
+        face_graph_sizes = np.array([len(n) for n in face_graph2], dtype=np.int32)
 
         # graphs in 1d
-        neighbor_graph = np.array(list(itertools.chain.from_iterable(neighbor_graph)))
-        face_graph = np.array(list(itertools.chain.from_iterable(face_graph)))
+        neighbor_graph2 = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
+        face_graph2 = np.array(list(itertools.chain.from_iterable(face_graph2)), dtype=np.int32)
 
-        return neighbor_graph, face_graph, vor.vertices
+        return neighbor_graph, face_graph, vor.vertices, neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes
+        #return neighbor_graph, face_graph, vor.vertices
     
 
     def _cell_volume_center(self, particle_id, particles, neighbor_graph, face_graph, circum_centers):

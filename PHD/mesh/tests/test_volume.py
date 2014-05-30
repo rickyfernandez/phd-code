@@ -1,4 +1,4 @@
-import moving_mesh.mesh as mesh
+import PHD.mesh as mesh
 import numpy as np
 
 
@@ -33,7 +33,8 @@ def test_volume():
 
     # create the voronoi diagram
     particles = np.asarray(zip(x,y))
-    neighbor_graph, face_graph, voronoi_vertices = mesh.tessellation(particles)
+    vor_mesh = mesh.voronoi_mesh()
+    neighbor_graph, face_graph, voronoi_vertices = vor_mesh.tessellate(particles)
 
     # find all particles inside the unit box 
     k = np.where(((0. <= x) & (x <= 1.)) & ((0. <= y) & (y <= 1.)))[0]
@@ -42,7 +43,8 @@ def test_volume():
     particles_index = {"real": k}
     
     # calculate voronoi volumes of all real particles 
-    volume = mesh.volume_center_mass(particles, neighbor_graph, particles_index, face_graph, voronoi_vertices)
+    volume = vor_mesh.volume_center_mass(particles, neighbor_graph, particles_index,
+            face_graph, voronoi_vertices)
     volumes = np.sum(volume[0,:])
 
     assert np.abs(1.0 - volumes) < 1.0E-10
