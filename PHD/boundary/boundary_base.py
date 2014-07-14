@@ -24,3 +24,28 @@ class boundary_base(object):
         
         return np.array(list(border))
 
+    def find_boundary_particles2(self, neighbor_graph, num_neighbors, ghost_indices, total_ghost_indices):
+        """
+        find border particles, two layers, and return their indicies 
+        """
+
+        cumsum_neighbors = num_neighbors.cumsum()
+
+        # grab all neighbors of ghost particles, this includes border cells
+        border = set()
+        for i in ghost_indices:
+            start = cumsum_neighbors[i] - num_neighbors[i]
+            end   = cumsum_neighbors[i]
+            border.update(neighbor_graph[start:end])
+
+        # grab neighbors of border cells 
+        border_tmp = set(border)
+        for i in border_tmp:
+            start = cumsum_neighbors[i] - num_neighbors[i]
+            end   = cumsum_neighbors[i]
+            border.update(neighbor_graph[start:end])
+
+        # remove ghost particles leaving border cells and neighbors, two layers
+        border = border.difference(total_ghost_indices)
+        
+        return np.array(list(border))

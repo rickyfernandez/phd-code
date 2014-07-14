@@ -113,7 +113,7 @@ class moving_mesh(object):
         if isinstance(riemann_solver, riemann_base):
             self.riemann_solver = riemann_solver
         else:
-            raise TypeError
+            raise TypeError("Unknown riemann solver")
 
     def set_parameter(self, parameter_name, parameter):
 
@@ -221,7 +221,7 @@ class moving_mesh(object):
         left  = primitive[:, faces_info[4,:].astype(int)]
         right = primitive[:, faces_info[5,:].astype(int)]
 
-        # calculate state at edge
+        # calculate state at edges
         fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
 
         # update conserved variables

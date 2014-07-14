@@ -77,7 +77,7 @@ class voronoi_mesh(object):
         face_graph2 = np.array(list(itertools.chain.from_iterable(face_graph2)), dtype=np.int32)
 
         return neighbor_graph, face_graph, vor.vertices, neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes
-        #return neighbor_graph, face_graph, vor.vertices
+#--->   #return neighbor_graph, face_graph, vor.vertices
     
 
     def _cell_volume_center(self, particle_id, particles, neighbor_graph, face_graph, circum_centers):
