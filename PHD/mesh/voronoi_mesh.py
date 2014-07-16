@@ -1,11 +1,12 @@
 from scipy.spatial import Voronoi
+import cell_volume_center as cv
 import numpy as np
 import itertools
 import copy
 
 class voronoi_mesh(object):
 
-    def regularization(self, prim, particles, gamma, vol_center_mass, particles_index):
+    def regularization(self, prim, particles, gamma, cell_info, particles_index):
 
         eta = 0.25
 
@@ -18,12 +19,12 @@ class voronoi_mesh(object):
         
         # generate distance for center mass to particle position
         r = np.transpose(particles[indices])
-        s = vol_center_mass[1:3,:]
+        s = cell_info["center of mass"]
 
         d = s - r
         d = np.sqrt(np.sum(d**2,axis=0))
 
-        R = np.sqrt(vol_center_mass[0,:]/np.pi)
+        R = np.sqrt(cell_info["volume"]/np.pi)
 
         #w = np.copy(prim[1:3, indices])
         w = np.zeros(s.shape)
@@ -123,6 +124,14 @@ class voronoi_mesh(object):
         for i, particle_id in enumerate(particles_index["real"]):
             vals[:,i] = self._cell_volume_center(particle_id, particles, neighbor_graph, face_graph, voronoi_vertices)
         return vals
+
+    def volume_center_mass2(self, particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
+            particles_index, cell_info):
+
+        num_particles = particles_index["real"].size
+
+        cv.cell_volume_center(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
+                cell_info["volume"], cell_info["center of mass"], num_particles)
 
 
     def faces_for_flux(self, particles, w, particles_index, neighbor_graph, face_graph, voronoi_vertices):

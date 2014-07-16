@@ -27,11 +27,16 @@ class moving_mesh(object):
         self.data = None
         self.cell_info = None
 
-        #
         self.particles_index = None
+        self.voronoi_vertices = None
+        self.ng = None
+        self.ngs = None
+        self.fg = None
+        self.fgs = None
+#-->
         self.neighbor_graph = None
         self.face_graph = None
-        self.voronoi_vertices = None
+#-->
 
         # simulation classes
         self.mesh = voronoi_mesh()
@@ -83,7 +88,7 @@ class moving_mesh(object):
     def set_initial_state(self, initial_particles, initial_data, initial_particles_index):
         """
         Set the initial state of the system by specifying the particle positions, their data
-        U=(density, density*velcotiy, Energy) and particle labels (ghost or real).
+        U=(density, density*velocity, Energy) and particle labels (ghost or real).
 
         Parameters
         ----------
@@ -96,16 +101,25 @@ class moving_mesh(object):
         self.particles = initial_particles.copy()
         self.particles_index = dict(initial_particles_index)
 
-        # make initial teselation
-        self.neighbor_graph, self.face_graph, self.voronoi_vertices = self.mesh.tessellate(self.particles)
+        # make initial tesellation
+        self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
-                self.particles_index, self.face_graph, self.voronoi_vertices)
+#-->
+        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
+        #        self.particles_index, self.face_graph, self.voronoi_vertices)
+
+        num = self.particles_index["real"].shape[0]
+        self.cell_info = {"volume": np.zeros(num, dtype="float64"),
+            "center of mass": np.zeros((2, num), dtype="float64")}
+
+        self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
 
         # convert data to mass, momentum, and energy
-        volume = self.cell_info[0,:]
-        self.data = initial_data*volume
+        self.data = initial_data*self.cell_info["volume"]
+
+        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
+        #        self.particles_index, self.face_graph, self.voronoi_vertices)
 
 
     def set_riemann_solver(self, riemann_solver):
@@ -156,7 +170,7 @@ class moving_mesh(object):
             # add colormap
             colors = []
             for i in self.particles_index["real"]:
-                colors.append(self.data[0,i]/self.cell_info[0,i])
+                colors.append(self.data[0,i]/self.cell_info["volume"][i])
 
             fig, ax = plt.subplots()
             p = PatchCollection(l, cmap=matplotlib.cm.jet)
@@ -180,20 +194,24 @@ class moving_mesh(object):
         self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph)
 
         # make tesselation returning graph of neighbors graph of faces and voronoi vertices
-        self.neighbor_graph, self.face_graph, self.voronoi_vertices = self.mesh.tessellate(self.particles)
+        self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
 
         # calculate cell information of all real particles: volume and center mass
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.particles_index,
-                self.face_graph, self.voronoi_vertices)
+        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.particles_index,
+        #        self.face_graph, self.voronoi_vertices)
 
-        volume = self.cell_info[0,:]
+        num = self.particles_index["real"].shape[0]
+        self.cell_info = {"volume": np.zeros(num, dtype="float64"),
+            "center of mass": np.zeros((2, num), dtype="float64")}
+        self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
+
+        volume = self.cell_info["volume"]
 
         # calculate primitive variables for real particles
         primitive = self._cons_to_prim(volume)
 
         # calculate global time step from real particles
         dt = self._get_dt(primitive, volume)
-
         if time + dt > self.max_time:
             dt = self.max_time - time
 
@@ -208,6 +226,11 @@ class moving_mesh(object):
         # mesh regularization
         w = self.mesh.regularization(primitive, self.particles, self.gamma, self.cell_info, self.particles_index)
         w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
+
+#-->
+        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.particles_index,
+        #        self.face_graph, self.voronoi_vertices)
+
 
         # add particle velocities
         w[:, self.particles_index["real"]]  += primitive[1:3, self.particles_index["real"]]
