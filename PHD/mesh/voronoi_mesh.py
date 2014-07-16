@@ -19,12 +19,13 @@ class voronoi_mesh(object):
         
         # generate distance for center mass to particle position
         r = np.transpose(particles[indices])
-        s = cell_info["center of mass"]
+        #s = cell_info["center of mass"]
+        s = cell_info[1:3,:]
 
         d = s - r
         d = np.sqrt(np.sum(d**2,axis=0))
 
-        R = np.sqrt(cell_info["volume"]/np.pi)
+        R = np.sqrt(cell_info[0,:]/np.pi)
 
         #w = np.copy(prim[1:3, indices])
         w = np.zeros(s.shape)

@@ -106,17 +106,18 @@ class moving_mesh(object):
 
         # calculate volume of real particles 
 #-->
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
-        #        self.particles_index, self.face_graph, self.voronoi_vertices)
+        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
+                self.particles_index, self.face_graph, self.voronoi_vertices)
 
-        num = self.particles_index["real"].shape[0]
-        self.cell_info = {"volume": np.zeros(num, dtype="float64"),
-            "center of mass": np.zeros((2, num), dtype="float64")}
+        #num = self.particles_index["real"].shape[0]
+        #self.cell_info = {"volume": np.zeros(num, dtype="float64"),
+        #    "center of mass": np.zeros((2, num), dtype="float64")}
 
-        self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
+        #self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
 
         # convert data to mass, momentum, and energy
-        self.data = initial_data*self.cell_info["volume"]
+        #self.data = initial_data*self.cell_info["volume"]
+        self.data = initial_data*self.cell_info[0,:]
 
         #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
         #        self.particles_index, self.face_graph, self.voronoi_vertices)
@@ -170,7 +171,8 @@ class moving_mesh(object):
             # add colormap
             colors = []
             for i in self.particles_index["real"]:
-                colors.append(self.data[0,i]/self.cell_info["volume"][i])
+                colors.append(self.data[0,i]/self.cell_info[0,i])
+                #colors.append(self.data[0,i]/self.cell_info["volume"][i])
 
             fig, ax = plt.subplots()
             p = PatchCollection(l, cmap=matplotlib.cm.jet)
@@ -197,15 +199,16 @@ class moving_mesh(object):
         self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
 
         # calculate cell information of all real particles: volume and center mass
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.particles_index,
-        #        self.face_graph, self.voronoi_vertices)
+        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.particles_index,
+                self.face_graph, self.voronoi_vertices)
 
-        num = self.particles_index["real"].shape[0]
-        self.cell_info = {"volume": np.zeros(num, dtype="float64"),
-            "center of mass": np.zeros((2, num), dtype="float64")}
-        self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
+        #num = self.particles_index["real"].shape[0]
+        #self.cell_info = {"volume": np.zeros(num, dtype="float64"),
+        #    "center of mass": np.zeros((2, num), dtype="float64")}
+        #self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
 
-        volume = self.cell_info["volume"]
+        #volume = self.cell_info["volume"]
+        volume = self.cell_info[0,:]
 
         # calculate primitive variables for real particles
         primitive = self._cons_to_prim(volume)
