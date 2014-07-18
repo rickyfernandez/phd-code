@@ -165,7 +165,7 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 4.1])
+            p.set_clim([0, 1])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -181,7 +181,8 @@ class moving_mesh(object):
         """
 
         # generate periodic ghost particles with links to original real particles 
-        self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph)
+        #self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph)
+        self.particles = self.boundary.update(self.particles, self.particles_index, self.ng, self.ngs)
 
         # make tesselation returning graph of neighbors graph of faces and voronoi vertices
         self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)

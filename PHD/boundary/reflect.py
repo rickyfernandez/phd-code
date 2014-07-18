@@ -11,7 +11,7 @@ class reflect(boundary_base):
         self.boundary["bottom"] = bottom
         self.boundary["top"] = top
 
-    def update(self, particles, particles_index, neighbor_graph):
+    def update(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
 
         ghost_indices = particles_index["ghost"]
 
@@ -34,7 +34,7 @@ class reflect(boundary_base):
 
         # left boundary
         i = np.where(right < xg)[0]
-        right_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        right_border = self.find_boundary_particles(neighbor_graph, neighbor_graph_size, ghost_indices[i], ghost_indices)
 
         # reflect particles across right boundary
         x_right_ghost = 2.0*right - x[right_border]
@@ -50,7 +50,7 @@ class reflect(boundary_base):
 
         # left boundary 
         i = np.where(xg < left)[0]
-        left_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        left_border = self.find_boundary_particles(neighbor_graph, neighbor_graph_size, ghost_indices[i], ghost_indices)
 
         # reflect particles across left boundary
         x_left_ghost = 2.*left - x[left_border]
@@ -66,7 +66,7 @@ class reflect(boundary_base):
 
         # top boundary 
         i = np.where(yg > top)[0]
-        top_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        top_border = self.find_boundary_particles(neighbor_graph, neighbor_graph_size, ghost_indices[i], ghost_indices)
 
         # reflect particles across top boundary
         x_top_ghost = x[top_border]
@@ -82,7 +82,7 @@ class reflect(boundary_base):
 
         # bottom boundary 
         i = np.where(yg < bottom)[0]
-        bottom_border = self.find_boundary_particles(neighbor_graph, ghost_indices[i], ghost_indices)
+        bottom_border = self.find_boundary_particles(neighbor_graph, neighbor_graph_size, ghost_indices[i], ghost_indices)
 
         # reflect particles across bottom boundary
         x_bottom_ghost = x[bottom_border]
