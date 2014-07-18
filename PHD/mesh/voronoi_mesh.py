@@ -16,18 +16,16 @@ class voronoi_mesh(object):
         rho      = prim[0, indices]
 
         c = np.sqrt(gamma*pressure/rho)
-        
+
         # generate distance for center mass to particle position
         r = np.transpose(particles[indices])
-        #s = cell_info["center of mass"]
-        s = cell_info[1:3,:]
+        s = cell_info["center of mass"]
 
         d = s - r
         d = np.sqrt(np.sum(d**2,axis=0))
 
-        R = np.sqrt(cell_info[0,:]/np.pi)
+        R = np.sqrt(cell_info["volume"]/np.pi)
 
-        #w = np.copy(prim[1:3, indices])
         w = np.zeros(s.shape)
 
 
@@ -80,59 +78,18 @@ class voronoi_mesh(object):
 
         return neighbor_graph, face_graph, vor.vertices, neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes
 #--->   #return neighbor_graph, face_graph, vor.vertices
-    
 
-    def _cell_volume_center(self, particle_id, particles, neighbor_graph, face_graph, circum_centers):
-        """
-        Calculate the volume and center mass of particle.
-        """
 
-        # array of indices pairs of voronoi vertices
-        # for each face - (numfaces, 2)
-        voronoi_faces = np.array(face_graph[particle_id])
-
-        area = circum_centers[voronoi_faces]
-        area = area[:,0,:] - area[:,1,:]
-        area = (area*area).sum(axis=1)
-        np.sqrt(area, area)
-
-        f = np.mean(circum_centers[voronoi_faces], axis=1)
-        center_of_mass = 2.0*f/3.0 + particles[particle_id]/3.0
-
-        # coordinates of voronoi generating point
-        center    = particles[particle_id]
-        neighbors = particles[neighbor_graph[particle_id]]
-
-        # speration vectors form neighbors to voronoi generating point
-        r = center - neighbors
-        h = 0.5*np.sqrt(np.sum(r**2, axis=1))
-
-        volumes     = 0.5*area*h
-        cell_volume = np.sum(0.5*area*h)
-
-        # cell center of mass coordinates
-        cm = (center_of_mass*volumes[:,np.newaxis]).sum(axis=0)/cell_volume
-
-        return cell_volume, cm[0], cm[1]
-
-    def volume_center_mass(self, particles, neighbor_graph, particles_index, face_graph, voronoi_vertices):
-        """
-        Caculate the volumes and center mass of all particles inside the domain.
-        """
-
-        # calculate volume of real particles 
-        vals = np.empty((3, particles_index["real"].shape[0]), dtype="float64")
-        for i, particle_id in enumerate(particles_index["real"]):
-            vals[:,i] = self._cell_volume_center(particle_id, particles, neighbor_graph, face_graph, voronoi_vertices)
-        return vals
-
-    def volume_center_mass2(self, particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
-            particles_index, cell_info):
+    def volume_center_mass(self, particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
+            particles_index):
 
         num_particles = particles_index["real"].size
+        cell_info = {"volume": np.zeros(num_particles, dtype="float64"), "center of mass": np.zeros((2, num_particles), dtype="float64")}
 
         cv.cell_volume_center(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
                 cell_info["volume"], cell_info["center of mass"], num_particles)
+
+        return cell_info
 
 
     def faces_for_flux(self, particles, w, particles_index, neighbor_graph, face_graph, voronoi_vertices):
@@ -154,7 +111,7 @@ class voronoi_mesh(object):
 
             # go through neighbors and corresponding faces
             for i, neighbor in enumerate(neighbors):
-                
+
                 # grab voronoi vertices of face corresponding to neighbor
                 vor_verts  = voronoi_vertices[np.asarray(faces[i])]
 

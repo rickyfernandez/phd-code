@@ -51,7 +51,7 @@ class moving_mesh(object):
         """
         # sound speed
         c = np.sqrt(self.gamma*prim[3,:]/prim[0,:])
-        
+
         # calculate approx radius of each voronoi cell
         R = np.sqrt(vol/np.pi)
 
@@ -60,7 +60,7 @@ class moving_mesh(object):
 
     def _cons_to_prim(self, volume):
         """
-        Convert volume integrated variables (density, densiy*velocity, Energy) to 
+        Convert volume integrated variables (density, densiy*velocity, Energy) to
         primitive variables (mass, momentum, pressure).
         """
         # conserative vector is mass, momentum, total energy
@@ -105,22 +105,10 @@ class moving_mesh(object):
         self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
-#-->
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
-                self.particles_index, self.face_graph, self.voronoi_vertices)
-
-        #num = self.particles_index["real"].shape[0]
-        #self.cell_info = {"volume": np.zeros(num, dtype="float64"),
-        #    "center of mass": np.zeros((2, num), dtype="float64")}
-
-        #self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
+        self.cell_info = self.mesh.volume_center_mass(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index)
 
         # convert data to mass, momentum, and energy
-        #self.data = initial_data*self.cell_info["volume"]
-        self.data = initial_data*self.cell_info[0,:]
-
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph,
-        #        self.particles_index, self.face_graph, self.voronoi_vertices)
+        self.data = initial_data*self.cell_info["volume"]
 
 
     def set_riemann_solver(self, riemann_solver):
@@ -146,7 +134,7 @@ class moving_mesh(object):
 
         while time < self.max_time and num_steps < self.max_steps:
 
-            print "sovling for step:", num_steps
+            print "solving for step:", num_steps
 
             time += self._solve_one_step(time)
 
@@ -171,13 +159,13 @@ class moving_mesh(object):
             # add colormap
             colors = []
             for i in self.particles_index["real"]:
-                colors.append(self.data[0,i]/self.cell_info[0,i])
-                #colors.append(self.data[0,i]/self.cell_info["volume"][i])
+                #colors.append(self.data[0,i]/self.cell_info[0,i])
+                colors.append(self.data[0,i]/self.cell_info["volume"][i])
 
             fig, ax = plt.subplots()
-            p = PatchCollection(l, cmap=matplotlib.cm.jet)
+            p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 3.1])
+            p.set_clim([0, 4.1])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -198,17 +186,9 @@ class moving_mesh(object):
         # make tesselation returning graph of neighbors graph of faces and voronoi vertices
         self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
 
-        # calculate cell information of all real particles: volume and center mass
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.particles_index,
-                self.face_graph, self.voronoi_vertices)
+        self.cell_info = self.mesh.volume_center_mass(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index)
 
-        #num = self.particles_index["real"].shape[0]
-        #self.cell_info = {"volume": np.zeros(num, dtype="float64"),
-        #    "center of mass": np.zeros((2, num), dtype="float64")}
-        #self.mesh.volume_center_mass2(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index, self.cell_info)
-
-        #volume = self.cell_info["volume"]
-        volume = self.cell_info[0,:]
+        volume = self.cell_info["volume"]
 
         # calculate primitive variables for real particles
         primitive = self._cons_to_prim(volume)
@@ -228,12 +208,8 @@ class moving_mesh(object):
 
         # mesh regularization
         w = self.mesh.regularization(primitive, self.particles, self.gamma, self.cell_info, self.particles_index)
+        w = np.zeros(w.shape)
         w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
-
-#-->
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.particles_index,
-        #        self.face_graph, self.voronoi_vertices)
-
 
         # add particle velocities
         w[:, self.particles_index["real"]]  += primitive[1:3, self.particles_index["real"]]
