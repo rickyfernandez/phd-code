@@ -32,7 +32,7 @@ class reflect(boundary_base):
         bottom = self.boundary["bottom"]; top   = self.boundary["top"]
 
 
-        # left boundary
+        # right boundary
         i = np.where(right < xg)[0]
         right_border = self.find_boundary_particles(neighbor_graph, neighbor_graph_size, ghost_indices[i], ghost_indices)
 

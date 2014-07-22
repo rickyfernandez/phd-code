@@ -1,4 +1,4 @@
-from libc.math cimport sqrt
+from libc.math cimport sqrt, atan2
 import numpy as np
 cimport numpy as np
 cimport cython
@@ -31,7 +31,7 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
         yp = particles[id_p,1]
 
         #print "particle in cython:", id_p
-       
+
         # loop over neighbors
         for j in range(num_neighbors[id_p]):
 
@@ -79,3 +79,117 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
 
         center_of_mass[0,id_p] /= volume[id_p]
         center_of_mass[1,id_p] /= volume[id_p]
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def number_of_faces(int[:] neighbor_graph, int[:] neighbor_graph_size, int num_particles):
+
+    cdef int num_faces
+    cdef int id_p, id_n
+    cdef int ind, j
+
+    ind = 0
+    num_faces = 0
+
+    # determine the number of faces 
+    for id_p in range(num_particles):
+        for j in range(neighbor_graph_size[id_p]):
+
+            # index of neighbor
+            id_n = neighbor_graph[ind]
+            if id_n > id_p:
+                num_faces += 1
+
+            # go to next neighbor
+            ind += 1
+
+    return num_faces
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+def faces_for_flux(double[:,::1] particles, int[:] neighbor_graph, int[:] neighbor_graph_size,
+        int[:] face_graph, double[:,::1] circum_centers, double[:,::1] w, double[:,::1] faces_info, int num_particles):
+
+    cdef int id_p, id_n, ind, ind_face, j, k
+    cdef double xp, yp, xn, yn, x1, y1, x2, y2, xr, yr, x, y
+    cdef double factor
+
+    k = 0
+    ind = 0
+    ind_face = 0
+
+    for id_p in range(num_particles):
+
+        # position of particle
+        xp = particles[id_p,0]
+        yp = particles[id_p,1]
+
+        for j in range(neighbor_graph_size[id_p]):
+
+            # index of neighbor
+            id_n = neighbor_graph[ind]
+
+            if id_p < id_n:
+
+                # step 1: calculate area of face, in 2d each face 
+                # is made up of two vertices
+
+                # position of neighbor
+                xn = particles[id_n,0]
+                yn = particles[id_n,1]
+
+                # position of voronoi vertices that make up the face
+                x1 = circum_centers[face_graph[ind_face],0]
+                y1 = circum_centers[face_graph[ind_face],1]
+                ind_face += 1
+
+                x2 = circum_centers[face_graph[ind_face],0]
+                y2 = circum_centers[face_graph[ind_face],1]
+                ind_face += 1
+
+                x = x2 - x1
+                y = y2 - y1
+
+                # area
+                faces_info[1, k] = sqrt(x*x + y*y)
+
+                # step 2: calculate angle of normal
+                xr = xn - xp
+                yr = yn - yp
+
+                # make sure the normal is pointing in the neighbor direction
+                if (xr*y - yr*x) > 0.0:
+                    x, y = y, -x
+                else:
+                    x, y = -y, x
+
+                faces_info[0, k] = atan2(y, x)
+                #faces_info[0, k] = acos(x/sqrt(x*x + y*y))
+
+                # step 3: calculate velocity of face
+                faces_info[2, k] = 0.5*(w[0, id_p] + w[0, id_n])
+                faces_info[3, k] = 0.5*(w[1, id_p] + w[1, id_n])
+
+                fx = 0.5*(x1 + x2)
+                fy = 0.5*(y1 + y2)
+
+                factor  = (w[0,id_p]-w[0,id_n])*(fx-0.5*(xp+xn)) + (w[1,id_p]-w[1,id_n])*(fy-0.5*(yp+yn))
+                factor /= (xn-xp)*(xn-xp) + (yn-yp)*(yn-yp)
+
+                faces_info[2, k] += factor*(xn-xp)
+                faces_info[3, k] += factor*(yn-yp)
+
+                # step 4: store the particles that make up the face
+                faces_info[4, k] = id_p
+                faces_info[5, k] = id_n
+
+                # update counter
+                k   += 1
+                ind += 1
+
+            else:
+
+                # face accounted for, go to next neighbor and face
+                ind += 1
+                ind_face += 2

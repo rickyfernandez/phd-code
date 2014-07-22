@@ -3,6 +3,8 @@ from PHD.mesh import voronoi_mesh
 from PHD.riemann.riemann_base import riemann_base
 from PHD.boundary.boundary_base import boundary_base
 
+from PHD.mesh.cell_volume_center import number_of_faces
+
 # for debug plotting 
 from matplotlib.collections import LineCollection, PolyCollection, PatchCollection
 from matplotlib.patches import Polygon
@@ -136,7 +138,7 @@ class moving_mesh(object):
 
             print "solving for step:", num_steps
 
-            time += self._solve_one_step(time)
+            time += self._solve_one_step(time, num_steps)
 
 
             # debugging plot --- turn to a routine later ---
@@ -165,7 +167,7 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 1])
+            p.set_clim([0, 4.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -175,13 +177,12 @@ class moving_mesh(object):
 
 
 
-    def _solve_one_step(self, time):
+    def _solve_one_step(self, time, count):
         """
         Evolve the simulation for one time step.
         """
 
         # generate periodic ghost particles with links to original real particles 
-        #self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph)
         self.particles = self.boundary.update(self.particles, self.particles_index, self.ng, self.ngs)
 
         # make tesselation returning graph of neighbors graph of faces and voronoi vertices
@@ -217,8 +218,14 @@ class moving_mesh(object):
         w[:, self.particles_index["ghost"]] += primitive[1:3, self.particles_index["ghost"]]
 
         # grab each face with particle id of the left and right particles as well angle and area
-        faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph,
-                self.face_graph, self.voronoi_vertices)
+        #faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph,
+        #        self.face_graph, self.voronoi_vertices)
+
+        faces_info = self.mesh.faces_for_flux2(self.particles, w, self.particles_index, self.ng, self.ngs,
+                self.fg, self.voronoi_vertices)
+
+        #if count == 2:
+        #    import pdb; pdb.set_trace()
 
         # grab left and right states
         left  = primitive[:, faces_info[4,:].astype(int)]
@@ -226,6 +233,11 @@ class moving_mesh(object):
 
         # calculate state at edges
         fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
+
+        #numFaces = number_of_faces(self.ng, self.ngs, self.particles_index["real"].size)
+        #print "number of faces", fluxes.shape, numFaces
+
+        #assert(fluxes.shape[1] == number_of_faces(self.ng, self.ngs, self.particles_index["real"].size))
 
         # update conserved variables
         self._update(fluxes, dt, faces_info)
