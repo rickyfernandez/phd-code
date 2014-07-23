@@ -167,7 +167,7 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 1.])
+            p.set_clim([0, 4.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -217,15 +217,8 @@ class moving_mesh(object):
         w[:, self.particles_index["real"]]  += primitive[1:3, self.particles_index["real"]]
         w[:, self.particles_index["ghost"]] += primitive[1:3, self.particles_index["ghost"]]
 
-        # grab each face with particle id of the left and right particles as well angle and area
-        #faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph,
-        #        self.face_graph, self.voronoi_vertices)
-
-        faces_info = self.mesh.faces_for_flux2(self.particles, w, self.particles_index, self.ng, self.ngs,
+        faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.ng, self.ngs,
                 self.fg, self.voronoi_vertices)
-
-        #if count == 2:
-        #    import pdb; pdb.set_trace()
 
         # grab left and right states
         left  = primitive[:, faces_info[4,:].astype(int)]
@@ -233,11 +226,6 @@ class moving_mesh(object):
 
         # calculate state at edges
         fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
-
-        #numFaces = number_of_faces(self.ng, self.ngs, self.particles_index["real"].size)
-        #print "number of faces", fluxes.shape, numFaces
-
-        #assert(fluxes.shape[1] == number_of_faces(self.ng, self.ngs, self.particles_index["real"].size))
 
         # update conserved variables
         self._update(fluxes, dt, faces_info)

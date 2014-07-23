@@ -30,8 +30,6 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
         xp = particles[0,id_p]
         yp = particles[1,id_p]
 
-        #print "particle in cython:", id_p
-
         # loop over neighbors
         for j in range(num_neighbors[id_p]):
 
@@ -41,7 +39,6 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
             # neighbor position
             xn = particles[0,id_n]
             yn = particles[1,id_n]
-            #print "neighbors in cython:", id_n
 
             # distance between particles
             h = 0.5*sqrt((xn-xp)*(xn-xp) + (yn-yp)*(yn-yp))
@@ -58,7 +55,6 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
             ind_face += 1
 
             face_area = sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))
-            #print "volume in cython", 0.5*face_area*h
             volume[id_p] += 0.5*face_area*h
 
             # center of mass of face
@@ -165,7 +161,6 @@ def faces_for_flux(double[:,::1] particles, int[:] neighbor_graph, int[:] neighb
                     x, y = -y, x
 
                 faces_info[0, k] = atan2(y, x)
-                #faces_info[0, k] = acos(x/sqrt(x*x + y*y))
 
                 # step 3: calculate velocity of face
                 faces_info[2, k] = 0.5*(w[0, id_p] + w[0, id_n])
