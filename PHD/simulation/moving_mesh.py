@@ -104,7 +104,8 @@ class moving_mesh(object):
         self.particles_index = dict(initial_particles_index)
 
         # make initial tesellation
-        self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
+        #self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
+        self.ng, self.ngs, self.fg, self.fgs, self.voronoi_vertices = self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index)
@@ -143,20 +144,25 @@ class moving_mesh(object):
 
             # debugging plot --- turn to a routine later ---
             l = []
-            for i in self.particles_index["real"]:
+            ii = 0; jj = 0
+            for ip in self.particles_index["real"]:
 
-                verts_indices = np.unique(np.asarray(self.face_graph[i]).flatten())
+                #verts_indices = np.unique(np.asarray(self.face_graph[i]).flatten())
+                jj += self.ngs[ip]*2
+                verts_indices = np.unique(self.fg[ii:jj])
                 verts = self.voronoi_vertices[verts_indices]
 
                 # coordinates of neighbors relative to particle p
-                xc = verts[:,0] - self.particles[0,i]
-                yc = verts[:,1] - self.particles[1,i]
+                xc = verts[:,0] - self.particles[0,ip]
+                yc = verts[:,1] - self.particles[1,ip]
 
                 # sort in counter clock wise order
                 sorted_vertices = np.argsort(np.angle(xc+1j*yc))
                 verts = verts[sorted_vertices]
 
                 l.append(Polygon(verts, True))
+
+                ii = jj
 
             # add colormap
             colors = []
@@ -186,7 +192,8 @@ class moving_mesh(object):
         self.particles = self.boundary.update(self.particles, self.particles_index, self.ng, self.ngs)
 
         # make tesselation returning graph of neighbors graph of faces and voronoi vertices
-        self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
+        #self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
+        self.ng, self.ngs, self.fg, self.fgs, self.voronoi_vertices = self.mesh.tessellate(self.particles)
 
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index)
 

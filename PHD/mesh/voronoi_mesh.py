@@ -50,7 +50,7 @@ class voronoi_mesh(object):
         num_particles = particles.shape[1]
 
         # create neighbor and face graph
-        face_graph = [[] for i in xrange(num_particles)]
+        #face_graph = [[] for i in xrange(num_particles)]
         neighbor_graph = [[] for i in xrange(num_particles)]
         face_graph2 = [[] for i in xrange(num_particles)]
 
@@ -62,8 +62,8 @@ class voronoi_mesh(object):
             neighbor_graph[p1].append(p2)
             neighbor_graph[p2].append(p1)
 
-            face_graph[p1].append(vor.ridge_vertices[i])
-            face_graph[p2].append(vor.ridge_vertices[i])
+            #face_graph[p1].append(vor.ridge_vertices[i])
+            #face_graph[p2].append(vor.ridge_vertices[i])
 
             face_graph2[p1] += vor.ridge_vertices[i]
             face_graph2[p2] += vor.ridge_vertices[i]
@@ -76,7 +76,8 @@ class voronoi_mesh(object):
         neighbor_graph2 = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
         face_graph2 = np.array(list(itertools.chain.from_iterable(face_graph2)), dtype=np.int32)
 
-        return neighbor_graph, face_graph, vor.vertices, neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes
+        #return neighbor_graph, face_graph, vor.vertices, neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes
+        return neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes, vor.vertices
 #--->   #return neighbor_graph, face_graph, vor.vertices
 
 
