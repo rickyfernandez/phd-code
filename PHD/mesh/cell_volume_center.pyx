@@ -27,8 +27,8 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
     for id_p in range(num_particles):
 
         # get poistion of particle
-        xp = particles[id_p,0]
-        yp = particles[id_p,1]
+        xp = particles[0,id_p]
+        yp = particles[1,id_p]
 
         #print "particle in cython:", id_p
 
@@ -39,8 +39,8 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
             id_n = neighbor_graph[ind]
 
             # neighbor position
-            xn = particles[id_n,0]
-            yn = particles[id_n,1]
+            xn = particles[0,id_n]
+            yn = particles[1,id_n]
             #print "neighbors in cython:", id_n
 
             # distance between particles
@@ -122,8 +122,8 @@ def faces_for_flux(double[:,::1] particles, int[:] neighbor_graph, int[:] neighb
     for id_p in range(num_particles):
 
         # position of particle
-        xp = particles[id_p,0]
-        yp = particles[id_p,1]
+        xp = particles[0,id_p]
+        yp = particles[1,id_p]
 
         for j in range(neighbor_graph_size[id_p]):
 
@@ -136,8 +136,8 @@ def faces_for_flux(double[:,::1] particles, int[:] neighbor_graph, int[:] neighb
                 # is made up of two vertices
 
                 # position of neighbor
-                xn = particles[id_n,0]
-                yn = particles[id_n,1]
+                xn = particles[0,id_n]
+                yn = particles[1,id_n]
 
                 # position of voronoi vertices that make up the face
                 x1 = circum_centers[face_graph[ind_face],0]

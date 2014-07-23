@@ -94,7 +94,7 @@ class moving_mesh(object):
 
         Parameters
         ----------
-        initial_particles : Numpy array of size (number particles, dimension)
+        initial_particles : Numpy array of size (dimensino, number particles)
         initial_data : Numpy array of conservative state vector U=(density, density*velocity, Energy)
             with size (variables, number particles)
         initial_particles_index: dictionary with two keys "real" and "ghost" that hold the indices
@@ -149,8 +149,8 @@ class moving_mesh(object):
                 verts = self.voronoi_vertices[verts_indices]
 
                 # coordinates of neighbors relative to particle p
-                xc = verts[:,0] - self.particles[i,0]
-                yc = verts[:,1] - self.particles[i,1]
+                xc = verts[:,0] - self.particles[0,i]
+                yc = verts[:,1] - self.particles[1,i]
 
                 # sort in counter clock wise order
                 sorted_vertices = np.argsort(np.angle(xc+1j*yc))
@@ -167,7 +167,7 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 4.])
+            p.set_clim([0, 1.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -243,7 +243,7 @@ class moving_mesh(object):
         self._update(fluxes, dt, faces_info)
 
         # move particles
-        self.particles[self.particles_index["real"],:] += dt*np.transpose(w[:, self.particles_index["real"]])
+        self.particles[:,self.particles_index["real"]] += dt*w[:, self.particles_index["real"]]
 
         return dt
 

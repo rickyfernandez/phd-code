@@ -15,8 +15,8 @@ class reflect(boundary_base):
 
         ghost_indices = particles_index["ghost"]
 
-        xg = particles[ghost_indices,0]; yg = particles[ghost_indices,1]
-        x  = particles[:,0];              y = particles[:,1]
+        xg = particles[0,ghost_indices]; yg = particles[1,ghost_indices]
+        x  = particles[0,:];              y = particles[1,:]
 
         x_ghost = np.empty(0)
         y_ghost = np.empty(0)
@@ -101,8 +101,8 @@ class reflect(boundary_base):
         real_indices = particles_index["real"]
 
         # first the real particles
-        x_new_particles = np.copy(particles[real_indices,0])
-        y_new_particles = np.copy(particles[real_indices,1])
+        x_new_particles = np.copy(particles[0,real_indices])
+        y_new_particles = np.copy(particles[1,real_indices])
 
         # now the new ghost particles
         x_new_particles = np.append(x_new_particles, x_ghost)
@@ -118,7 +118,7 @@ class reflect(boundary_base):
         particles_index["ghost_map"] = ghost_map
         particles_index["ghost"] = np.arange(real_indices.size, x_new_particles.size)
 
-        return  np.array(zip(x_new_particles, y_new_particles))
+        return  np.array([x_new_particles, y_new_particles])
 
     def reverse_velocities(self, particles, primitive, particles_index):
 
@@ -132,11 +132,11 @@ class reflect(boundary_base):
         ghost_indices = particles_index["ghost"]
 
         # reverse velocities in x direction
-        x = particles[ghost_indices, 0]
+        x = particles[0,ghost_indices]
         i = np.where((x < left) | (right < x))[0]
         primitive[1, ghost_indices[i]] *= -1.0
 
         # reverse velocities in y direction
-        y = particles[ghost_indices, 1]
+        y = particles[1,ghost_indices]
         i = np.where((y < bottom) | (top < y))[0]
         primitive[2, ghost_indices[i]] *= -1.0

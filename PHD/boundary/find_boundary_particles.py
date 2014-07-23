@@ -16,5 +16,5 @@ def find_boundary_particles(neighbor_graph, ghost_indices, total_ghost_indices):
 
     # remove ghost particles leaving border cells and neighbors
     border = border.difference(total_ghost_indices)
-    
+
     return np.array(list(border))

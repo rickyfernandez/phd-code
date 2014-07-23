@@ -41,7 +41,7 @@ def sedov():
     y_particles = np.append(y_particles, y[~indices])
     particles_index["ghost"] = np.arange(particles_index["real"].size, x_particles.size)
 
-    particles = np.array(zip(x_particles, y_particles))
+    particles = np.array([x_particles, y_particles])
 
     return data, particles, particles_index
 
