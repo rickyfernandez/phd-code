@@ -1,6 +1,3 @@
-from matplotlib.collections import LineCollection, PolyCollection, PatchCollection
-from matplotlib.patches import Polygon
-import matplotlib.pyplot as plt
 import numpy as np
 
 def sod():

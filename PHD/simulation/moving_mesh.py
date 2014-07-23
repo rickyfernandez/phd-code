@@ -3,8 +3,6 @@ from PHD.mesh import voronoi_mesh
 from PHD.riemann.riemann_base import riemann_base
 from PHD.boundary.boundary_base import boundary_base
 
-from PHD.mesh.cell_volume_center import number_of_faces
-
 # for debug plotting 
 from matplotlib.collections import LineCollection, PolyCollection, PatchCollection
 from matplotlib.patches import Polygon
@@ -31,14 +29,10 @@ class moving_mesh(object):
 
         self.particles_index = None
         self.voronoi_vertices = None
-        self.ng = None
-        self.ngs = None
-        self.fg = None
-        self.fgs = None
-#-->
         self.neighbor_graph = None
+        self.neighbor_graph_sizes = None
         self.face_graph = None
-#-->
+        self.face_graph_sizes = None
 
         # simulation classes
         self.mesh = voronoi_mesh()
@@ -104,11 +98,11 @@ class moving_mesh(object):
         self.particles_index = dict(initial_particles_index)
 
         # make initial tesellation
-        #self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
-        self.ng, self.ngs, self.fg, self.fgs, self.voronoi_vertices = self.mesh.tessellate(self.particles)
+        self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.face_graph_sizes, self.voronoi_vertices = self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index)
+        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
+                self.voronoi_vertices, self.particles_index)
 
         # convert data to mass, momentum, and energy
         self.data = initial_data*self.cell_info["volume"]
@@ -147,9 +141,8 @@ class moving_mesh(object):
             ii = 0; jj = 0
             for ip in self.particles_index["real"]:
 
-                #verts_indices = np.unique(np.asarray(self.face_graph[i]).flatten())
-                jj += self.ngs[ip]*2
-                verts_indices = np.unique(self.fg[ii:jj])
+                jj += self.neighbor_graph_sizes[ip]*2
+                verts_indices = np.unique(self.face_graph[ii:jj])
                 verts = self.voronoi_vertices[verts_indices]
 
                 # coordinates of neighbors relative to particle p
@@ -167,13 +160,12 @@ class moving_mesh(object):
             # add colormap
             colors = []
             for i in self.particles_index["real"]:
-                #colors.append(self.data[0,i]/self.cell_info[0,i])
                 colors.append(self.data[0,i]/self.cell_info["volume"][i])
 
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 4.])
+            p.set_clim([0, 1.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -189,13 +181,13 @@ class moving_mesh(object):
         """
 
         # generate periodic ghost particles with links to original real particles 
-        self.particles = self.boundary.update(self.particles, self.particles_index, self.ng, self.ngs)
+        self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
 
         # make tesselation returning graph of neighbors graph of faces and voronoi vertices
-        #self.neighbor_graph, self.face_graph, self.voronoi_vertices, self.ng, self.ngs, self.fg, self.fgs = self.mesh.tessellate(self.particles)
-        self.ng, self.ngs, self.fg, self.fgs, self.voronoi_vertices = self.mesh.tessellate(self.particles)
+        self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.face_graph_sizes, self.voronoi_vertices = self.mesh.tessellate(self.particles)
 
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.ng, self.ngs, self.fg, self.voronoi_vertices, self.particles_index)
+        self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
+                self.voronoi_vertices, self.particles_index)
 
         volume = self.cell_info["volume"]
 
@@ -224,8 +216,8 @@ class moving_mesh(object):
         w[:, self.particles_index["real"]]  += primitive[1:3, self.particles_index["real"]]
         w[:, self.particles_index["ghost"]] += primitive[1:3, self.particles_index["ghost"]]
 
-        faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.ng, self.ngs,
-                self.fg, self.voronoi_vertices)
+        faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
+                self.face_graph, self.voronoi_vertices)
 
         # grab left and right states
         left  = primitive[:, faces_info[4,:].astype(int)]

@@ -1,6 +1,6 @@
 import numpy as np
 
-def sedov():
+def implosion():
 
     # boundaries
     boundary_dic = {"left":0.0, "right":1.0, "bottom":0.0, "top":1.0}
@@ -18,17 +18,16 @@ def sedov():
     left   = boundary_dic["left"];   right = boundary_dic["right"]
     bottom = boundary_dic["bottom"]; top   = boundary_dic["top"]
 
-    indices = (((left < x) & (x < right)) & ((bottom < y) & (y < top)))
+    indices = (((left <= x) & (x <= right)) & ((bottom <= y) & (y <= top)))
     x_in = x[indices]; y_in = y[indices]
 
+    indices_in = (x_in+y_in) > 0.5
     data = np.zeros((4, x_in.size))
+    data[0, indices_in] = 1.0
+    data[3, indices_in] = 1.0/(gamma-1.0)
 
-    data[0,:] = 1.0        # density
-    data[3,:] = 1.0E-5     # energy density
-
-    r = 0.0125/2.
-    cells = ((x_in-.5)**2 + (y_in-.5)**2) <= r
-    data[3, cells] = 1.0/(np.pi*r**2)
+    data[0, ~indices_in] = 0.125
+    data[3, ~indices_in] = 0.14/(gamma-1.0)
 
     x_particles = np.copy(x_in); y_particles = np.copy(y_in)
     particles_index = {}
@@ -42,7 +41,6 @@ def sedov():
 
     return data, particles, particles_index
 
-
 #-------------------------------------------------------------------------------
 import PHD.simulation as simulation
 import PHD.boundary as boundary
@@ -51,16 +49,16 @@ import PHD.riemann as riemann
 # parameters for the simulation
 CFL = 0.5
 gamma = 1.4
-max_steps = 100
+max_steps = 200
 max_time = 0.5
-output_name = "Sedov_"
+output_name = "Implosion_"
 
 # create boundary and riemann objects
 boundary_condition = boundary.reflect(0.,1.,0.,1.)
 riemann_solver = riemann.pvrs()
 
 # create initial state of the system
-data, particles, particles_index = sedov()
+data, particles, particles_index = implosion()
 
 # setup the moving mesh simulation
 simulation = simulation.moving_mesh()
