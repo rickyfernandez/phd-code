@@ -41,7 +41,7 @@ class moving_mesh(object):
         self.riemann_solver = None
 
 
-    def _get_dt(self, prim, vol):
+    def _get_dt(self, time, prim, vol):
         """
         Calculate the time step using the CFL condition.
         """
@@ -51,7 +51,12 @@ class moving_mesh(object):
         # calculate approx radius of each voronoi cell
         R = np.sqrt(vol/np.pi)
 
-        return self.CFL*np.min(R/c)
+        dt = self.CFL*np.min(R/c)
+
+        if time + dt > self.max_time:
+            dt = self.max_time - time
+
+        return dt
 
 
     def _cons_to_prim(self, volume):
@@ -180,12 +185,13 @@ class moving_mesh(object):
         Evolve the simulation for one time step.
         """
 
-        # generate periodic ghost particles with links to original real particles 
+        # generate ghost particles with links to original real particles 
         self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
 
-        # make tesselation returning graph of neighbors graph of faces and voronoi vertices
+        # make tesselation 
         self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.face_graph_sizes, self.voronoi_vertices = self.mesh.tessellate(self.particles)
 
+        # calculate volume and center of mass of real particles
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
                 self.voronoi_vertices, self.particles_index)
 
@@ -195,9 +201,7 @@ class moving_mesh(object):
         primitive = self._cons_to_prim(volume)
 
         # calculate global time step from real particles
-        dt = self._get_dt(primitive, volume)
-        if time + dt > self.max_time:
-            dt = self.max_time - time
+        dt = self._get_dt(time, primitive, volume)
 
         # copy values for ghost particles
         ghost_map = self.particles_index["ghost_map"]
