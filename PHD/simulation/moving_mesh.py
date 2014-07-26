@@ -13,7 +13,7 @@ import matplotlib
 class moving_mesh(object):
 
     def __init__(self, gamma = 1.4, CFL = 0.5, max_steps=100, max_time=None,
-            output_name="simulation_"):
+            output_name="simulation_", regularization=False):
 
         # simulation parameters
         self.CFL = CFL
@@ -21,6 +21,7 @@ class moving_mesh(object):
         self.max_steps = max_steps
         self.max_time = max_time
         self.output_name = output_name
+        self.regularization = regularization
 
         # particle information
         self.particles = None
@@ -35,7 +36,7 @@ class moving_mesh(object):
         self.face_graph_sizes = None
 
         # simulation classes
-        self.mesh = voronoi_mesh()
+        self.mesh = voronoi_mesh(regularization)
         self.boundary = None
         self.reconstruction = None
         self.riemann_solver = None
@@ -195,7 +196,7 @@ class moving_mesh(object):
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
                 self.voronoi_vertices, self.particles_index)
 
-        # calculate primitive variables for real particles
+        # calculate primitive variables of real particles
         primitive = self._cons_to_prim(self.cell_info["volume"])
 
         # calculate global time step from real particles
@@ -204,15 +205,8 @@ class moving_mesh(object):
         # assign primitive values to ghost particles
         primitive = self.boundary.primitive_to_ghost(self.particles, primitive, self.particles_index)
 
-        # mesh regularization
-        ghost_map = self.particles_index["ghost_map"]
-        w = self.mesh.regularization(primitive, self.particles, self.gamma, self.cell_info, self.particles_index)
-        w = np.zeros(w.shape)
-        w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
-
-        # add particle velocities
-        w[:, self.particles_index["real"]]  += primitive[1:3, self.particles_index["real"]]
-        w[:, self.particles_index["ghost"]] += primitive[1:3, self.particles_index["ghost"]]
+        # assign particle velocities and mesh regularization
+        w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma)
 
         faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
                 self.face_graph, self.voronoi_vertices)
@@ -221,7 +215,7 @@ class moving_mesh(object):
         left  = primitive[:, faces_info[4,:].astype(int)]
         right = primitive[:, faces_info[5,:].astype(int)]
 
-        # calculate state at edges
+        # calculate reimann solution at edges 
         fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
 
         # update conserved variables

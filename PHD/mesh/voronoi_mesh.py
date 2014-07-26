@@ -6,6 +6,28 @@ import copy
 
 class voronoi_mesh(object):
 
+    def __init__(self, regularization):
+        self.regularization = regularization
+
+    def assign_particle_velocities(self, particles, primitive, particles_index, cell_info, gamma):
+
+        # mesh regularization
+        if self.regularization == True:
+            w = self.mesh.regularization(primitive, particles, gamma, cell_info, particles_index)
+        else:
+            w = np.zeros((2,particles_index["real"].size))
+
+        # transfer particle velocities to ghost particles
+        ghost_map = particles_index["ghost_map"]
+        w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+
+        # add particle velocities
+        w[:, particles_index["real"]]  += primitive[1:3, particles_index["real"]]
+        w[:, particles_index["ghost"]] += primitive[1:3, particles_index["ghost"]]
+
+        return w
+
+
     def regularization(self, prim, particles, gamma, cell_info, particles_index):
 
         eta = 0.25
@@ -27,7 +49,6 @@ class voronoi_mesh(object):
         R = np.sqrt(cell_info["volume"]/np.pi)
 
         w = np.zeros(s.shape)
-
 
         i = (0.9 <= d/(eta*R)) & (d/(eta*R) < 1.1)
         if i.any():
