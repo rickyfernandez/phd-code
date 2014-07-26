@@ -30,3 +30,11 @@ class boundary_base(object):
         border = border.difference(total_ghost_indices)
 
         return np.array(list(border))
+
+    def primitive_to_ghost(self, particles, primitive, particles_index):
+        """
+        copy primitive values from real particles to associated ghost particles
+        """
+        ghost_map = particles_index["ghost_map"]
+        return np.hstack((primitive, primitive[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+

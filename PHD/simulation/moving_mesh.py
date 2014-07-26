@@ -170,7 +170,7 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 1.])
+            p.set_clim([0, 4.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -195,23 +195,17 @@ class moving_mesh(object):
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
                 self.voronoi_vertices, self.particles_index)
 
-        volume = self.cell_info["volume"]
-
         # calculate primitive variables for real particles
-        primitive = self._cons_to_prim(volume)
+        primitive = self._cons_to_prim(self.cell_info["volume"])
 
         # calculate global time step from real particles
-        dt = self._get_dt(time, primitive, volume)
+        dt = self._get_dt(time, primitive, self.cell_info["volume"])
 
-        # copy values for ghost particles
-        ghost_map = self.particles_index["ghost_map"]
-        primitive = np.hstack((primitive,
-            primitive[:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
-
-        # reverse velocities
-        self.boundary.reverse_velocities(self.particles, primitive, self.particles_index)
+        # assign primitive values to ghost particles
+        primitive = self.boundary.primitive_to_ghost(self.particles, primitive, self.particles_index)
 
         # mesh regularization
+        ghost_map = self.particles_index["ghost_map"]
         w = self.mesh.regularization(primitive, self.particles, self.gamma, self.cell_info, self.particles_index)
         w = np.zeros(w.shape)
         w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))

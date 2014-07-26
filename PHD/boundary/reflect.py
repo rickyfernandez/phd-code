@@ -140,3 +140,14 @@ class reflect(boundary_base):
         y = particles[1,ghost_indices]
         i = np.where((y < bottom) | (top < y))[0]
         primitive[2, ghost_indices[i]] *= -1.0
+
+    def primitive_to_ghost(self, particles, primitive, particles_index):
+
+        # copy primitive values to ghost
+        primitive = super(reflect, self).primitive_to_ghost(particles, primitive, particles_index)
+
+        # for reflect boundary ghost particles velocities have to be reversed
+        self.reverse_velocities(particles, primitive, particles_index)
+
+        return primitive
+
