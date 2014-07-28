@@ -1,5 +1,6 @@
 import numpy as np
 from PHD.mesh import voronoi_mesh
+from PHD.reconstruction.reconstruction_base import reconstruction_base
 from PHD.riemann.riemann_base import riemann_base
 from PHD.boundary.boundary_base import boundary_base
 
@@ -84,6 +85,13 @@ class moving_mesh(object):
 
         if isinstance(boundary, boundary_base):
             self.boundary = boundary
+        else:
+            raise TypeError
+
+    def set_reconstruction(self, reconstruction):
+
+        if isinstance(reconstruction, reconstruction_base):
+            self.reconstruction = reconstruction
         else:
             raise TypeError
 
@@ -205,16 +213,29 @@ class moving_mesh(object):
         # assign primitive values to ghost particles
         primitive = self.boundary.primitive_to_ghost(self.particles, primitive, self.particles_index)
 
-        # assign particle velocities and mesh regularization
+#--->
+        # assign particle velocities to real and ghost and do mesh regularization
         w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma)
 
-        faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
+#--->
+        # calculate gradient of real particles
+        grad = self.reconstruction.gradient()
+
+        # assign gradient values to ghost particles
+        grad = self.boundary.gradient_to_ghost(self.particles, grad, self.particles_index)
+
+        # calculate states at edges
+        left, right, faces_info = self.reconstruction.extrapolate(self.particles, primitive, grad, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
                 self.face_graph, self.voronoi_vertices)
 
-        # grab left and right states
-        left  = primitive[:, faces_info[4,:].astype(int)]
-        right = primitive[:, faces_info[5,:].astype(int)]
+        #faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
+        #        self.face_graph, self.voronoi_vertices)
 
+        # grab left and right states
+        #left  = primitive[:, faces_info[4,:].astype(int)]
+        #right = primitive[:, faces_info[5,:].astype(int)]
+
+#--->
         # calculate reimann solution at edges 
         fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
 
