@@ -217,7 +217,6 @@ class moving_mesh(object):
         # assign particle velocities to real and ghost and do mesh regularization
         w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma)
 
-#--->
         # calculate gradient of real particles
         grad = self.reconstruction.gradient()
 
@@ -228,14 +227,6 @@ class moving_mesh(object):
         left, right, faces_info = self.reconstruction.extrapolate(self.particles, primitive, grad, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
                 self.face_graph, self.voronoi_vertices)
 
-        #faces_info = self.mesh.faces_for_flux(self.particles, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
-        #        self.face_graph, self.voronoi_vertices)
-
-        # grab left and right states
-        #left  = primitive[:, faces_info[4,:].astype(int)]
-        #right = primitive[:, faces_info[5,:].astype(int)]
-
-#--->
         # calculate reimann solution at edges 
         fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
 
