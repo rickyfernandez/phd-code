@@ -151,3 +151,8 @@ class reflect(boundary_base):
 
         return primitive
 
+    def gradient_to_ghost(self, particles, gradient, particles_index):
+
+        if gradient == None:
+            return None
+

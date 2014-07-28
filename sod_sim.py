@@ -46,6 +46,7 @@ def sod():
 #-------------------------------------------------------------------------------
 import PHD.simulation as simulation
 import PHD.boundary as boundary
+import PHD.reconstruction as reconstruction
 import PHD.riemann as riemann
 
 # parameters for the simulation
@@ -57,6 +58,7 @@ output_name = "Sod_"
 
 # create boundary and riemann objects
 boundary_condition = boundary.reflect(0.,1.,0.,1.)
+reconstruction = reconstruction.piecewise_constant()
 riemann_solver = riemann.pvrs()
 
 # create initial state of the system
@@ -74,6 +76,7 @@ simulation.set_parameter("output_name", output_name)
 
 # set the boundary, riemann solver, and initial state of the simulation 
 simulation.set_boundary_condition(boundary_condition)
+simulation.set_reconstruction(reconstruction)
 simulation.set_riemann_solver(riemann_solver)
 simulation.set_initial_state(particles, data, particles_index)
 

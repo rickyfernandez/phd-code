@@ -114,13 +114,13 @@ class voronoi_mesh(object):
         return cell_info
 
 
-    def faces_for_flux(self, particles, w, particles_index, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices):
-
-        num_particles = particles_index["real"].size
-        num = cv.number_of_faces(neighbor_graph, neighbor_graph_size, num_particles)
-
-        faces_info = np.empty((6, num), dtype="float64")
-
-        cv.faces_for_flux(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices, w, faces_info,  num_particles)
-
-        return faces_info
+#    def faces_for_flux(self, particles, w, particles_index, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices):
+#
+#        num_particles = particles_index["real"].size
+#        num = cv.number_of_faces(neighbor_graph, neighbor_graph_size, num_particles)
+#
+#        faces_info = np.empty((6, num), dtype="float64")
+#
+#        cv.faces_for_flux(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices, w, faces_info,  num_particles)
+#
+#        return faces_info
