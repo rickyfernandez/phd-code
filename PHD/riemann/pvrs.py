@@ -5,10 +5,6 @@ class pvrs(riemann_base):
 
     def state(self, left_face, right_face, gamma):
 
-        # state variables in the face frame of reference
-        #left_face, right_face = self._transform_to_face(ql, qr, faces_info)
-
-
         # Begin the calculation of the flux at the interface 
         rho_left  = left_face[0,:]
         u_left    = left_face[1,:]
@@ -257,8 +253,6 @@ class pvrs(riemann_base):
             rhoe_state[iii] = 0.5*(rhoe_star_left[iii] + rhoe_star_right[iii])
 
 
-        # calculate the flux at each face
-        #return self._transform_flux_to_lab(rho_state, u_state, v_state, rhoe_state, p_state, faces_info)
         return np.array([rho_state, u_state, v_state, rhoe_state, p_state])
 
 

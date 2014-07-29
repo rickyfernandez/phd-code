@@ -179,7 +179,7 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 4.])
+            p.set_clim([0, 1.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -217,20 +217,6 @@ class moving_mesh(object):
         # assign particle velocities to real and ghost and do mesh regularization
         w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma)
 
-#--->
-#        # calculate gradient of real particles
-#        grad = self.reconstruction.gradient()
-#
-#        # assign gradient values to ghost particles
-#        grad = self.boundary.gradient_to_ghost(self.particles, grad, self.particles_index)
-#
-#        # calculate states at edges
-#        left, right, faces_info = self.reconstruction.extrapolate(self.particles, primitive, grad, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
-#                self.face_graph, self.voronoi_vertices)
-#
-#        # calculate reimann solution at edges 
-#        fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
-
         # grab left and right faces
         left_face, right_face, faces_info = self.mesh.faces_for_flux(self.particles, primitive, w, self.particles_index, self.neighbor_graph,
                 self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
@@ -251,7 +237,6 @@ class moving_mesh(object):
 
         # transform back to lab frame
         fluxes = self.mesh.transform_to_lab(face_states, faces_info)
-#--->
 
         # update conserved variables
         self._update(fluxes, dt, faces_info)

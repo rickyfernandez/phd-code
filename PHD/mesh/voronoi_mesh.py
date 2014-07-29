@@ -138,9 +138,6 @@ class voronoi_mesh(object):
         # velocity of all faces
         wx = faces_info[2,:]; wy = faces_info[3,:]
 
-        # prepare faces to rotate and boost to face frame
-        #left_face = ql.copy(); right_face = qr.copy()
-
         # boost to frame of face
         left_face[1,:] -= wx; right_face[1,:] -= wx
         left_face[2,:] -= wy; right_face[2,:] -= wy
@@ -164,7 +161,6 @@ class voronoi_mesh(object):
         right_face[1,:] = u_right_rotated
         right_face[2,:] = v_right_rotated
 
-        #return left_face, right_face
 
     def transform_to_lab(self, face_states, faces_info):
         """
