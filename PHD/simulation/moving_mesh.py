@@ -217,18 +217,41 @@ class moving_mesh(object):
         # assign particle velocities to real and ghost and do mesh regularization
         w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma)
 
-        # calculate gradient of real particles
-        grad = self.reconstruction.gradient()
+#--->
+#        # calculate gradient of real particles
+#        grad = self.reconstruction.gradient()
+#
+#        # assign gradient values to ghost particles
+#        grad = self.boundary.gradient_to_ghost(self.particles, grad, self.particles_index)
+#
+#        # calculate states at edges
+#        left, right, faces_info = self.reconstruction.extrapolate(self.particles, primitive, grad, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
+#                self.face_graph, self.voronoi_vertices)
+#
+#        # calculate reimann solution at edges 
+#        fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
 
-        # assign gradient values to ghost particles
-        grad = self.boundary.gradient_to_ghost(self.particles, grad, self.particles_index)
+        # grab left and right faces
+        left_face, right_face, faces_info = self.mesh.faces_for_flux(self.particles, primitive, w, self.particles_index, self.neighbor_graph,
+                self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
 
-        # calculate states at edges
-        left, right, faces_info = self.reconstruction.extrapolate(self.particles, primitive, grad, w, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes,
-                self.face_graph, self.voronoi_vertices)
+        # transform to rest frame
+        self.mesh.transform_to_face(left_face, right_face, faces_info)
 
-        # calculate reimann solution at edges 
-        fluxes = self.riemann_solver.flux(left, right, faces_info, self.gamma)
+        # reconstruct
+        #grad = self.reconstruction.gradient()
+        #grad = self.boundary.gradient_to_ghost(self.particles, grad, self.particles_index)
+        #self.reconstruction.extrapolate(left_face, right_face, grad, faces_info)
+
+        # rotate frame 
+        self.mesh.rotate_to_face(left_face, right_face, faces_info)
+
+        # calculate state at face by riemann solver
+        face_states = self.riemann_solver.state(left_face, right_face, self.gamma)
+
+        # transform back to lab frame
+        fluxes = self.mesh.transform_to_lab(face_states, faces_info)
+#--->
 
         # update conserved variables
         self._update(fluxes, dt, faces_info)
@@ -239,13 +262,13 @@ class moving_mesh(object):
         return dt
 
 
-    def _update(self, fluxes, dt, face_info):
+    def _update(self, fluxes, dt, faces_info):
 
         ghost_map = self.particles_index["ghost_map"]
-        area = face_info[1,:]
+        area = faces_info[1,:]
 
         k = 0
-        for i, j in zip(face_info[4,:], face_info[5,:]):
+        for i, j in zip(faces_info[4,:], faces_info[5,:]):
 
             self.data[:,i] -= dt*area[k]*fluxes[:,k]
 

@@ -114,13 +114,101 @@ class voronoi_mesh(object):
         return cell_info
 
 
-#    def faces_for_flux(self, particles, w, particles_index, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices):
-#
-#        num_particles = particles_index["real"].size
-#        num = cv.number_of_faces(neighbor_graph, neighbor_graph_size, num_particles)
-#
-#        faces_info = np.empty((6, num), dtype="float64")
-#
-#        cv.faces_for_flux(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices, w, faces_info,  num_particles)
-#
-#        return faces_info
+    def faces_for_flux(self, particles, primitive, w, particles_index, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices):
+
+        num_real_particles = particles_index["real"].size
+        num_faces = cv.number_of_faces(neighbor_graph, neighbor_graph_size, num_real_particles)
+
+        faces_info = np.empty((6, num_faces), dtype="float64")
+
+        cv.faces_for_flux(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices, w, faces_info,  num_real_particles)
+
+        # grab left and right states
+        left  = primitive[:, faces_info[4,:].astype(int)]
+        right = primitive[:, faces_info[5,:].astype(int)]
+
+        return left, right, faces_info
+
+    def transform_to_face(self, left_face, right_face, faces_info):
+        """
+        Transform coordinate system to the state of each face. This
+        has two parts. First a boost than a rotation.
+        """
+
+        # velocity of all faces
+        wx = faces_info[2,:]; wy = faces_info[3,:]
+
+        # prepare faces to rotate and boost to face frame
+        #left_face = ql.copy(); right_face = qr.copy()
+
+        # boost to frame of face
+        left_face[1,:] -= wx; right_face[1,:] -= wx
+        left_face[2,:] -= wy; right_face[2,:] -= wy
+
+
+    def rotate_to_face(self, left_face, right_face, faces_info):
+
+        # The orientation of the face for all faces 
+        theta = faces_info[0,:]
+
+        # rotate to frame face
+        u_left_rotated =  np.cos(theta)*left_face[1,:] + np.sin(theta)*left_face[2,:]
+        v_left_rotated = -np.sin(theta)*left_face[1,:] + np.cos(theta)*left_face[2,:]
+
+        left_face[1,:] = u_left_rotated
+        left_face[2,:] = v_left_rotated
+
+        u_right_rotated =  np.cos(theta)*right_face[1,:] + np.sin(theta)*right_face[2,:]
+        v_right_rotated = -np.sin(theta)*right_face[1,:] + np.cos(theta)*right_face[2,:]
+
+        right_face[1,:] = u_right_rotated
+        right_face[2,:] = v_right_rotated
+
+        #return left_face, right_face
+
+    def transform_to_lab(self, face_states, faces_info):
+        """
+        Calculate the flux in the lab frame using the state vector of the face.
+        """
+
+        rho = face_states[0,:]
+        u   = face_states[1,:]
+        v   = face_states[2,:]
+        rhoe= face_states[3,:]
+        p   = face_states[4,:]
+
+        # The orientation of the face for all faces 
+        theta = faces_info[0,:]
+
+        # velocity of all faces
+        wx = faces_info[2,:]; wy = faces_info[3,:]
+
+        # components of the flux vector
+        F = np.zeros((4, rho.size))
+        G = np.zeros((4, rho.size))
+
+        # rotate state back to labrotary frame
+        u_lab = np.cos(theta)*u - np.sin(theta)*v
+        v_lab = np.sin(theta)*u + np.cos(theta)*v
+
+        # unboost
+        u_lab += wx
+        v_lab += wy
+
+        # calculate energy density in lab frame
+        E = 0.5*rho*(u_lab**2 + v_lab**2) + rhoe
+
+        # flux component in the x-direction
+        F[0,:] = rho*(u_lab - wx)
+        F[1,:] = rho*u_lab*(u_lab-wx) + p
+        F[2,:] = rho*v_lab*(u_lab-wx)
+        F[3,:] = E*(u_lab-wx) + p*u_lab
+
+        # flux component in the y-direction
+        G[0,:] = rho*(v_lab - wy)
+        G[1,:] = rho*u_lab*(v_lab-wy)
+        G[2,:] = rho*v_lab*(v_lab-wy) + p
+        G[3,:] = E*(v_lab-wy) + p*v_lab
+
+        # dot product flux in orientation of face
+        return np.cos(theta)*F + np.sin(theta)*G

@@ -6,7 +6,7 @@ def sedov():
     boundary_dic = {"left":0.0, "right":1.0, "bottom":0.0, "top":1.0}
 
     L = 1.       # domain size
-    n = 100      # number of points
+    n = 50      # number of points
     gamma = 1.4
 
     dx = L/n

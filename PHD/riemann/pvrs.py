@@ -3,10 +3,10 @@ from riemann_base import riemann_base
 
 class pvrs(riemann_base):
 
-    def flux(self, ql, qr, faces_info, gamma):
+    def state(self, left_face, right_face, gamma):
 
         # state variables in the face frame of reference
-        left_face, right_face = self._transform_to_face(ql, qr, faces_info)
+        #left_face, right_face = self._transform_to_face(ql, qr, faces_info)
 
 
         # Begin the calculation of the flux at the interface 
@@ -54,7 +54,7 @@ class pvrs(riemann_base):
 
         #----------------------------------------------------------------------------------------
         # Now calculate what state the interface is in
-        
+
         # Now we calculate which state we are in, see fig. 9.2 (Toro)
         # for a visual of possible wave patterns.
 
@@ -63,7 +63,7 @@ class pvrs(riemann_base):
         head_right = np.zeros(rho_left.shape)
         tail_right = np.zeros(rho_left.shape)
         s         = np.zeros(rho_left.shape)
-        
+
         alpha = np.zeros(rho_left.shape)
 
         rho_state  = np.zeros(rho_left.shape)
@@ -108,7 +108,7 @@ class pvrs(riemann_base):
                 #l = ~k
                 l = ~k*ji
                 if l.any():
-                     
+
                     # shock is moving to the left, its a
                     # left star state
                     rho_state[l]  = rho_star_left[l]
@@ -156,9 +156,9 @@ class pvrs(riemann_base):
                     p_state[mn]    = alpha[mn]*p_star[mn]         + (1.0 - alpha[mn])*p_left[mn]
                     rhoe_state[mn] = alpha[mn]*rhoe_star_left[mn] + (1.0 - alpha[mn])*rhoe_left[mn]
 
-                
 
-            
+
+
         #elif u_star < 0.0:
         r = u_star < 0.0; ri=~i*r
         if ri.any():
@@ -196,7 +196,7 @@ class pvrs(riemann_base):
                 #else:
                 qq = ~q*tri
                 if qq.any():
-                     
+
                     # shock is moving to the left, its a
                     # right state
                     rho_state[qq]  = rho_right[qq]
@@ -244,7 +244,7 @@ class pvrs(riemann_base):
                     p_state[zt]    = alpha[zt]*p_star[zt]          + (1.0 - alpha[zt])*p_right[zt]
                     rhoe_state[zt] = alpha[zt]*rhoe_star_right[zt] + (1.0 - alpha[zt])*rhoe_right[zt]
 
-                
+
 
         #else:
         iii = ~(i+r)
@@ -258,7 +258,8 @@ class pvrs(riemann_base):
 
 
         # calculate the flux at each face
-        return self._transform_flux_to_lab(rho_state, u_state, v_state, rhoe_state, p_state, faces_info)
+        #return self._transform_flux_to_lab(rho_state, u_state, v_state, rhoe_state, p_state, faces_info)
+        return np.array([rho_state, u_state, v_state, rhoe_state, p_state])
 
 
 
