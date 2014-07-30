@@ -213,7 +213,6 @@ class moving_mesh(object):
         # assign primitive values to ghost particles
         primitive = self.boundary.primitive_to_ghost(self.particles, primitive, self.particles_index)
 
-#--->
         # assign particle velocities to real and ghost and do mesh regularization
         w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma)
 
@@ -223,13 +222,21 @@ class moving_mesh(object):
 
         # transform to rest frame
         self.mesh.transform_to_face(left_face, right_face, faces_info)
+#2
+#--->
+        # calculate gradient for real particles
+        gradx, grady = self.reconstruction.gradient()
 
-        # reconstruct
-        #grad = self.reconstruction.gradient()
-        #grad = self.boundary.gradient_to_ghost(self.particles, grad, self.particles_index)
-        #self.reconstruction.extrapolate(left_face, right_face, grad, faces_info)
+        # assign gradients to ghost particles
+        gradx, grady = self.boundary.gradient_to_ghost(self.particles, gradx, grady, self.particles_index)
 
-        # rotate frame 
+        # find state values at the face 
+        self.reconstruction.extrapolate(left_face, right_face, gradx, grady, faces_info, self.particles, primitive, w, self.particles_index,
+                self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
+#2
+#--->
+
+        # rotate to frame 
         self.mesh.rotate_to_face(left_face, right_face, faces_info)
 
         # calculate state at face by riemann solver
