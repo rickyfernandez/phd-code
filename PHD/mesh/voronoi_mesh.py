@@ -119,13 +119,23 @@ class voronoi_mesh(object):
         num_real_particles = particles_index["real"].size
         num_faces = cv.number_of_faces(neighbor_graph, neighbor_graph_size, num_real_particles)
 
-        faces_info = np.empty((6, num_faces), dtype="float64")
+        faces_info = {
+                "face angles":         np.empty(num_faces, dtype="float64"),
+                "face areas":          np.empty(num_faces, dtype="float64"),
+                "face center of mass": np.empty((2, num_faces), dtype="float64"),
+                "face pairs":          np.empty((2, num_faces), dtype="int32"),
+                "face velocities":     np.empty((2, num_faces), dtype="float64")
+                }
 
-        cv.faces_for_flux(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices, w, faces_info,  num_real_particles)
+        cv.faces_for_flux(faces_info["face areas"], faces_info["face velocities"], faces_info["face angles"], faces_info["face pairs"],
+                faces_info["face center of mass"], particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
+                w, num_real_particles)
 
         # grab left and right states
-        left  = primitive[:, faces_info[4,:].astype(int)]
-        right = primitive[:, faces_info[5,:].astype(int)]
+        #left  = primitive[:, faces_info[4,:].astype(int)]
+        #right = primitive[:, faces_info[5,:].astype(int)]
+        left  = primitive[:, faces_info["face pairs"][0,:]]
+        right = primitive[:, faces_info["face pairs"][1,:]]
 
         return left, right, faces_info
 
@@ -136,7 +146,9 @@ class voronoi_mesh(object):
         """
 
         # velocity of all faces
-        wx = faces_info[2,:]; wy = faces_info[3,:]
+        #wx = faces_info[2,:]; wy = faces_info[3,:]
+        wx = faces_info["face velocities"][0,:]
+        wy = faces_info["face velocities"][1,:]
 
         # boost to frame of face
         left_face[1,:] -= wx; right_face[1,:] -= wx
@@ -146,7 +158,8 @@ class voronoi_mesh(object):
     def rotate_to_face(self, left_face, right_face, faces_info):
 
         # The orientation of the face for all faces 
-        theta = faces_info[0,:]
+        #theta = faces_info[0,:]
+        theta = faces_info["face angles"]
 
         # rotate to frame face
         u_left_rotated =  np.cos(theta)*left_face[1,:] + np.sin(theta)*left_face[2,:]
@@ -174,10 +187,13 @@ class voronoi_mesh(object):
         p   = face_states[4,:]
 
         # The orientation of the face for all faces 
-        theta = faces_info[0,:]
+        #theta = faces_info[0,:]
+        theta = faces_info["face angles"]
 
         # velocity of all faces
-        wx = faces_info[2,:]; wy = faces_info[3,:]
+        #wx = faces_info[2,:]; wy = faces_info[3,:]
+        wx = faces_info["face velocities"][0,:]
+        wy = faces_info["face velocities"][1,:]
 
         # components of the flux vector
         F = np.zeros((4, rho.size))

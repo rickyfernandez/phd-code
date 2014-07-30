@@ -179,7 +179,7 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 1.])
+            p.set_clim([0, 4.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
@@ -257,10 +257,12 @@ class moving_mesh(object):
     def _update(self, fluxes, dt, faces_info):
 
         ghost_map = self.particles_index["ghost_map"]
-        area = faces_info[1,:]
+        #area = faces_info[1,:]
+        area = faces_info["face areas"]
 
         k = 0
-        for i, j in zip(faces_info[4,:], faces_info[5,:]):
+        #for i, j in zip(faces_info[4,:], faces_info[5,:]):
+        for i, j in zip(faces_info["face pairs"][0,:], faces_info["face pairs"][1,:]):
 
             self.data[:,i] -= dt*area[k]*fluxes[:,k]
 

@@ -42,7 +42,6 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
 
             # distance between particles
             h = 0.5*sqrt((xn-xp)*(xn-xp) + (yn-yp)*(yn-yp))
-            #print "h in cython", h
 
             # calculate area of face between particle and neighbor 
             # in 2d each face is made up of two vertices
@@ -104,8 +103,9 @@ def number_of_faces(int[:] neighbor_graph, int[:] neighbor_graph_size, int num_p
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def faces_for_flux(double[:,::1] particles, int[:] neighbor_graph, int[:] neighbor_graph_size,
-        int[:] face_graph, double[:,::1] circum_centers, double[:,::1] w, double[:,::1] faces_info, int num_particles):
+def faces_for_flux(double[:] face_areas, double[:,::1] face_velocities, double[:] face_angles, int[:,::1] face_pairs, double[:,::1] face_com,
+        double[:,::1] particles, int[:] neighbor_graph, int[:] neighbor_graph_size, int[:] face_graph, double[:,::1] circum_centers,
+        double[:,::1] w, int num_particles):
 
     cdef int id_p, id_n, ind, ind_face, j, k
     cdef double xp, yp, xn, yn, x1, y1, x2, y2, xr, yr, x, y
@@ -148,7 +148,8 @@ def faces_for_flux(double[:,::1] particles, int[:] neighbor_graph, int[:] neighb
                 y = y2 - y1
 
                 # area
-                faces_info[1, k] = sqrt(x*x + y*y)
+                #faces_info[1, k] = sqrt(x*x + y*y)
+                face_areas[k] = sqrt(x*x + y*y)
 
                 # step 2: calculate angle of normal
                 xr = xn - xp
@@ -160,24 +161,34 @@ def faces_for_flux(double[:,::1] particles, int[:] neighbor_graph, int[:] neighb
                 else:
                     x, y = -y, x
 
-                faces_info[0, k] = atan2(y, x)
+                #faces_info[0, k] = atan2(y, x)
+                face_angles[k] = atan2(y, x)
 
                 # step 3: calculate velocity of face
-                faces_info[2, k] = 0.5*(w[0, id_p] + w[0, id_n])
-                faces_info[3, k] = 0.5*(w[1, id_p] + w[1, id_n])
+                #faces_info[2, k] = 0.5*(w[0, id_p] + w[0, id_n])
+                #faces_info[3, k] = 0.5*(w[1, id_p] + w[1, id_n])
+                face_velocities[0,k] = 0.5*(w[0, id_p] + w[0, id_n])
+                face_velocities[1,k] = 0.5*(w[1, id_p] + w[1, id_n])
 
                 fx = 0.5*(x1 + x2)
                 fy = 0.5*(y1 + y2)
 
+                face_com[0,k] = fx
+                face_com[1,k] = fy
+
                 factor  = (w[0,id_p]-w[0,id_n])*(fx-0.5*(xp+xn)) + (w[1,id_p]-w[1,id_n])*(fy-0.5*(yp+yn))
                 factor /= (xn-xp)*(xn-xp) + (yn-yp)*(yn-yp)
 
-                faces_info[2, k] += factor*(xn-xp)
-                faces_info[3, k] += factor*(yn-yp)
+                #faces_info[2, k] += factor*(xn-xp)
+                #faces_info[3, k] += factor*(yn-yp)
+                face_velocities[0,k] += factor*(xn-xp)
+                face_velocities[1,k] += factor*(yn-yp)
 
                 # step 4: store the particles that make up the face
-                faces_info[4, k] = id_p
-                faces_info[5, k] = id_n
+                #faces_info[4, k] = id_p
+                #faces_info[5, k] = id_n
+                face_pairs[0,k] = id_p
+                face_pairs[1,k] = id_n
 
                 # update counter
                 k   += 1
