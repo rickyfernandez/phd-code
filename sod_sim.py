@@ -6,7 +6,7 @@ def sod():
     boundary_dic = {"left":0.0, "right":1.0, "bottom":0.0, "top":1.0}
 
     L = 1.       # domain size
-    n = 50      # number of points
+    n = 100      # number of points
     gamma = 1.4
 
     dx = L/n
@@ -52,13 +52,14 @@ import PHD.riemann as riemann
 # parameters for the simulation
 CFL = 0.5
 gamma = 1.4
-max_steps = 100
-max_time = 0.5
+max_steps = 1000
+max_time = 0.2
 output_name = "Sod_"
 
 # create boundary and riemann objects
 boundary_condition = boundary.reflect(0.,1.,0.,1.)
-reconstruction = reconstruction.piecewise_constant()
+#reconstruction = reconstruction.piecewise_constant()
+reconstruction = reconstruction.piecewise_linear()
 riemann_solver = riemann.pvrs()
 
 # create initial state of the system

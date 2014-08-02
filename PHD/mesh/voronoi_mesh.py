@@ -7,13 +7,13 @@ import copy
 class voronoi_mesh(object):
 
     def __init__(self, regularization):
-        self.regularization = regularization
+        self.regular = regularization
 
     def assign_particle_velocities(self, particles, primitive, particles_index, cell_info, gamma):
 
         # mesh regularization
         if self.regularization == True:
-            w = self.mesh.regularization(primitive, particles, gamma, cell_info, particles_index)
+            w = self.regularization(primitive, particles, gamma, cell_info, particles_index)
         else:
             w = np.zeros((2,particles_index["real"].size))
 
@@ -134,8 +134,8 @@ class voronoi_mesh(object):
         # grab left and right states
         #left  = primitive[:, faces_info[4,:].astype(int)]
         #right = primitive[:, faces_info[5,:].astype(int)]
-        left  = primitive[:, faces_info["face pairs"][0,:]]
-        right = primitive[:, faces_info["face pairs"][1,:]]
+        left  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
+        right = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
 
         return left, right, faces_info
 

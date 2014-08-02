@@ -156,3 +156,26 @@ class reflect(boundary_base):
         if gradx == None and grady == None:
             return None, None
 
+        gradx, grady = super(reflect, self).gradient_to_ghost(particles, gradx, grady, particles_index)
+
+        left = self.boundary["left"]
+        right = self.boundary["right"]
+
+        bottom = self.boundary["bottom"]
+        top = self.boundary["top"]
+
+        ghost_indices = particles_index["ghost"]
+
+        # reverse velocities in x direction
+        x = particles[0,ghost_indices]
+        i = np.where((x < left) | (right < x))[0]
+        #primitive[1, ghost_indices[i]] *= -1.0
+        gradx[1, ghost_indices[i]] *= -1.0
+
+        # reverse velocities in y direction
+        y = particles[1,ghost_indices]
+        i = np.where((y < bottom) | (top < y))[0]
+        #primitive[2, ghost_indices[i]] *= -1.0
+        grady[2, ghost_indices[i]] *= -1.0
+
+        return gradx, grady

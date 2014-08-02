@@ -1,1 +1,2 @@
 from piecewise_constant import piecewise_constant
+from piecewise_linear import piecewise_linear

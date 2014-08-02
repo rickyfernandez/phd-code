@@ -38,3 +38,12 @@ class boundary_base(object):
         ghost_map = particles_index["ghost_map"]
         return np.hstack((primitive, primitive[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
 
+    def gradient_to_ghost(self, particles, gradx, grady, particles_index):
+        """
+        copy gradient values from real particles to associated ghost particles
+        """
+        ghost_map = particles_index["ghost_map"]
+        grad_x = np.hstack((gradx, gradx[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+        grad_y = np.hstack((grady, grady[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+
+        return grad_x, grad_y

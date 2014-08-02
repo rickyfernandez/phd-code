@@ -14,7 +14,7 @@ import matplotlib
 class moving_mesh(object):
 
     def __init__(self, gamma = 1.4, CFL = 0.5, max_steps=100, max_time=None,
-            output_name="simulation_", regularization=False):
+            output_name="simulation_", regularization=True):
 
         # simulation parameters
         self.CFL = CFL
@@ -179,10 +179,17 @@ class moving_mesh(object):
             fig, ax = plt.subplots()
             p = PatchCollection(l, alpha=0.4)
             p.set_array(np.array(colors))
-            p.set_clim([0, 4.])
+            p.set_clim([0, 1.])
             ax.add_collection(p)
             plt.colorbar(p)
             plt.savefig(self.output_name+`num_steps`.zfill(4))
+            plt.clf()
+
+            for i in self.particles_index["real"]:
+                colors.append(self.data[0,i]/self.cell_info["volume"][i])
+
+            plt.plot(self.particles[0, self.particles_index["real"]], self.data[0, self.particles_index["real"]]/self.cell_info["volume"], "rx")
+            plt.savefig("scatter"+`num_steps`.zfill(4))
             plt.clf()
 
             num_steps+=1
@@ -220,19 +227,24 @@ class moving_mesh(object):
         left_face, right_face, faces_info = self.mesh.faces_for_flux(self.particles, primitive, w, self.particles_index, self.neighbor_graph,
                 self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
 
-        # transform to rest frame
+        # transform to rest frame ? boost to face ?
         self.mesh.transform_to_face(left_face, right_face, faces_info)
 #2
 #--->
         # calculate gradient for real particles
-        gradx, grady = self.reconstruction.gradient()
+        gradx, grady = self.reconstruction.gradient(primitive, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
+                self.face_graph, self.voronoi_vertices)
 
         # assign gradients to ghost particles
         gradx, grady = self.boundary.gradient_to_ghost(self.particles, gradx, grady, self.particles_index)
 
+
+        # hack for right now
+        ghost_map = self.particles_index["ghost_map"]
+        cell_com = np.hstack((self.cell_info["center of mass"], self.cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
+
         # find state values at the face 
-        self.reconstruction.extrapolate(left_face, right_face, gradx, grady, faces_info, self.particles, primitive, w, self.particles_index,
-                self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
+        self.reconstruction.extrapolate(left_face, right_face, gradx, grady, faces_info, cell_com, self.gamma, dt)
 #2
 #--->
 

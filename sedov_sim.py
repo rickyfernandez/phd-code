@@ -6,7 +6,7 @@ def sedov():
     boundary_dic = {"left":0.0, "right":1.0, "bottom":0.0, "top":1.0}
 
     L = 1.       # domain size
-    n = 50      # number of points
+    n = 51      # number of points
     gamma = 1.4
 
     dx = L/n
@@ -26,7 +26,7 @@ def sedov():
     data[0,:] = 1.0        # density
     data[3,:] = 1.0E-5     # energy density
 
-    r = 0.0125/2.
+    r = 0.0125/64.
     cells = ((x_in-.5)**2 + (y_in-.5)**2) <= r
     data[3, cells] = 1.0/(np.pi*r**2)
 
@@ -53,12 +53,12 @@ import PHD.riemann as riemann
 CFL = 0.5
 gamma = 1.4
 max_steps = 100
-max_time = 0.5
+max_time = 0.2
 output_name = "Sedov_"
 
 # create boundary and riemann objects
 boundary_condition = boundary.reflect(0.,1.,0.,1.)
-reconstruction = reconstruction.piecewise_constant()
+reconstruction = reconstruction.piecewise_linear()
 riemann_solver = riemann.pvrs()
 
 # create initial state of the system
