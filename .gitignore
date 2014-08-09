@@ -3,6 +3,7 @@
 *.pyc
 *.c
 *.html
+*.hdf5
 *.so
 *.Rhistory
 build/
