@@ -1,3 +1,4 @@
+import h5py
 import numpy as np
 from PHD.mesh import voronoi_mesh
 from PHD.reconstruction.reconstruction_base import reconstruction_base
@@ -66,7 +67,7 @@ class moving_mesh(object):
         Convert volume integrated variables (density, densiy*velocity, Energy) to
         primitive variables (mass, momentum, pressure).
         """
-        # conserative vector is mass, momentum, total energy
+        # conserative vector is mass, momentum, total energy in cell volume
         mass = self.data[0,:]
 
         primitive = np.empty(self.data.shape, dtype=np.float64)
@@ -74,10 +75,28 @@ class moving_mesh(object):
         primitive[1:3,:] = self.data[1:3,:]/mass    # velocity
 
         # pressure
-        primitive[3,:] = (self.data[3,:]/volume-0.5*self.data[0,:]*\
+        primitive[3,:] = (self.data[3,:]/volume-0.5*primitive[0,:]*\
                 (primitive[1,:]**2 + primitive[2,:]**2))*(self.gamma-1.0)
 
         return primitive
+
+    def data_dump(self, time):
+
+        f = h5py.File(self.output_name + ".hdf5", "w")
+
+        vol  = self.cell_info["volume"]
+        mass = self.data[0,:]
+        vx   = self.data[1,:]/mass
+        vy   = self.data[2,:]/mass
+
+        f["/particles"] = self.particles
+        f["/density"]  = mass/vol
+        f["/velocity"] = self.data[1:3,:]/mass
+        f["/pressure"] = (self.data[3,:]/vol - 0.5*(mass/vol)*(vx**2 + vy**2))*(self.gamma-1.0)
+
+        f.attrs["time"] = time
+
+        f.close()
 
 
 
@@ -118,7 +137,7 @@ class moving_mesh(object):
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
                 self.voronoi_vertices, self.particles_index)
 
-        # convert data to mass, momentum, and energy
+        # convert data to mass, momentum, and total energy in cell
         self.data = initial_data*self.cell_info["volume"]
 
 
@@ -145,55 +164,84 @@ class moving_mesh(object):
 
         while time < self.max_time and num_steps < self.max_steps:
 
-            print "solving for step:", num_steps
 
             time += self._solve_one_step(time, num_steps)
+            print "solving for step:", num_steps, "time: ", time
 
 
             # debugging plot --- turn to a routine later ---
-            l = []
-            ii = 0; jj = 0
-            for ip in self.particles_index["real"]:
+#            l = []
+#            ii = 0; jj = 0
+#            for ip in self.particles_index["real"]:
+#
+#                jj += self.neighbor_graph_sizes[ip]*2
+#                verts_indices = np.unique(self.face_graph[ii:jj])
+#                verts = self.voronoi_vertices[verts_indices]
+#
+#                # coordinates of neighbors relative to particle p
+#                xc = verts[:,0] - self.particles[0,ip]
+#                yc = verts[:,1] - self.particles[1,ip]
+#
+#                # sort in counter clock wise order
+#                sorted_vertices = np.argsort(np.angle(xc+1j*yc))
+#                verts = verts[sorted_vertices]
+#
+#                l.append(Polygon(verts, True))
+#
+#                ii = jj
+#
+#
+#
+#            # add colormap
+#            colors = []
+#            for i in self.particles_index["real"]:
+#                colors.append(self.data[0,i]/self.cell_info["volume"][i])
+#
+#            #fig, ax = plt.subplots(figsize=(20, 5))
+#            fig, ax = plt.subplots()
+#            p = PatchCollection(l, alpha=0.4)
+#            p.set_array(np.array(colors))
+#            p.set_clim([0, 4.])
+#
+#            ax.set_xlim(0,1)
+#            ax.set_ylim(0,1)
+#            #ax.set_aspect(2)
+#            ax.add_collection(p)
+#
+#            #plt.colorbar(p, orientation='horizontal')
+#            plt.savefig(self.output_name+`num_steps`.zfill(4))
+#            plt.clf()
 
-                jj += self.neighbor_graph_sizes[ip]*2
-                verts_indices = np.unique(self.face_graph[ii:jj])
-                verts = self.voronoi_vertices[verts_indices]
+            plt.figure(figsize=(5,5))
+            plt.subplot(3,1,1)
+            plt.scatter(self.particles[0, self.particles_index["real"]], self.data[0,:]/self.cell_info["volume"],
+                    facecolors="none", edgecolors="r")
+            plt.xlim(-0.2,2.2)
+            #plt.ylim(-0.1,1.1)
 
-                # coordinates of neighbors relative to particle p
-                xc = verts[:,0] - self.particles[0,ip]
-                yc = verts[:,1] - self.particles[1,ip]
+            plt.subplot(3,1,2)
+            plt.scatter(self.particles[0, self.particles_index["real"]], self.data[1,:], facecolors="none", edgecolors="r")
+            plt.xlim(-0.2,2.2)
+            plt.ylim(-2.1,2.1)
 
-                # sort in counter clock wise order
-                sorted_vertices = np.argsort(np.angle(xc+1j*yc))
-                verts = verts[sorted_vertices]
+            plt.subplot(3,1,3)
+            vol = self.cell_info["volume"]
+            mass = self.data[0,:]
+            vx = self.data[1,:]/mass
+            vy = self.data[2,:]/mass
 
-                l.append(Polygon(verts, True))
+            p = (self.data[3,:]/vol - 0.5*(mass/vol)*(vx**2 + vy**2))*(self.gamma-1.0)
+            plt.scatter(self.particles[0, self.particles_index["real"]], p, facecolors="none", edgecolors="r")
+            plt.xlim(-0.2,2.2)
+            #plt.ylim(-0.1,0.5)
 
-                ii = jj
-
-            # add colormap
-            colors = []
-            for i in self.particles_index["real"]:
-                colors.append(self.data[0,i]/self.cell_info["volume"][i])
-
-            fig, ax = plt.subplots()
-            p = PatchCollection(l, alpha=0.4)
-            p.set_array(np.array(colors))
-            p.set_clim([0, 1.])
-            ax.add_collection(p)
-            plt.colorbar(p)
-            plt.savefig(self.output_name+`num_steps`.zfill(4))
-            plt.clf()
-
-            for i in self.particles_index["real"]:
-                colors.append(self.data[0,i]/self.cell_info["volume"][i])
-
-            plt.plot(self.particles[0, self.particles_index["real"]], self.data[0, self.particles_index["real"]]/self.cell_info["volume"], "rx")
             plt.savefig("scatter"+`num_steps`.zfill(4))
             plt.clf()
 
             num_steps+=1
 
+        # output final step
+        self.data_dump(time)
 
 
     def _solve_one_step(self, time, count):
