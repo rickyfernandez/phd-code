@@ -5,13 +5,11 @@ import itertools
 
 class VoronoiMesh(object):
 
-    def __init__(self, regularization):
-        self.regular = regularization
 
-    def assign_particle_velocities(self, particles, primitive, particles_index, cell_info, gamma):
+    def assign_particle_velocities(self, particles, primitive, particles_index, cell_info, gamma, regular):
 
         # mesh regularization
-        if self.regularization == True:
+        if regular == True:
             w = self.regularization(primitive, particles, gamma, cell_info, particles_index)
         else:
             w = np.zeros((2,particles_index["real"].size))

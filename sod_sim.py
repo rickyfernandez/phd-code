@@ -64,11 +64,12 @@ max_steps = 1000
 max_time = 0.2
 output_name = "Sod"
 output_cycle = 100
+regularization = True
 
 # create boundary and riemann objects
 boundary_condition = boundary.Reflect(0.,1.,0.,.1)
-reconstruction = reconstruction.PiecewiseConstant()
-#reconstruction = reconstruction.PiecewiseLinear()
+#reconstruction = reconstruction.PiecewiseConstant()
+reconstruction = reconstruction.PiecewiseLinear()
 riemann_solver = riemann.Pvrs()
 
 # create initial state of the system
@@ -85,6 +86,7 @@ simulation.set_parameter("max_steps", max_steps)
 simulation.set_parameter("max_time", max_time)
 simulation.set_parameter("output_name", output_name)
 simulation.set_parameter("output_cycle", output_cycle)
+simulation.set_parameter("regularization", regularization)
 
 # set the boundary, riemann solver, and initial state of the simulation 
 simulation.set_boundary_condition(boundary_condition)

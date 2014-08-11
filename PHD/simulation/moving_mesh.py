@@ -39,7 +39,7 @@ class MovingMesh(object):
         self.face_graph_sizes = None
 
         # simulation classes
-        self.mesh = VoronoiMesh(regularization)
+        self.mesh = VoronoiMesh()
         self.boundary = None
         self.reconstruction = None
         self.riemann_solver = None
@@ -273,7 +273,7 @@ class MovingMesh(object):
         primitive = self.boundary.primitive_to_ghost(self.particles, primitive, self.particles_index)
 
         # assign particle velocities to real and ghost and do mesh regularization
-        w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma)
+        w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma, self.regularization)
 
         # grab left and right faces
         left_face, right_face, faces_info = self.mesh.faces_for_flux(self.particles, primitive, w, self.particles_index, self.neighbor_graph,
