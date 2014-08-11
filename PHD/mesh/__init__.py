@@ -1,1 +1,1 @@
-from voronoi_mesh import voronoi_mesh
+from voronoi_mesh import VoronoiMesh

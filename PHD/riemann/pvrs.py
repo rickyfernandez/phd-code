@@ -1,7 +1,7 @@
+from riemann_base import RiemannBase
 import numpy as np
-from riemann_base import riemann_base
 
-class pvrs(riemann_base):
+class Pvrs(RiemannBase):
 
     def state(self, left_face, right_face, gamma):
 
@@ -254,12 +254,3 @@ class pvrs(riemann_base):
 
 
         return np.array([rho_state, u_state, v_state, rhoe_state, p_state])
-
-
-
-if __name__ == "__main__":
-
-    left  = np.array([[1.0, 1.0, 1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
-    right = np.array([[0.125, 0.125, 0.125], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.1, 0.1, 0.1]])
-
-    print Hllc(left, right, 1.4)

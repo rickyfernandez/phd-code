@@ -1,6 +1,6 @@
 import numpy as np
 
-class riemann_base(object):
+class RiemannBase(object):
     """
     Riemann base class. All riemann solvers should inherit this class
     """

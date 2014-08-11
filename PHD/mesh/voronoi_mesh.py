@@ -2,9 +2,8 @@ from scipy.spatial import Voronoi
 import cell_volume_center as cv
 import numpy as np
 import itertools
-import copy
 
-class voronoi_mesh(object):
+class VoronoiMesh(object):
 
     def __init__(self, regularization):
         self.regular = regularization
@@ -71,9 +70,8 @@ class voronoi_mesh(object):
         num_particles = particles.shape[1]
 
         # create neighbor and face graph
-        #face_graph = [[] for i in xrange(num_particles)]
         neighbor_graph = [[] for i in xrange(num_particles)]
-        face_graph2 = [[] for i in xrange(num_particles)]
+        face_graph = [[] for i in xrange(num_particles)]
 
         # loop through each face collecting the two particles
         # that made that face as well as the face itself
@@ -83,23 +81,18 @@ class voronoi_mesh(object):
             neighbor_graph[p1].append(p2)
             neighbor_graph[p2].append(p1)
 
-            #face_graph[p1].append(vor.ridge_vertices[i])
-            #face_graph[p2].append(vor.ridge_vertices[i])
-
-            face_graph2[p1] += vor.ridge_vertices[i]
-            face_graph2[p2] += vor.ridge_vertices[i]
+            face_graph[p1] += vor.ridge_vertices[i]
+            face_graph[p2] += vor.ridge_vertices[i]
 
         # sizes for 1d graphs
         neighbor_graph_sizes = np.array([len(n) for n in neighbor_graph], dtype=np.int32)
-        face_graph_sizes = np.array([len(n) for n in face_graph2], dtype=np.int32)
+        face_graph_sizes = np.array([len(n) for n in face_graph], dtype=np.int32)
 
         # graphs in 1d
-        neighbor_graph2 = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
-        face_graph2 = np.array(list(itertools.chain.from_iterable(face_graph2)), dtype=np.int32)
+        neighbor_graph = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
+        face_graph = np.array(list(itertools.chain.from_iterable(face_graph)), dtype=np.int32)
 
-        #return neighbor_graph, face_graph, vor.vertices, neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes
-        return neighbor_graph2, neighbor_graph_sizes, face_graph2, face_graph_sizes, vor.vertices
-#--->   #return neighbor_graph, face_graph, vor.vertices
+        return neighbor_graph, neighbor_graph_sizes, face_graph, face_graph_sizes, vor.vertices
 
 
     def volume_center_mass(self, particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
@@ -132,8 +125,6 @@ class voronoi_mesh(object):
                 w, num_real_particles)
 
         # grab left and right states
-        #left  = primitive[:, faces_info[4,:].astype(int)]
-        #right = primitive[:, faces_info[5,:].astype(int)]
         left  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
         right = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
 
@@ -146,7 +137,6 @@ class voronoi_mesh(object):
         """
 
         # velocity of all faces
-        #wx = faces_info[2,:]; wy = faces_info[3,:]
         wx = faces_info["face velocities"][0,:]
         wy = faces_info["face velocities"][1,:]
 
@@ -158,7 +148,6 @@ class voronoi_mesh(object):
     def rotate_to_face(self, left_face, right_face, faces_info):
 
         # The orientation of the face for all faces 
-        #theta = faces_info[0,:]
         theta = faces_info["face angles"]
 
         # rotate to frame face
@@ -187,11 +176,9 @@ class voronoi_mesh(object):
         p   = face_states[4,:]
 
         # The orientation of the face for all faces 
-        #theta = faces_info[0,:]
         theta = faces_info["face angles"]
 
         # velocity of all faces
-        #wx = faces_info[2,:]; wy = faces_info[3,:]
         wx = faces_info["face velocities"][0,:]
         wy = faces_info["face velocities"][1,:]
 

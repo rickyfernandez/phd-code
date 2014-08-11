@@ -1,6 +1,6 @@
 import numpy as np
 
-class boundary_base(object):
+class BoundaryBase(object):
 
     def update(self, particles, particles_index, neighbor_graph):
         pass

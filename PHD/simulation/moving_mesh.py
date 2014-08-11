@@ -1,9 +1,9 @@
 import h5py
 import numpy as np
-from PHD.mesh import voronoi_mesh
-from PHD.reconstruction.reconstruction_base import reconstruction_base
-from PHD.riemann.riemann_base import riemann_base
-from PHD.boundary.boundary_base import boundary_base
+from PHD.mesh import VoronoiMesh
+from PHD.riemann.riemann_base import RiemannBase
+from PHD.boundary.boundary_base import BoundaryBase
+from PHD.reconstruction.reconstruct_base import ReconstructBase
 
 # for debug plotting 
 from matplotlib.collections import LineCollection, PolyCollection, PatchCollection
@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 
-class moving_mesh(object):
+class MovingMesh(object):
 
     def __init__(self, gamma = 1.4, CFL = 0.5, max_steps=100, max_time=None, output_cycle = 100000,
             output_name="simulation_", regularization=True):
@@ -39,7 +39,7 @@ class moving_mesh(object):
         self.face_graph_sizes = None
 
         # simulation classes
-        self.mesh = voronoi_mesh(regularization)
+        self.mesh = VoronoiMesh(regularization)
         self.boundary = None
         self.reconstruction = None
         self.riemann_solver = None
@@ -103,14 +103,14 @@ class moving_mesh(object):
 
     def set_boundary_condition(self, boundary):
 
-        if isinstance(boundary, boundary_base):
+        if isinstance(boundary, BoundaryBase):
             self.boundary = boundary
         else:
             raise TypeError
 
     def set_reconstruction(self, reconstruction):
 
-        if isinstance(reconstruction, reconstruction_base):
+        if isinstance(reconstruction, ReconstructBase):
             self.reconstruction = reconstruction
         else:
             raise TypeError
@@ -144,7 +144,7 @@ class moving_mesh(object):
 
     def set_riemann_solver(self, riemann_solver):
 
-        if isinstance(riemann_solver, riemann_base):
+        if isinstance(riemann_solver, RiemannBase):
             self.riemann_solver = riemann_solver
         else:
             raise TypeError("Unknown riemann solver")
@@ -244,6 +244,8 @@ class moving_mesh(object):
             plt.savefig("scatter"+`num_steps`.zfill(4))
             plt.clf()
 
+        # last data dump
+        self.data_dump(time, num_steps)
 
 
     def _solve_one_step(self, time, count):
@@ -319,11 +321,9 @@ class moving_mesh(object):
     def _update(self, fluxes, dt, faces_info):
 
         ghost_map = self.particles_index["ghost_map"]
-        #area = faces_info[1,:]
         area = faces_info["face areas"]
 
         k = 0
-        #for i, j in zip(faces_info[4,:], faces_info[5,:]):
         for i, j in zip(faces_info["face pairs"][0,:], faces_info["face pairs"][1,:]):
 
             self.data[:,i] -= dt*area[k]*fluxes[:,k]

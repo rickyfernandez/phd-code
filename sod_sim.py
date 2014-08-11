@@ -52,10 +52,10 @@ def sod():
     return data, particles, particles_index
 
 #-------------------------------------------------------------------------------
-import PHD.simulation as simulation
-import PHD.boundary as boundary
-import PHD.reconstruction as reconstruction
 import PHD.riemann as riemann
+import PHD.boundary as boundary
+import PHD.simulation as simulation
+import PHD.reconstruction as reconstruction
 
 # parameters for the simulation
 CFL = 0.5
@@ -63,19 +63,19 @@ gamma = 1.4
 max_steps = 1000
 max_time = 0.2
 output_name = "Sod"
-output_cycle = 1
+output_cycle = 100
 
 # create boundary and riemann objects
-boundary_condition = boundary.reflect(0.,1.,0.,.1)
-#reconstruction = reconstruction.piecewise_constant()
-reconstruction = reconstruction.piecewise_linear()
-riemann_solver = riemann.pvrs()
+boundary_condition = boundary.Reflect(0.,1.,0.,.1)
+reconstruction = reconstruction.PiecewiseConstant()
+#reconstruction = reconstruction.PiecewiseLinear()
+riemann_solver = riemann.Pvrs()
 
 # create initial state of the system
 data, particles, particles_index = sod()
 
 # setup the moving mesh simulation
-simulation = simulation.moving_mesh()
+simulation = simulation.MovingMesh()
 #simulation = simulation.static_mesh()
 
 # set runtime parameters for the simulation

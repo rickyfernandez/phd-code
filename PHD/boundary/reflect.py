@@ -1,7 +1,7 @@
 import numpy as np
-from boundary_base import boundary_base
+from boundary_base import BoundaryBase
 
-class reflect(boundary_base):
+class Reflect(BoundaryBase):
 
     def __init__(self, left, right, bottom, top):
         self.boundary = {}
@@ -144,7 +144,7 @@ class reflect(boundary_base):
     def primitive_to_ghost(self, particles, primitive, particles_index):
 
         # copy primitive values to ghost
-        primitive = super(reflect, self).primitive_to_ghost(particles, primitive, particles_index)
+        primitive = super(Reflect, self).primitive_to_ghost(particles, primitive, particles_index)
 
         # for reflect boundary ghost particles velocities have to be reversed
         self.reverse_velocities(particles, primitive, particles_index)
@@ -156,7 +156,7 @@ class reflect(boundary_base):
         if gradx == None and grady == None:
             return None, None
 
-        gradx, grady = super(reflect, self).gradient_to_ghost(particles, gradx, grady, particles_index)
+        gradx, grady = super(Reflect, self).gradient_to_ghost(particles, gradx, grady, particles_index)
 
         left = self.boundary["left"]
         right = self.boundary["right"]
@@ -169,13 +169,11 @@ class reflect(boundary_base):
         # reverse velocities in x direction
         x = particles[0,ghost_indices]
         i = np.where((x < left) | (right < x))[0]
-        #primitive[1, ghost_indices[i]] *= -1.0
         gradx[1, ghost_indices[i]] *= -1.0
 
         # reverse velocities in y direction
         y = particles[1,ghost_indices]
         i = np.where((y < bottom) | (top < y))[0]
-        #primitive[2, ghost_indices[i]] *= -1.0
         grady[2, ghost_indices[i]] *= -1.0
 
         return gradx, grady
