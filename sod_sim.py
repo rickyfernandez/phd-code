@@ -3,15 +3,23 @@ import numpy as np
 def sod():
 
     # boundaries
-    boundary_dic = {"left":0.0, "right":1.0, "bottom":0.0, "top":1.0}
+    boundary_dic = {"left":0.0, "right":1.0, "bottom":0.0, "top":0.1}
 
-    L = 1.       # domain size
-    n = 100      # number of points
     gamma = 1.4
 
-    dx = L/n
-    x = (np.arange(n+6, dtype=np.float64) - 3)*dx + 0.5*dx
-    X, Y = np.meshgrid(x,x); Y = np.flipud(Y)
+    Lx = 1.       # domain size
+    nx = 100      # number of points
+
+    dx = Lx/nx
+    x = (np.arange(nx+6, dtype=np.float64) - 3)*dx + 0.5*dx
+
+    Ly = .1       # domain size
+    ny = 10       # number of points
+
+    dy = Ly/ny
+    y = (np.arange(ny+6, dtype=np.float64) - 3)*dy + 0.5*dy
+
+    X, Y = np.meshgrid(x,y); Y = np.flipud(Y)
 
     x = X.flatten(); y = Y.flatten()
 
@@ -54,10 +62,11 @@ CFL = 0.5
 gamma = 1.4
 max_steps = 1000
 max_time = 0.2
-output_name = "Sod_"
+output_name = "Sod"
+output_cycle = 1
 
 # create boundary and riemann objects
-boundary_condition = boundary.reflect(0.,1.,0.,1.)
+boundary_condition = boundary.reflect(0.,1.,0.,.1)
 #reconstruction = reconstruction.piecewise_constant()
 reconstruction = reconstruction.piecewise_linear()
 riemann_solver = riemann.pvrs()
@@ -67,6 +76,7 @@ data, particles, particles_index = sod()
 
 # setup the moving mesh simulation
 simulation = simulation.moving_mesh()
+#simulation = simulation.static_mesh()
 
 # set runtime parameters for the simulation
 simulation.set_parameter("CFL", CFL)
@@ -74,6 +84,7 @@ simulation.set_parameter("gamma", gamma)
 simulation.set_parameter("max_steps", max_steps)
 simulation.set_parameter("max_time", max_time)
 simulation.set_parameter("output_name", output_name)
+simulation.set_parameter("output_cycle", output_cycle)
 
 # set the boundary, riemann solver, and initial state of the simulation 
 simulation.set_boundary_condition(boundary_condition)

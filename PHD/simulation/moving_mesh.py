@@ -14,7 +14,7 @@ import matplotlib
 
 class moving_mesh(object):
 
-    def __init__(self, gamma = 1.4, CFL = 0.5, max_steps=100, max_time=None,
+    def __init__(self, gamma = 1.4, CFL = 0.5, max_steps=100, max_time=None, output_cycle = 100000,
             output_name="simulation_", regularization=True):
 
         # simulation parameters
@@ -22,6 +22,7 @@ class moving_mesh(object):
         self.gamma = gamma
         self.max_steps = max_steps
         self.max_time = max_time
+        self.output_cycle = output_cycle
         self.output_name = output_name
         self.regularization = regularization
 
@@ -80,9 +81,9 @@ class moving_mesh(object):
 
         return primitive
 
-    def data_dump(self, time):
+    def data_dump(self, time, num):
 
-        f = h5py.File(self.output_name + ".hdf5", "w")
+        f = h5py.File(self.output_name + "_" + `num`.zfill(4) + ".hdf5", "w")
 
         vol  = self.cell_info["volume"]
         mass = self.data[0,:]
@@ -168,6 +169,11 @@ class moving_mesh(object):
             time += self._solve_one_step(time, num_steps)
             print "solving for step:", num_steps, "time: ", time
 
+            num_steps+=1
+
+            # output data
+            if num_steps%self.output_cycle == 0:
+                self.data_dump(time, num_steps)
 
             # debugging plot --- turn to a routine later ---
 #            l = []
@@ -238,10 +244,6 @@ class moving_mesh(object):
             plt.savefig("scatter"+`num_steps`.zfill(4))
             plt.clf()
 
-            num_steps+=1
-
-        # output final step
-        self.data_dump(time)
 
 
     def _solve_one_step(self, time, count):
