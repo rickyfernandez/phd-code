@@ -153,23 +153,29 @@ def extrapolate(double[:,::1] left_face, double[:,::1] right_face, double[:,::1]
         p_r   = right_face[3,k]
 
         # density
-        left_face[0,k]  -= 0.5*dt*(vx_l*gradx[0,i] + vy_l*grady[0,i] + rho_l*(gradx[1,i] + grady[2,i]))
-        right_face[0,k] -= 0.5*dt*(vx_r*gradx[0,j] + vy_r*grady[0,j] + rho_r*(gradx[1,j] + grady[2,j]))
+        #left_face[0,k]  -= 0.5*dt*(vx_l*gradx[0,i] + vy_l*grady[0,i] + rho_l*(gradx[1,i] + grady[2,i]))
+        #right_face[0,k] -= 0.5*dt*(vx_r*gradx[0,j] + vy_r*grady[0,j] + rho_r*(gradx[1,j] + grady[2,j]))
 
-        # velocity x
-        left_face[1,k]  -= 0.5*dt*(vx_l*gradx[1,i] + vy_l*grady[1,i] + gradx[3,i]/rho_l)
-        right_face[1,k] -= 0.5*dt*(vx_r*gradx[1,j] + vy_r*grady[1,j] + gradx[3,j]/rho_r)
+        ## velocity x
+        #left_face[1,k]  -= 0.5*dt*(vx_l*gradx[1,i] + vy_l*grady[1,i] + gradx[3,i]/rho_l)
+        #right_face[1,k] -= 0.5*dt*(vx_r*gradx[1,j] + vy_r*grady[1,j] + gradx[3,j]/rho_r)
 
-        # velocity y
-        left_face[2,k]  -= 0.5*dt*(vx_l*gradx[2,i] + vy_l*grady[2,i] + grady[3,i]/rho_l)
-        right_face[2,k] -= 0.5*dt*(vx_r*gradx[2,j] + vy_r*grady[2,j] + grady[3,j]/rho_r)
+        ## velocity y
+        #left_face[2,k]  -= 0.5*dt*(vx_l*gradx[2,i] + vy_l*grady[2,i] + grady[3,i]/rho_l)
+        #right_face[2,k] -= 0.5*dt*(vx_r*gradx[2,j] + vy_r*grady[2,j] + grady[3,j]/rho_r)
 
-        # pressure
-        left_face[3,k]  -= 0.5*dt*(vx_l*gradx[3,i] + vy_l*grady[3,i] + gamma*p_l*(gradx[1,i] + grady[2,i]))
-        right_face[3,k] -= 0.5*dt*(vx_r*gradx[3,j] + vy_r*grady[3,j] + gamma*p_r*(gradx[1,j] + grady[2,j]))
+        ## pressure
+        #left_face[3,k]  -= 0.5*dt*(vx_l*gradx[3,i] + vy_l*grady[3,i] + gamma*p_l*(gradx[1,i] + grady[2,i]))
+        #right_face[3,k] -= 0.5*dt*(vx_r*gradx[3,j] + vy_r*grady[3,j] + gamma*p_r*(gradx[1,j] + grady[2,j]))
 
         # add spatial component
         for var in range(4):
 
             left_face[var,k]  += gradx[var,i]*(face_com[0,k] - cell_com[0,i]) + grady[var,i]*(face_com[1,k] - cell_com[1,i])
             right_face[var,k] += gradx[var,j]*(face_com[0,k] - cell_com[0,j]) + grady[var,j]*(face_com[1,k] - cell_com[1,j])
+
+            if (left_face[var,k] < 0.0) and (var == 0 or var == 3):
+                print "left_face[", var, "],", k, "] = ", left_face[var,k]
+
+            if (right_face[var,k] < 0.0) and (var == 0 or var == 3):
+                print "right_face[", var, "],", k, "] = ", right_face[var,k]
