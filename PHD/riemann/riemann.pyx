@@ -3,6 +3,217 @@ import numpy as np
 cimport numpy as np
 cimport cython
 
+
+def hllc(double[:,::1] face_left, double[:,::1] face_right, double[:,::1] flux, double[:] w_face, double gamma, int num_faces):
+
+    cdef double p_star, u_star
+    cdef double density_avg, soundspeed_avg
+
+    cdef double w
+
+    cdef double s_left, s_right, s_contact
+    cdef double c_left, c_right
+
+    cdef double[:] flux_state = np.zeros(4, dtype=np.float64)
+
+    cdef double[:] u_state_left = np.zeros(4, dtype=np.float64)
+    cdef double[:] q_left       = np.zeros(4, dtype=np.float64)
+    cdef double[:] u_star_left  = np.zeros(4, dtype=np.float64)
+
+    cdef double[:] u_state_right = np.zeros(4, dtype=np.float64)
+    cdef double[:] q_right       = np.zeros(4, dtype=np.float64)
+    cdef double[:] u_star_right  = np.zeros(4, dtype=np.float64)
+
+    cdef double z, p_lr
+    cdef double Q = 2.0
+    cdef double A_left, A_right, B_left, B_right
+    cdef double g_left, g_right
+
+    cdef int i, j
+    cdef double p_min
+    cdef double p_max
+    cdef double c_floor = 1.0E-10
+
+    cdef double d_left
+    cdef double p_left
+    cdef double u_left
+
+    cdef double d_right
+    cdef double p_right
+    cdef double u_right
+
+    for i in range(num_faces):
+
+        d_left = face_left[0,i]
+        u_left = face_left[1,i]
+        p_left = face_left[3,i]
+
+        d_right = face_right[0,i]
+        u_right = face_right[1,i]
+        p_right = face_right[3,i]
+
+        c_left  = max(sqrt(gamma*p_left/d_left), c_floor)
+        c_right = max(sqrt(gamma*p_right/d_right), c_floor)
+
+        density_avg    = 0.5*(d_left + d_right)
+        soundspeed_avg = 0.5*(c_left + c_right)
+
+        # estimate p* - eq. 9.20
+        p_star = max(0.0, 0.5*(p_left + p_right) + 0.5*(u_left - u_right)*density_avg*soundspeed_avg)
+
+        p_min = min(p_left, p_right)
+        p_max = max(p_left, p_right)
+
+        if(((p_max/p_min) < Q) and ((p_min < p_star) and (p_star < p_max))):
+
+            u_star = 0.5*(u_left + u_right) + 0.5*(p_left - p_right)/(density_avg*soundspeed_avg)
+
+        elif(p_star <= p_min):
+
+            # two rarefaction riemann solver (TRRS)
+            # eq. 9.31
+            z = (gamma - 1.0)/(2.0*gamma);
+
+            # eq. 9.35
+            p_lr = pow(p_left/p_right, z);
+
+            u_star = (p_lr*u_left/c_left +\
+                    u_right/c_right + 2.0*(p_lr - 1.0)/(gamma - 1.0))/\
+                    (p_lr/c_left + 1.0/c_right)
+
+            # estimate p* from two rarefaction aprroximation - eq. 9.36
+            p_star = 0.5*p_left*pow(1.0 + (gamma - 1.0)*
+                        (u_left - u_star)/(2.0*c_left), 1.0/z)
+
+            p_star += 0.5*p_right*pow(1.0 + (gamma - 1.0)*
+                        (u_star - u_right)/(2.0*c_right), 1.0/z)
+
+
+        else:
+
+            # two shock riemann solver (TSRS)
+
+            # eq. 9.31
+            A_left  = 2.0/((gamma + 1.0)*d_left)
+            A_right = 2.0/((gamma + 1.0)*d_right)
+
+            B_left  = p_left*((gamma - 1.0)/(gamma + 1.0))
+            B_right = p_right*((gamma - 1.0)/(gamma + 1.0))
+
+            # 9.41
+            g_left  = sqrt(A_left/(p_star + B_left))
+            g_right = sqrt(A_right/(p_star + B_right))
+
+            # estimate p* from two shock aprroximation - eq. 9.43
+            p_star = (g_left*p_left + g_right*p_right -\
+                    (u_right - u_left))/(g_left + g_right);
+
+            u_star = 0.5*(u_left + u_right) +\
+                    0.5*(g_right*(p_star - p_right) - g_left*(p_star - p_left))
+
+
+        # calculate fastest left wave speed estimates - eq. 10.68-10.69
+        if(p_star <= p_left):
+            # rarefaction wave
+            s_left = u_left - c_left
+
+        else:
+            # shock wave
+            s_left = u_left - c_left*sqrt(1.0+((gamma+1.0)/(2.0*gamma))*(p_star/p_left - 1.0))
+
+        # calculate fastest right wave speed estimates - eq. 10.68-10.69
+        if(p_star <= p_right):
+            # Rarefaction wave
+            s_right = u_right + c_right
+
+        else:
+            # shock wave
+            s_right = u_right + c_right*sqrt(1.0+((gamma+1.0)/(2.0*gamma))*(p_star/p_right - 1.0))
+
+
+        # contact wave speed - eq. 10.70
+        s_contact = (p_right - p_left + d_left*u_left*(s_left - u_left) -\
+                d_right*u_right*(s_right - u_right))/\
+                (d_left*(s_left - u_left) - d_right*(s_right - u_right))
+
+        #s_contact = u_star;
+
+        for j in range(4):
+
+            q_left[j]  = face_left[j,i]
+            q_right[j] = face_right[j,i]
+
+        # convert from primitive variables to conserative variables
+        prim_to_cons(u_state_left,  q_left, gamma)
+        prim_to_cons(u_state_right, q_right, gamma)
+
+        w = w_face[i]
+        # calculate interface flux - eq. 10.71
+        if(w <= s_left):
+            # left state
+            construct_flux(flux_state, q_left, gamma)
+
+            for j in range(4):
+                flux_state[j] -= w*u_state_left[j]
+
+        elif((s_left < w) and (w <= s_right)):
+
+            if(w <= s_contact):
+
+                hllc_state(u_star_left, q_left, gamma, s_left, s_contact)
+                construct_flux(flux_state, q_left, gamma)
+
+                for j in range(4):
+                    flux_state[j] += s_left*(u_star_left[j] - u_state_left[j]) - w*u_star_left[j]
+
+            else:
+
+                hllc_state(u_star_right, q_right, gamma, s_right, s_contact)
+                construct_flux(flux_state, q_right, gamma)
+
+                for j in range(4):
+                    flux_state[j] += s_right*(u_star_right[j] - u_state_right[j]) - w*u_star_right[j]
+
+        else:
+
+            # it's a right state
+            construct_flux(flux_state, q_right, gamma)
+
+            for j in range(4):
+                flux_state[j] -= w*u_state_right[j]
+
+        for j in range(4):
+            flux[j,i] = flux_state[j]
+
+
+cdef hllc_state(double[:] u_str, double[:] q, double gamma, double s_wave, double contact_wave):
+
+    cdef double factor = q[0]*(s_wave - q[1])/(s_wave - contact_wave)
+
+    # star state - eq. 10.39
+    u_str[0] = factor
+    u_str[1] = factor*contact_wave
+    u_str[2] = factor*q[2];
+    u_str[3] = factor*(0.5*(q[1]*q[1] + q[2]*q[2]) + q[3]/(q[0]*(gamma - 1.0)) +\
+            (contact_wave - q[1])*(contact_wave + q[3]/(q[0]*(s_wave - q[1]))))
+
+
+cdef prim_to_cons(double[:] u_s, double[:] q_s, double gamma):
+
+    u_s[0] = q_s[0]
+    u_s[1] = q_s[0]*q_s[1]
+    u_s[2] = q_s[0]*q_s[2]
+    u_s[3] = 0.5*q_s[0]*(q_s[1]*q_s[1] + q_s[2]*q_s[2]) + q_s[3]/(gamma-1.0)
+
+
+cdef construct_flux(double[:] flux_state, double[:] q, double gamma):
+
+    flux_state[0] = q[0]*q[1]
+    flux_state[1] = q[0]*q[1]*q[1] + q[3]
+    flux_state[2] = q[0]*q[1]*q[2]
+    flux_state[3] = q[1]*(0.5*q[0]*(q[1]*q[1] + q[2]*q[2]) + q[3]*gamma/(gamma - 1.0))
+
+
 def castro(double[:,::1] face_left, double[:,::1] face_right, double[:,::1] face_state, double gamma, int num_faces):
 
 

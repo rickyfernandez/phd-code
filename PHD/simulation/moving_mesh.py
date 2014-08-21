@@ -55,7 +55,12 @@ class MovingMesh(object):
         # calculate approx radius of each voronoi cell
         R = np.sqrt(vol/np.pi)
 
-        dt = self.CFL*np.min(R/c)
+        # grab the velocity
+        u = np.sqrt(prim[1,:]**2 + prim[2,:]**2)
+        lam = np.maximum(np.maximum(u-c, u), u+c)
+
+        #dt = self.CFL*np.min(R/c)
+        dt = self.CFL*np.min(R/lam)
 
         if time + dt > self.max_time:
             dt = self.max_time - time
@@ -78,6 +83,16 @@ class MovingMesh(object):
         # pressure
         primitive[3,:] = (self.data[3,:]/volume-0.5*primitive[0,:]*\
                 (primitive[1,:]**2 + primitive[2,:]**2))*(self.gamma-1.0)
+
+        i = primitive[0,:] < 0
+        if i.any():
+            print "found particles with negative densities"
+            print self.particles[0,i]
+
+        i = primitive[3,:] < 0
+        if i.any():
+            print "found particles with negative pressure"
+            print self.particles[0,i]
 
         return primitive
 
@@ -169,80 +184,81 @@ class MovingMesh(object):
             time += self._solve_one_step(time, num_steps)
             print "solving for step:", num_steps, "time: ", time
 
-            num_steps+=1
 
             # output data
             if num_steps%self.output_cycle == 0:
                 self.data_dump(time, num_steps)
 
+            num_steps+=1
             # debugging plot --- turn to a routine later ---
-#            l = []
-#            ii = 0; jj = 0
-#            for ip in self.particles_index["real"]:
-#
-#                jj += self.neighbor_graph_sizes[ip]*2
-#                verts_indices = np.unique(self.face_graph[ii:jj])
-#                verts = self.voronoi_vertices[verts_indices]
-#
-#                # coordinates of neighbors relative to particle p
-#                xc = verts[:,0] - self.particles[0,ip]
-#                yc = verts[:,1] - self.particles[1,ip]
-#
-#                # sort in counter clock wise order
-#                sorted_vertices = np.argsort(np.angle(xc+1j*yc))
-#                verts = verts[sorted_vertices]
-#
-#                l.append(Polygon(verts, True))
-#
-#                ii = jj
-#
-#
-#
-#            # add colormap
-#            colors = []
-#            for i in self.particles_index["real"]:
-#                colors.append(self.data[0,i]/self.cell_info["volume"][i])
-#
-#            #fig, ax = plt.subplots(figsize=(20, 5))
-#            fig, ax = plt.subplots()
-#            p = PatchCollection(l, alpha=0.4)
-#            p.set_array(np.array(colors))
-#            p.set_clim([0, 4.])
-#
-#            ax.set_xlim(0,1)
-#            ax.set_ylim(0,1)
-#            #ax.set_aspect(2)
-#            ax.add_collection(p)
-#
-#            #plt.colorbar(p, orientation='horizontal')
-#            plt.savefig(self.output_name+`num_steps`.zfill(4))
-#            plt.clf()
+            l = []
+            ii = 0; jj = 0
+            for ip in self.particles_index["real"]:
 
-            plt.figure(figsize=(5,5))
-            plt.subplot(3,1,1)
-            plt.scatter(self.particles[0, self.particles_index["real"]], self.data[0,:]/self.cell_info["volume"],
-                    facecolors="none", edgecolors="r")
-            plt.xlim(-0.2,2.2)
-            #plt.ylim(-0.1,1.1)
+                jj += self.neighbor_graph_sizes[ip]*2
+                verts_indices = np.unique(self.face_graph[ii:jj])
+                verts = self.voronoi_vertices[verts_indices]
 
-            plt.subplot(3,1,2)
-            plt.scatter(self.particles[0, self.particles_index["real"]], self.data[1,:], facecolors="none", edgecolors="r")
-            plt.xlim(-0.2,2.2)
-            plt.ylim(-2.1,2.1)
+                # coordinates of neighbors relative to particle p
+                xc = verts[:,0] - self.particles[0,ip]
+                yc = verts[:,1] - self.particles[1,ip]
 
-            plt.subplot(3,1,3)
-            vol = self.cell_info["volume"]
-            mass = self.data[0,:]
-            vx = self.data[1,:]/mass
-            vy = self.data[2,:]/mass
+                # sort in counter clock wise order
+                sorted_vertices = np.argsort(np.angle(xc+1j*yc))
+                verts = verts[sorted_vertices]
 
-            p = (self.data[3,:]/vol - 0.5*(mass/vol)*(vx**2 + vy**2))*(self.gamma-1.0)
-            plt.scatter(self.particles[0, self.particles_index["real"]], p, facecolors="none", edgecolors="r")
-            plt.xlim(-0.2,2.2)
-            #plt.ylim(-0.1,0.5)
+                l.append(Polygon(verts, True))
 
-            plt.savefig("scatter"+`num_steps`.zfill(4))
+                ii = jj
+
+
+
+            # add colormap
+            colors = []
+            for i in self.particles_index["real"]:
+                colors.append(self.data[0,i]/self.cell_info["volume"][i])
+                #colors.append(self.data[1,i]/self.data[0,i])
+
+            #fig, ax = plt.subplots(figsize=(20, 5))
+            fig, ax = plt.subplots()
+            p = PatchCollection(l, alpha=0.4)
+            p.set_array(np.array(colors))
+            p.set_clim([0, 4])
+
+            ax.set_xlim(0,2)
+            ax.set_ylim(0,0.2)
+            ax.set_aspect(2)
+            ax.add_collection(p)
+
+            plt.colorbar(p, orientation='horizontal')
+            plt.savefig(self.output_name+`num_steps`.zfill(4))
             plt.clf()
+#
+#            plt.figure(figsize=(5,5))
+#            plt.subplot(3,1,1)
+#            plt.scatter(self.particles[0, self.particles_index["real"]], self.data[0,:]/self.cell_info["volume"],
+#                    facecolors="none", edgecolors="r")
+#            plt.xlim(-0.2,2.2)
+#            #plt.ylim(-0.1,1.1)
+#
+#            plt.subplot(3,1,2)
+#            plt.scatter(self.particles[0, self.particles_index["real"]], self.data[1,:], facecolors="none", edgecolors="r")
+#            plt.xlim(-0.2,2.2)
+#            plt.ylim(-2.1,2.1)
+#
+#            plt.subplot(3,1,3)
+#            vol = self.cell_info["volume"]
+#            mass = self.data[0,:]
+#            vx = self.data[1,:]/mass
+#            vy = self.data[2,:]/mass
+#
+#            p = (self.data[3,:]/vol - 0.5*(mass/vol)*(vx**2 + vy**2))*(self.gamma-1.0)
+#            plt.scatter(self.particles[0, self.particles_index["real"]], p, facecolors="none", edgecolors="r")
+#            plt.xlim(-0.2,2.2)
+#            #plt.ylim(-0.1,0.5)
+#
+#            plt.savefig("scatter"+`num_steps`.zfill(4))
+#            plt.clf()
 
         # last data dump
         self.data_dump(time, num_steps)
@@ -280,7 +296,7 @@ class MovingMesh(object):
                 self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
 
         # transform to rest frame ? boost to face ?
-        self.mesh.transform_to_face(left_face, right_face, faces_info)
+        #self.mesh.transform_to_face(left_face, right_face, faces_info)
 #2
 #--->
         # calculate gradient for real particles
@@ -301,13 +317,13 @@ class MovingMesh(object):
 #--->
 
         # rotate to frame 
-        self.mesh.rotate_to_face(left_face, right_face, faces_info)
+        #self.mesh.rotate_to_face(left_face, right_face, faces_info)
 
         # calculate state at face by riemann solver
-        face_states = self.riemann_solver.state(left_face, right_face, self.gamma)
+        fluxes = self.riemann_solver.fluxes(left_face, right_face, faces_info, self.gamma)
 
         # transform back to lab frame
-        fluxes = self.mesh.transform_to_lab(face_states, faces_info)
+        #fluxes = self.mesh.transform_to_lab(face_states, faces_info)
 
         # update conserved variables
         self._update(fluxes, dt, faces_info)

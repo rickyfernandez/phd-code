@@ -145,16 +145,18 @@ class Reflect(BoundaryBase):
 
         gradx, grady = super(Reflect, self).gradient_to_ghost(particles, gradx, grady, particles_index)
 
-        #ghost_indices = particles_index["ghost"]
+        ghost_indices = particles_index["ghost"]
 
         # reverse velocities in x direction
-        #x = particles[0,ghost_indices]
-        #i = np.where((x < self.left) | (self.right < x))[0]
-        #gradx[1, ghost_indices[i]] *= -1.0
+        x = particles[0,ghost_indices]
+        i = np.where((x < self.left) | (self.right < x))[0]
+        gradx[1, ghost_indices[i]] *= -1.0
+        #grady[1, ghost_indices[i]] *= -1.0
 
         # reverse velocities in y direction
-        #y = particles[1,ghost_indices]
-        #i = np.where((y < self.bottom) | (self.top < y))[0]
+        y = particles[1,ghost_indices]
+        i = np.where((y < self.bottom) | (self.top < y))[0]
+        gradx[2, ghost_indices[i]] *= -1.0
         #grady[2, ghost_indices[i]] *= -1.0
 
         return gradx, grady
