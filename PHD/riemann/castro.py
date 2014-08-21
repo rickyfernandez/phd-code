@@ -4,18 +4,10 @@ import riemann
 
 class Castro(RiemannBase):
 
-    def state(self, left_face, right_face, gamma):
-
-        num_faces = left_face.shape[1]
-        state_face = np.zeros((5,num_faces), dtype="float64")
-        riemann.castro(left_face, right_face, state_face, gamma, num_faces)
-
-        return state_face
-
     def fluxes(self, left_face, right_face, faces_info, gamma):
 
-        num_faces = left_face.shape[1]
-        fluxes = np.zeros((4,num_faces), dtype="float64")
+        num_faces    = left_face.shape[1]
+        face_states  = np.zeros((5,num_faces), dtype="float64")
 
         # The orientation of the face for all faces 
         theta = faces_info["face angles"]
@@ -24,19 +16,52 @@ class Castro(RiemannBase):
         wx = faces_info["face velocities"][0,:]
         wy = faces_info["face velocities"][1,:]
 
-        # velocity of the faces in the direction of the faces
-        # dot product invariant under rotation
-        w = wx*np.cos(theta) + wy*np.sin(theta)
+        # boost to frame of face
+        left_face[1,:] -= wx; right_face[1,:] -= wx
+        left_face[2,:] -= wy; right_face[2,:] -= wy
 
         # rotate to face frame 
-        # rotate states to the frame of the face
         self.rotate_state(left_face,  theta)
         self.rotate_state(right_face, theta)
 
         # solve the riemann problem
-        riemann.hllc(left_face, right_face, fluxes, w, gamma, num_faces)
+        riemann.castro(left_face, right_face, face_states, gamma, num_faces)
 
-        # rotate the flux back to the lab frame 
-        self.rotate_state(fluxes, -theta)
+        # rotate state back to the lab frame 
+        self.rotate_state(face_states, -theta)
 
-        return fluxes
+        rho = face_states[0,:]
+        u   = face_states[1,:]
+        v   = face_states[2,:]
+        rhoe= face_states[3,:]
+        p   = face_states[4,:]
+
+        # rotate state back to labrotary frame
+        u_lab = np.cos(theta)*u - np.sin(theta)*v
+        v_lab = np.sin(theta)*u + np.cos(theta)*v
+
+        # unboost
+        u_lab += wx
+        v_lab += wy
+
+        # calculate energy density in lab frame
+        E = 0.5*rho*(u_lab**2 + v_lab**2) + rhoe
+
+        # components of the flux vector
+        F = np.zeros((4, rho.size))
+        G = np.zeros((4, rho.size))
+
+        # flux component in the x-direction
+        F[0,:] = rho*(u_lab - wx)
+        F[1,:] = rho*u_lab*(u_lab-wx) + p
+        F[2,:] = rho*v_lab*(u_lab-wx)
+        F[3,:] = E*(u_lab-wx) + p*u_lab
+
+        # flux component in the y-direction
+        G[0,:] = rho*(v_lab - wy)
+        G[1,:] = rho*u_lab*(v_lab-wy)
+        G[2,:] = rho*v_lab*(v_lab-wy) + p
+        G[3,:] = E*(v_lab-wy) + p*v_lab
+
+        # dot product flux in orientation of face
+        return np.cos(theta)*F + np.sin(theta)*G
