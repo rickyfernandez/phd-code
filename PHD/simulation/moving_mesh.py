@@ -45,7 +45,7 @@ class MovingMesh(object):
         self.riemann_solver = None
 
 
-    def _get_dt(self, time, prim, vol):
+    def get_dt(self, time, prim, vol):
         """
         Calculate the time step using the CFL condition.
         """
@@ -283,7 +283,7 @@ class MovingMesh(object):
         primitive = self._cons_to_prim(self.cell_info["volume"])
 
         # calculate global time step from real particles
-        dt = self._get_dt(time, primitive, self.cell_info["volume"])
+        dt = self.get_dt(time, primitive, self.cell_info["volume"])
 
         # assign primitive values to ghost particles
         primitive = self.boundary.primitive_to_ghost(self.particles, primitive, self.particles_index)
@@ -315,18 +315,11 @@ class MovingMesh(object):
         self.reconstruction.extrapolate(left_face, right_face, gradx, grady, faces_info, cell_com, self.gamma, dt)
 #2
 #--->
-
-        # rotate to frame 
-        #self.mesh.rotate_to_face(left_face, right_face, faces_info)
-
         # calculate state at face by riemann solver
         fluxes = self.riemann_solver.fluxes(left_face, right_face, faces_info, self.gamma)
 
-        # transform back to lab frame
-        #fluxes = self.mesh.transform_to_lab(face_states, faces_info)
-
         # update conserved variables
-        self._update(fluxes, dt, faces_info)
+        self.update(fluxes, dt, faces_info)
 
         # move particles
         self.particles[:,self.particles_index["real"]] += dt*w[:, self.particles_index["real"]]
@@ -334,7 +327,7 @@ class MovingMesh(object):
         return dt
 
 
-    def _update(self, fluxes, dt, faces_info):
+    def update(self, fluxes, dt, faces_info):
 
         ghost_map = self.particles_index["ghost_map"]
         area = faces_info["face areas"]
