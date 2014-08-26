@@ -48,7 +48,6 @@ class MovingMesh(object):
         self.riemann_solver = None
 
 
-    #def get_dt(self, time, prim, vol):
     def get_dt(self):
         """
         Calculate the time step using the CFL condition.
@@ -57,78 +56,39 @@ class MovingMesh(object):
         cells = self.particles_index["real"]
         vol = self.cell_info["volume"]
 
+        # grab values that correspond to real particles
         dens = self.fields.get_field("density")[cells]
         velx = self.fields.get_field("velocity-x")[cells]
         vely = self.fields.get_field("velocity-x")[cells]
         pres = self.fields.get_field("pressure")[cells]
 
         # sound speed
-        #c = np.sqrt(self.gamma*prim[3,:]/prim[0,:])
         c = np.sqrt(self.gamma*pres/dens)
 
         # calculate approx radius of each voronoi cell
         R = np.sqrt(vol/np.pi)
 
-        # grab the velocity
-        #u = np.sqrt(prim[1,:]**2 + prim[2,:]**2)
         u = np.sqrt(velx**2 + vely**2)
+
+        # largest eigenvalue
         lam = np.maximum.reduce([np.absolute(u-c), np.absolute(u), np.absolute(u+c)])
 
-        #dt = self.CFL*np.min(R/c)
-        dt = self.CFL*np.min(R/lam)
+        self.dt = self.CFL*np.min(R/lam)
 
-        if self.time + dt > self.max_time:
-            dt = self.max_time - self.time
+        if self.time + self.dt > self.max_time:
+            self.dt = self.max_time - self.time
 
-        return dt
-
-
-#    def _cons_to_prim(self, volume):
-#        """
-#        Convert volume integrated variables (density, densiy*velocity, Energy) to
-#        primitive variables (mass, momentum, pressure).
-#        """
-#        # conserative vector is mass, momentum, total energy in cell volume
-#        mass = self.data[0,:]
-#
-#        primitive = np.empty(self.data.shape, dtype=np.float64)
-#        primitive[0,:] = self.data[0,:]/volume      # density
-#        primitive[1:3,:] = self.data[1:3,:]/mass    # velocity
-#
-#        # pressure
-#        primitive[3,:] = (self.data[3,:]/volume-0.5*primitive[0,:]*\
-#                (primitive[1,:]**2 + primitive[2,:]**2))*(self.gamma-1.0)
-#
-#        i = primitive[0,:] < 0
-#        if i.any():
-#            print "found particles with negative densities"
-#            print self.particles[0,i]
-#
-#        i = primitive[3,:] < 0
-#        if i.any():
-#            print "found particles with negative pressure"
-#            print self.particles[0,i]
-#
-#        return primitive
 
     def data_dump(self, num):
 
         f = h5py.File(self.output_name + "_" + `num`.zfill(4) + ".hdf5", "w")
 
-#        vol  = self.cell_info["volume"]
-#        mass = self.data[0,:]
-#        vx   = self.data[1,:]/mass
-#        vy   = self.data[2,:]/mass
-#
-#        f["/particles"] = self.particles
-#        f["/density"]  = mass/vol
-#        f["/velocity"] = self.data[1:3,:]/mass
-#        f["/pressure"] = (self.data[3,:]/vol - 0.5*(mass/vol)*(vx**2 + vy**2))*(self.gamma-1.0)
+        cells = self.particles_index["real"]
 
-        dens = self.fields.get_field("density")
-        velx = self.fields.get_field("velocity-x")
-        vely = self.fields.get_field("velocity-y")
-        pres = self.fields.get_field("pressure")
+        dens = self.fields.get_field("density")[cells]
+        velx = self.fields.get_field("velocity-x")[cells]
+        vely = self.fields.get_field("velocity-y")[cells]
+        pres = self.fields.get_field("pressure")[cells]
 
         f["/particles"]  = self.particles
 
@@ -140,7 +100,6 @@ class MovingMesh(object):
         f.attrs["time"] = self.time
 
         f.close()
-
 
 
     def set_boundary_condition(self, boundary):
@@ -180,9 +139,6 @@ class MovingMesh(object):
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
                 self.voronoi_vertices, self.particles_index)
 
-        # convert data to mass, momentum, and total energy in cell
-        #self.data = initial_data*self.cell_info["volume"]
-
         num_particles = self.particles_index["real"].size
 
         # setup data container
@@ -220,13 +176,14 @@ class MovingMesh(object):
         """
         Evolve the simulation from time zero to the specified max time.
         """
-        #time = 0.0
         num_steps = 0
 
         while self.time < self.max_time and num_steps < self.max_steps:
 
 
-            self.time += self._solve_one_step(num_steps)
+            self._solve_one_step(num_steps)
+            self.time += self.dt
+
             print "solving for step:", num_steps, "time: ", self.time
 
 
@@ -258,14 +215,14 @@ class MovingMesh(object):
 #                ii = jj
 #
 #
-#            cells = self.particles_index["real"]
-#
-#            dens = self.fields.get_field("density")[cells]
-#            velx = self.fields.get_field("velocity-x")[cells]
-#            vely = self.fields.get_field("velocity-y")[cells]
-#            pres = self.fields.get_field("pressure")[cells]
-#
-#            # add colormap
+            cells = self.particles_index["real"]
+
+            dens = self.fields.get_field("density")[cells]
+            velx = self.fields.get_field("velocity-x")[cells]
+            vely = self.fields.get_field("velocity-y")[cells]
+            pres = self.fields.get_field("pressure")[cells]
+
+            # add colormap
 #            colors = []
 #            for i in self.particles_index["real"]:
 #                colors.append(dens[i])
@@ -284,28 +241,28 @@ class MovingMesh(object):
 #            plt.colorbar(p, orientation='horizontal')
 #            plt.savefig(self.output_name+`num_steps`.zfill(4))
 #            plt.clf()
-#
-#
-#
-#            plt.figure(figsize=(5,5))
-#            plt.subplot(3,1,1)
-#            plt.scatter(self.particles[0,cells], dens, facecolors="none", edgecolors="r")
-#            #plt.xlim(-0.2,2.2)
-#            plt.ylim(-5,40)
-#
-#            plt.subplot(3,1,2)
-#            plt.scatter(self.particles[0,cells], velx, facecolors="none", edgecolors="r")
-#            #plt.xlim(-0.2,2.2)
-#            plt.ylim(-5,30)
-#
-#            plt.subplot(3,1,3)
-#
-#            plt.scatter(self.particles[0,cells], pres, facecolors="none", edgecolors="r")
-#            #plt.xlim(-0.2,2.2)
-#            plt.ylim(-1,2000)
-#
-#            plt.savefig("scatter"+`num_steps`.zfill(4))
-#            plt.clf()
+
+
+
+            plt.figure(figsize=(5,5))
+            plt.subplot(3,1,1)
+            plt.scatter(self.particles[0,cells], dens, facecolors="none", edgecolors="r")
+            #plt.xlim(-0.2,2.2)
+            plt.ylim(0,1.1)
+
+            plt.subplot(3,1,2)
+            plt.scatter(self.particles[0,cells], velx, facecolors="none", edgecolors="r")
+            #plt.xlim(-0.2,2.2)
+            plt.ylim(-0.1,1.1)
+
+            plt.subplot(3,1,3)
+
+            plt.scatter(self.particles[0,cells], pres, facecolors="none", edgecolors="r")
+            #plt.xlim(-0.2,2.2)
+            plt.ylim(-0.1,1.1)
+
+            plt.savefig("scatter"+`num_steps`.zfill(4))
+            plt.clf()
 
         # last data dump
         self.data_dump(num_steps)
@@ -328,17 +285,10 @@ class MovingMesh(object):
 
         # calculate primitive variables of real particles
         self.fields.update_primitive(self.cell_info["volume"], self.particles, self.particles_index)
-        #primitive = self._cons_to_prim(self.cell_info["volume"])
 
         # calculate global time step from real particles
-        #dt = self.get_dt(self.time, primitive, self.cell_info["volume"])
-        dt = self.get_dt()
+        self.get_dt()
 
-        # assign primitive values to ghost particles
-        #primitive = self.boundary.primitive_to_ghost(self.particles, primitive, self.particles_index)
-
-        # assign particle velocities to real and ghost and do mesh regularization
-        #w = self.mesh.assign_particle_velocities(self.particles, primitive, self.particles_index, self.cell_info, self.gamma, self.regularization)
         w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cell_info, self.gamma, self.regularization)
 
         # grab left and right faces
@@ -347,11 +297,13 @@ class MovingMesh(object):
 
 #--->
         # calculate gradient for real particles
-        gradx, grady = self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
+        #gradx, grady = self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
+        #        self.face_graph, self.voronoi_vertices)
+        self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
                 self.face_graph, self.voronoi_vertices)
 
         # assign gradients to ghost particles
-        gradx, grady = self.boundary.gradient_to_ghost(self.particles, gradx, grady, self.particles_index)
+        #gradx, grady = self.boundary.gradient_to_ghost(self.particles, gradx, grady, self.particles_index)
 
 
         # hack for right now
@@ -359,22 +311,20 @@ class MovingMesh(object):
         cell_com = np.hstack((self.cell_info["center of mass"], self.cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
 
         # find state values at the face 
-        self.reconstruction.extrapolate(left_face, right_face, gradx, grady, faces_info, cell_com, self.gamma, dt)
+        self.reconstruction.extrapolate(left_face, right_face, faces_info, cell_com, self.gamma, self.dt)
 
 #--->
         # calculate state at face by riemann solver
         fluxes = self.riemann_solver.fluxes(left_face, right_face, faces_info, self.gamma)
 
         # update conserved variables
-        self.update(fluxes, dt, faces_info)
+        self.update(fluxes, faces_info)
 
         # move particles
-        self.particles[:,self.particles_index["real"]] += dt*w[:, self.particles_index["real"]]
-
-        return dt
+        self.particles[:,self.particles_index["real"]] += self.dt*w[:, self.particles_index["real"]]
 
 
-    def update(self, fluxes, dt, faces_info):
+    def update(self, fluxes, faces_info):
 
         ghost_map = self.particles_index["ghost_map"]
         area = faces_info["face areas"]
@@ -382,12 +332,10 @@ class MovingMesh(object):
         k = 0
         for i, j in zip(faces_info["face pairs"][0,:], faces_info["face pairs"][1,:]):
 
-            #self.data[:,i] -= dt*area[k]*fluxes[:,k]
-            self.fields.field_data[:,i] -= dt*area[k]*fluxes[:,k]
+            self.fields.field_data[:,i] -= self.dt*area[k]*fluxes[:,k]
 
             # do not update ghost particle cells
             if not ghost_map.has_key(j):
-                #self.data[:,j] += dt*area[k]*fluxes[:,k]
-                self.fields.field_data[:,j] += dt*area[k]*fluxes[:,k]
+                self.fields.field_data[:,j] += self.dt*area[k]*fluxes[:,k]
 
             k += 1

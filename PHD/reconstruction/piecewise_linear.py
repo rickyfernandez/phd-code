@@ -14,12 +14,16 @@ class PiecewiseLinear(ReconstructBase):
         re.gradient(primitive, gradx, grady, particles, cell_info["volume"], cell_info["center of mass"], neighbor_graph,
                 neighbor_graph_sizes, face_graph, circum_centers, num_real_particles)
 
-        return gradx, grady
+        gradx, grady = self.boundary.gradient_to_ghost(particles, gradx, grady, particles_index)
+
+        self.gradx = gradx
+        self.grady = grady
+        #return gradx, grady
 
 
-    def extrapolate(self, left_face, right_face, gradx, grady, faces_info, cell_com, gamma, dt):
+    def extrapolate(self, left_face, right_face, faces_info, cell_com, gamma, dt):
 
         num_faces = left_face.shape[1]
 
-        re.extrapolate(left_face, right_face, gradx, grady, faces_info["face center of mass"], faces_info["face pairs"],
+        re.extrapolate(left_face, right_face, self.gradx, self.grady, faces_info["face center of mass"], faces_info["face pairs"],
                 cell_com, gamma, dt, num_faces)
