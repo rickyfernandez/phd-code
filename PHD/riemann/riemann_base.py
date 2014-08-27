@@ -21,9 +21,13 @@ class RiemannBase(object):
         state[1,:] = u_tmp
         state[2,:] = v_tmp
 
-    def fluxes(self, left_face, right_face, faces_info, gamma, dt, cell_info, particles_index):
+    def fluxes(self, faces_info, gamma, dt, cell_info, particles_index):
 
-        num_faces = left_face.shape[1]
+        left_face  = faces_info["left faces"]
+        right_face = faces_info["right faces"]
+
+        #num_faces = left_face.shape[1]
+        num_faces = faces_info["number faces"]
         fluxes = np.zeros((4,num_faces), dtype="float64")
 
         # The orientation of the face for all faces 
