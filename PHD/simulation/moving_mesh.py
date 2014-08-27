@@ -270,10 +270,9 @@ class MovingMesh(object):
         """
 
         # generate ghost particles with links to original real particles 
-        #self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
         self.particles = self.fields.update_boundaries(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
 
-        # make tesselation 
+        # construct the new mesh 
         self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.face_graph_sizes, self.voronoi_vertices = self.mesh.tessellate(self.particles)
 
         # calculate volume and center of mass of real particles
@@ -286,32 +285,28 @@ class MovingMesh(object):
         # calculate global time step from real particles
         self.get_dt()
 
+        # assign fluid velocities to particles
         w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cell_info, self.gamma, self.regularization)
 
-        # grab left and right faces
-        left_face, right_face, faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.neighbor_graph,
+        # grab left and right states for each face
+        faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.neighbor_graph,
                 self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
 
-#--->
         # calculate gradient for real particles
         self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
                 self.face_graph, self.voronoi_vertices)
 
-        # hack for right now
-        #ghost_map = self.particles_index["ghost_map"]
-        #cell_com = np.hstack((self.cell_info["center of mass"], self.cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
-
-        # find state values at the face 
-        #self.reconstruction.extrapolate(left_face, right_face, faces_info, cell_com, self.gamma, self.dt)
-#--->
-
         # calculate state at face by riemann solver
-        fluxes = self.riemann_solver.fluxes(left_face, right_face, faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
+        fluxes = self.riemann_solver.fluxes(faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
 
         # update conserved variables
         self.update(fluxes, faces_info)
 
-        # move particles
+        # update particle positions
+        self.move_particles():
+
+
+    def move_particles(self):
         self.particles[:,self.particles_index["real"]] += self.dt*w[:, self.particles_index["real"]]
 
 
