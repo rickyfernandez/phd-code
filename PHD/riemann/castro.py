@@ -27,9 +27,6 @@ class Castro(RiemannBase):
         # solve the riemann problem
         riemann.castro(left_face, right_face, face_states, gamma, num_faces)
 
-        # rotate state back to the lab frame 
-        self.rotate_state(face_states, -theta)
-
         rho = face_states[0,:]
         u   = face_states[1,:]
         v   = face_states[2,:]
