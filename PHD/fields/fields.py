@@ -14,7 +14,6 @@ class Fields(object):
         self.prim = None
         self.lock = False
 
-        self.cons_names = ["density", "momentum-x/volume", "momentum-y/volume", "total-energy/volume"]
         self.prim_names = ["density", "velocity-x", "velocity-y", "pressure"]
 
         self.add_field("mass")
@@ -40,19 +39,22 @@ class Fields(object):
         self.field_data = np.zeros((self.num_fields, self.num_real_particles), dtype="float64")
 
 
-    def get_field(self, name):
+    def get_field(self, name, only_real=True):
 
         if name in self.field_names:
             i = self.field_names.index(name)
-            return self.field_data[i,:]
+            if only_real == True:
+                return self.field_data[i,:self.num_real_particles]
+            else:
+                return self.field_data[i,:]
 
         if name in self.prim_names:
             i = self.prim_names.index(name)
-            return self.prim[i,:]
+            if only_real == True:
+                return self.prim[i,:self.num_real_particles]
+            else:
+                return self.prim[i,:]
 
-        if name in self.cons_names:
-            i = self.cons_names.index(name)
-            return self.cons[i,:]
 
     def update_primitive(self, vol, particles, particles_index):
 
@@ -74,3 +76,10 @@ class Fields(object):
         pres[:] = (ener/vol - 0.5*dens*(velx**2 + vely**2))*(self.gamma - 1.0)
 
         self.prim = self.boundary.primitive_to_ghost(particles, self.prim, particles_index)
+
+    def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_sizes):
+
+        new_particles = self.boundary.update(particles, particles_index, neighbor_graph, neighbor_graph_sizes)
+        self.num_real_particles = particles_index["real"].size
+
+        return new_particles

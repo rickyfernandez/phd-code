@@ -53,14 +53,13 @@ class MovingMesh(object):
         Calculate the time step using the CFL condition.
         """
 
-        cells = self.particles_index["real"]
         vol = self.cell_info["volume"]
 
         # grab values that correspond to real particles
-        dens = self.fields.get_field("density")[cells]
-        velx = self.fields.get_field("velocity-x")[cells]
-        vely = self.fields.get_field("velocity-x")[cells]
-        pres = self.fields.get_field("pressure")[cells]
+        dens = self.fields.get_field("density")
+        velx = self.fields.get_field("velocity-x")
+        vely = self.fields.get_field("velocity-x")
+        pres = self.fields.get_field("pressure")
 
         # sound speed
         c = np.sqrt(self.gamma*pres/dens)
@@ -83,12 +82,10 @@ class MovingMesh(object):
 
         f = h5py.File(self.output_name + "_" + `num`.zfill(4) + ".hdf5", "w")
 
-        cells = self.particles_index["real"]
-
-        dens = self.fields.get_field("density")[cells]
-        velx = self.fields.get_field("velocity-x")[cells]
-        vely = self.fields.get_field("velocity-y")[cells]
-        pres = self.fields.get_field("pressure")[cells]
+        dens = self.fields.get_field("density")
+        velx = self.fields.get_field("velocity-x")
+        vely = self.fields.get_field("velocity-y")
+        pres = self.fields.get_field("pressure")
 
         f["/particles"]  = self.particles
 
@@ -215,14 +212,13 @@ class MovingMesh(object):
 #                ii = jj
 #
 #
-            cells = self.particles_index["real"]
-
-            dens = self.fields.get_field("density")[cells]
-            velx = self.fields.get_field("velocity-x")[cells]
-            vely = self.fields.get_field("velocity-y")[cells]
-            pres = self.fields.get_field("pressure")[cells]
-
-            # add colormap
+#            cells = self.particles_index["real"]
+#            dens = self.fields.get_field("density")
+#            velx = self.fields.get_field("velocity-x")
+#            vely = self.fields.get_field("velocity-y")
+#            pres = self.fields.get_field("pressure")
+#
+#            # add colormap
 #            colors = []
 #            for i in self.particles_index["real"]:
 #                colors.append(dens[i])
@@ -241,28 +237,28 @@ class MovingMesh(object):
 #            plt.colorbar(p, orientation='horizontal')
 #            plt.savefig(self.output_name+`num_steps`.zfill(4))
 #            plt.clf()
-
-
-
-            plt.figure(figsize=(5,5))
-            plt.subplot(3,1,1)
-            plt.scatter(self.particles[0,cells], dens, facecolors="none", edgecolors="r")
-            #plt.xlim(-0.2,2.2)
-            plt.ylim(0,1.1)
-
-            plt.subplot(3,1,2)
-            plt.scatter(self.particles[0,cells], velx, facecolors="none", edgecolors="r")
-            #plt.xlim(-0.2,2.2)
-            plt.ylim(-0.1,1.1)
-
-            plt.subplot(3,1,3)
-
-            plt.scatter(self.particles[0,cells], pres, facecolors="none", edgecolors="r")
-            #plt.xlim(-0.2,2.2)
-            plt.ylim(-0.1,1.1)
-
-            plt.savefig("scatter"+`num_steps`.zfill(4))
-            plt.clf()
+#
+#
+#
+#            plt.figure(figsize=(5,5))
+#            plt.subplot(3,1,1)
+#            plt.scatter(self.particles[0,cells], dens, facecolors="none", edgecolors="r")
+#            #plt.xlim(-0.2,2.2)
+#            plt.ylim(0,1.1)
+#
+#            plt.subplot(3,1,2)
+#            plt.scatter(self.particles[0,cells], velx, facecolors="none", edgecolors="r")
+#            #plt.xlim(-0.2,2.2)
+#            plt.ylim(-0.1,1.1)
+#
+#            plt.subplot(3,1,3)
+#
+#            plt.scatter(self.particles[0,cells], pres, facecolors="none", edgecolors="r")
+#            #plt.xlim(-0.2,2.2)
+#            plt.ylim(-0.1,1.1)
+#
+#            plt.savefig("scatter"+`num_steps`.zfill(4))
+#            plt.clf()
 
         # last data dump
         self.data_dump(num_steps)
@@ -274,7 +270,8 @@ class MovingMesh(object):
         """
 
         # generate ghost particles with links to original real particles 
-        self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
+        #self.particles = self.boundary.update(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
+        self.particles = self.fields.update_boundaries(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
 
         # make tesselation 
         self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.face_graph_sizes, self.voronoi_vertices = self.mesh.tessellate(self.particles)
@@ -297,25 +294,19 @@ class MovingMesh(object):
 
 #--->
         # calculate gradient for real particles
-        #gradx, grady = self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
-        #        self.face_graph, self.voronoi_vertices)
         self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
                 self.face_graph, self.voronoi_vertices)
 
-        # assign gradients to ghost particles
-        #gradx, grady = self.boundary.gradient_to_ghost(self.particles, gradx, grady, self.particles_index)
-
-
         # hack for right now
-        ghost_map = self.particles_index["ghost_map"]
-        cell_com = np.hstack((self.cell_info["center of mass"], self.cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
+        #ghost_map = self.particles_index["ghost_map"]
+        #cell_com = np.hstack((self.cell_info["center of mass"], self.cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in self.particles_index["ghost"]])]))
 
         # find state values at the face 
-        self.reconstruction.extrapolate(left_face, right_face, faces_info, cell_com, self.gamma, self.dt)
-
+        #self.reconstruction.extrapolate(left_face, right_face, faces_info, cell_com, self.gamma, self.dt)
 #--->
+
         # calculate state at face by riemann solver
-        fluxes = self.riemann_solver.fluxes(left_face, right_face, faces_info, self.gamma)
+        fluxes = self.riemann_solver.fluxes(left_face, right_face, faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
 
         # update conserved variables
         self.update(fluxes, faces_info)
