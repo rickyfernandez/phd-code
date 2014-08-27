@@ -3,6 +3,8 @@ import numpy as np
 cimport numpy as np
 cimport cython
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def gradient(double[:,::1] primitive, double[:,::1] gradx, double[:,::1] grady, double[:,::1] particles, double[:] volume,
         double[:,::1] center_of_mass, int[:] neighbor_graph, int[:] neighbor_graph_size, int[:] face_graph, double[:,::1] circum_centers,
         int num_real_particles):
@@ -127,8 +129,8 @@ def gradient(double[:,::1] primitive, double[:,::1] gradx, double[:,::1] grady, 
 
 
 
-#@cython.boundscheck(False)
-#@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.wraparound(False)
 def extrapolate(double[:,::1] left_face, double[:,::1] right_face, double[:,::1] gradx, double[:,::1] grady, double[:,::1] face_com,
         int[:,::1] face_pairs, double[:,::1] cell_com, double gamma, double dt, int num_faces):
 
@@ -153,20 +155,20 @@ def extrapolate(double[:,::1] left_face, double[:,::1] right_face, double[:,::1]
         p_r   = right_face[3,k]
 
         # density
-        #left_face[0,k]  -= 0.5*dt*(vx_l*gradx[0,i] + vy_l*grady[0,i] + rho_l*(gradx[1,i] + grady[2,i]))
-        #right_face[0,k] -= 0.5*dt*(vx_r*gradx[0,j] + vy_r*grady[0,j] + rho_r*(gradx[1,j] + grady[2,j]))
+        left_face[0,k]  -= 0.5*dt*(vx_l*gradx[0,i] + vy_l*grady[0,i] + rho_l*(gradx[1,i] + grady[2,i]))
+        right_face[0,k] -= 0.5*dt*(vx_r*gradx[0,j] + vy_r*grady[0,j] + rho_r*(gradx[1,j] + grady[2,j]))
 
         ## velocity x
-        #left_face[1,k]  -= 0.5*dt*(vx_l*gradx[1,i] + vy_l*grady[1,i] + gradx[3,i]/rho_l)
-        #right_face[1,k] -= 0.5*dt*(vx_r*gradx[1,j] + vy_r*grady[1,j] + gradx[3,j]/rho_r)
+        left_face[1,k]  -= 0.5*dt*(vx_l*gradx[1,i] + vy_l*grady[1,i] + gradx[3,i]/rho_l)
+        right_face[1,k] -= 0.5*dt*(vx_r*gradx[1,j] + vy_r*grady[1,j] + gradx[3,j]/rho_r)
 
         ## velocity y
-        #left_face[2,k]  -= 0.5*dt*(vx_l*gradx[2,i] + vy_l*grady[2,i] + grady[3,i]/rho_l)
-        #right_face[2,k] -= 0.5*dt*(vx_r*gradx[2,j] + vy_r*grady[2,j] + grady[3,j]/rho_r)
+        left_face[2,k]  -= 0.5*dt*(vx_l*gradx[2,i] + vy_l*grady[2,i] + grady[3,i]/rho_l)
+        right_face[2,k] -= 0.5*dt*(vx_r*gradx[2,j] + vy_r*grady[2,j] + grady[3,j]/rho_r)
 
         ## pressure
-        #left_face[3,k]  -= 0.5*dt*(vx_l*gradx[3,i] + vy_l*grady[3,i] + gamma*p_l*(gradx[1,i] + grady[2,i]))
-        #right_face[3,k] -= 0.5*dt*(vx_r*gradx[3,j] + vy_r*grady[3,j] + gamma*p_r*(gradx[1,j] + grady[2,j]))
+        left_face[3,k]  -= 0.5*dt*(vx_l*gradx[3,i] + vy_l*grady[3,i] + gamma*p_l*(gradx[1,i] + grady[2,i]))
+        right_face[3,k] -= 0.5*dt*(vx_r*gradx[3,j] + vy_r*grady[3,j] + gamma*p_r*(gradx[1,j] + grady[2,j]))
 
         # add spatial component
         for var in range(4):

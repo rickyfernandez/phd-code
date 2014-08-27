@@ -4,6 +4,8 @@ class RiemannBase(object):
     """
     Riemann base class. All riemann solvers should inherit this class
     """
+    def __init__(self, reconstruction=None):
+        self.reconstruction = reconstruction
 
     def rotate_state(self, state, theta):
 
@@ -19,7 +21,7 @@ class RiemannBase(object):
         state[1,:] = u_tmp
         state[2,:] = v_tmp
 
-    def fluxes(self, left_face, right_face, faces_info, gamma):
+    def fluxes(self, left_face, right_face, faces_info, gamma, dt, cell_info, particles_index):
 
         num_faces = left_face.shape[1]
         fluxes = np.zeros((4,num_faces), dtype="float64")
@@ -34,6 +36,12 @@ class RiemannBase(object):
         # velocity of the faces in the direction of the faces
         # dot product invariant under rotation
         w = wx*np.cos(theta) + wy*np.sin(theta)
+
+        # reconstruct to states to faces
+        # hack for right now
+        ghost_map = particles_index["ghost_map"]
+        cell_com = np.hstack((cell_info["center of mass"], cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+        self.reconstruction.extrapolate(left_face, right_face, faces_info, cell_com, gamma, dt)
 
         # rotate to face frame 
         self.rotate_state(left_face,  theta)
