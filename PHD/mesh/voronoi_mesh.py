@@ -4,9 +4,14 @@ import numpy as np
 import itertools
 
 class VoronoiMesh(object):
-
+    """
+    voronoi mesh class
+    """
 
     def assign_particle_velocities(self, particles, primitive, particles_index, cell_info, gamma, regular):
+        """
+        give particles local fluid velocities, regularization can be added
+        """
 
         # mesh regularization
         if regular == True:
@@ -26,6 +31,9 @@ class VoronoiMesh(object):
 
 
     def regularization(self, prim, particles, gamma, cell_info, particles_index):
+        """
+        give particles additional velocity to steer to center of mass
+        """
 
         eta = 0.25
 
@@ -60,7 +68,7 @@ class VoronoiMesh(object):
 
     def tessellate(self, particles):
         """
-        Create voronoi tesselation from particle positions
+        create voronoi tesselation from particle positions
         """
 
         vor = Voronoi(particles.T)
@@ -95,9 +103,16 @@ class VoronoiMesh(object):
 
     def volume_center_mass(self, particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
             particles_index):
+        """
+        find the volume and center of mass for all real particles
+        """
 
         num_particles = particles_index["real"].size
-        cell_info = {"volume": np.zeros(num_particles, dtype="float64"), "center of mass": np.zeros((2, num_particles), dtype="float64")}
+
+        cell_info = {
+                "volume":         np.zeros(num_particles, dtype="float64"),
+                "center of mass": np.zeros((2, num_particles), dtype="float64")
+                }
 
         cv.cell_volume_center(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
                 cell_info["volume"], cell_info["center of mass"], num_particles)
@@ -106,6 +121,10 @@ class VoronoiMesh(object):
 
 
     def faces_for_flux(self, particles, primitive, w, particles_index, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices):
+        """
+        find the area, orientation, center of mass, and velocity of each face as well
+        the particles that share the face and total numbe of faces
+        """
 
         num_real_particles = particles_index["real"].size
         num_faces = cv.number_of_faces(neighbor_graph, neighbor_graph_size, num_real_particles)
@@ -123,7 +142,7 @@ class VoronoiMesh(object):
                 faces_info["face center of mass"], particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
                 w, num_real_particles)
 
-        # grab left and right states
+        # grab left and right states for each face
         faces_info["left faces"]  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
         faces_info["right faces"] = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
 

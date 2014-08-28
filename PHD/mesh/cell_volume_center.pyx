@@ -10,8 +10,8 @@ def cell_volume_center(double[:,::1] particles, int[:] neighbor_graph, int[:] nu
         double[:,::1] center_of_mass, int num_particles):
 
     cdef int id_p          # particle index 
-    cdef int id_n          # particle index 
-    cdef int ind           # neighbor index
+    cdef int id_n          # neighbor index 
+    cdef int ind           # loop index
     cdef int ind_face      # face vertex index
 
     cdef double xp, yp, x1, y1, x2, y2
@@ -161,12 +161,9 @@ def faces_for_flux(double[:] face_areas, double[:,::1] face_velocities, double[:
                 else:
                     x, y = -y, x
 
-                #faces_info[0, k] = atan2(y, x)
                 face_angles[k] = atan2(y, x)
 
                 # step 3: calculate velocity of face
-                #faces_info[2, k] = 0.5*(w[0, id_p] + w[0, id_n])
-                #faces_info[3, k] = 0.5*(w[1, id_p] + w[1, id_n])
                 face_velocities[0,k] = 0.5*(w[0, id_p] + w[0, id_n])
                 face_velocities[1,k] = 0.5*(w[1, id_p] + w[1, id_n])
 
@@ -179,14 +176,10 @@ def faces_for_flux(double[:] face_areas, double[:,::1] face_velocities, double[:
                 factor  = (w[0,id_p]-w[0,id_n])*(fx-0.5*(xp+xn)) + (w[1,id_p]-w[1,id_n])*(fy-0.5*(yp+yn))
                 factor /= (xn-xp)*(xn-xp) + (yn-yp)*(yn-yp)
 
-                #faces_info[2, k] += factor*(xn-xp)
-                #faces_info[3, k] += factor*(yn-yp)
                 face_velocities[0,k] += factor*(xn-xp)
                 face_velocities[1,k] += factor*(yn-yp)
 
                 # step 4: store the particles that make up the face
-                #faces_info[4, k] = id_p
-                #faces_info[5, k] = id_n
                 face_pairs[0,k] = id_p
                 face_pairs[1,k] = id_n
 

@@ -1,8 +1,16 @@
 import numpy as np
 
 class BoundaryBase(object):
+    """
+    boundary condition base class, every boundary class must inherit
+    this class
+    """
 
     def update(self, particles, particles_index, neighbor_graph):
+        """
+        every boundary class must have an update method which generates
+        ghost particles from real particles
+        """
         pass
 
     def find_boundary_particles(self, neighbor_graph, neighbors_graph_size, ghost_indices, total_ghost_indices):
@@ -19,14 +27,15 @@ class BoundaryBase(object):
             end   = cumsum_neighbors[i]
             border.update(neighbor_graph[start:end])
 
-        # grab neighbors of border cells 
+        # grab neighbors again, this includes another layer of border cells 
         border_tmp = set(border)
         for i in border_tmp:
             start = cumsum_neighbors[i] - neighbors_graph_size[i]
             end   = cumsum_neighbors[i]
             border.update(neighbor_graph[start:end])
 
-        # remove ghost particles leaving border cells and neighbors, two layers
+        # remove ghost particles leaving border cells that will create
+        # new ghost particles
         border = border.difference(total_ghost_indices)
 
         return np.array(list(border))

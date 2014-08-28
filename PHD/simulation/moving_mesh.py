@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+import simulation as sim
 from PHD.fields import Fields
 from PHD.mesh import VoronoiMesh
 from PHD.riemann.riemann_base import RiemannBase
@@ -14,6 +15,9 @@ import matplotlib
 
 
 class MovingMesh(object):
+    """
+    moving mesh simulation class
+    """
 
     def __init__(self, gamma = 1.4, CFL = 0.5, max_steps=100, max_time=None, output_cycle = 100000,
             output_name="simulation_", regularization=True):
@@ -31,15 +35,19 @@ class MovingMesh(object):
         self.particles = None
         self.fields = None
         self.cell_info = None
-
         self.particles_index = None
-        self.voronoi_vertices = None
+
+        # particle graph information
         self.neighbor_graph = None
         self.neighbor_graph_sizes = None
         self.face_graph = None
         self.face_graph_sizes = None
+        self.voronoi_vertices = None
 
+        # runtime parameters
+        self.dt = 0.
         self.time = 0.
+        self.num_steps = 0
 
         # simulation classes
         self.mesh = VoronoiMesh()
@@ -66,7 +74,6 @@ class MovingMesh(object):
 
         # calculate approx radius of each voronoi cell
         R = np.sqrt(vol/np.pi)
-
         u = np.sqrt(velx**2 + vely**2)
 
         # largest eigenvalue
@@ -74,6 +81,7 @@ class MovingMesh(object):
 
         self.dt = self.CFL*np.min(R/lam)
 
+        # correct time step if exceed max time
         if self.time + self.dt > self.max_time:
             self.dt = self.max_time - self.time
 
@@ -100,6 +108,9 @@ class MovingMesh(object):
 
 
     def set_boundary_condition(self, boundary):
+        """
+        assign boundary condition for the simulation
+        """
 
         if isinstance(boundary, BoundaryBase):
             self.boundary = boundary
@@ -107,6 +118,9 @@ class MovingMesh(object):
             raise TypeError
 
     def set_reconstruction(self, reconstruction):
+        """
+        assign reconstruction method for the simulation
+        """
 
         if isinstance(reconstruction, ReconstructBase):
             self.reconstruction = reconstruction
@@ -171,24 +185,23 @@ class MovingMesh(object):
 
     def solve(self):
         """
-        Evolve the simulation from time zero to the specified max time.
+        Evolve the simulation from initial time to the specified max time.
         """
-        num_steps = 0
 
-        while self.time < self.max_time and num_steps < self.max_steps:
+        while self.time < self.max_time and self.num_steps < self.max_steps:
 
+            # advance the solution for one time step
+            self.solve_one_step()
 
-            self._solve_one_step(num_steps)
             self.time += self.dt
+            self.num_steps += 1
 
-            print "solving for step:", num_steps, "time: ", self.time
-
+            print "solving for step:", self.num_steps, "time: ", self.time
 
             # output data
-            if num_steps%self.output_cycle == 0:
-                self.data_dump(num_steps)
+            if self.num_steps%self.output_cycle == 0:
+                self.data_dump(self.num_steps)
 
-            num_steps+=1
 
 #            # debugging plot --- turn to a routine later ---
 #            l = []
@@ -235,7 +248,7 @@ class MovingMesh(object):
 #            ax.add_collection(p)
 #
 #            plt.colorbar(p, orientation='horizontal')
-#            plt.savefig(self.output_name+`num_steps`.zfill(4))
+#            plt.savefig(self.output_name+`self.num_steps`.zfill(4))
 #            plt.clf()
 #
 #
@@ -257,14 +270,14 @@ class MovingMesh(object):
 #            #plt.xlim(-0.2,2.2)
 #            plt.ylim(-0.1,1.1)
 #
-#            plt.savefig("scatter"+`num_steps`.zfill(4))
+#            plt.savefig("scatter"+`self.num_steps`.zfill(4))
 #            plt.clf()
 
         # last data dump
-        self.data_dump(num_steps)
+        self.data_dump(self.num_steps)
 
 
-    def _solve_one_step(self, count):
+    def solve_one_step(self):
         """
         Evolve the simulation for one time step.
         """
@@ -279,49 +292,48 @@ class MovingMesh(object):
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
                 self.voronoi_vertices, self.particles_index)
 
-        # calculate primitive variables of real particles
+        # calculate primitive variables of real particles and pass to ghost particles with give boundary conditions
         self.fields.update_primitive(self.cell_info["volume"], self.particles, self.particles_index)
 
-        # calculate global time step from real particles
+        # calculate global time step
         self.get_dt()
 
-        # assign fluid velocities to particles
+        # assign fluid velocities to particles, regularize if needed, and pass to ghost particles
         w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cell_info, self.gamma, self.regularization)
 
         # grab left and right states for each face
         faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.neighbor_graph,
                 self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
 
-        # calculate gradient for real particles
+        # calculate gradient for real particles and pass to ghost particles
         self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
                 self.face_graph, self.voronoi_vertices)
 
-        # calculate state at face by riemann solver
+        # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
         fluxes = self.riemann_solver.fluxes(faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
 
         # update conserved variables
-        self.update(fluxes, faces_info)
+        self.update(self.fields, fluxes, faces_info)
 
         # update particle positions
-        self.move_particles():
+        self.move_particles(w)
 
 
-    def move_particles(self):
+    def move_particles(self, w):
+        """
+        advance real particles positions for one time step
+        """
+
         self.particles[:,self.particles_index["real"]] += self.dt*w[:, self.particles_index["real"]]
 
 
-    def update(self, fluxes, faces_info):
+    def update(self, fields, fluxes, faces_info):
+        """
+        update state variables from fluxes
+        """
 
-        ghost_map = self.particles_index["ghost_map"]
         area = faces_info["face areas"]
+        face_pairs = faces_info["face pairs"]
+        num_faces = faces_info["number faces"]
 
-        k = 0
-        for i, j in zip(faces_info["face pairs"][0,:], faces_info["face pairs"][1,:]):
-
-            self.fields.field_data[:,i] -= self.dt*area[k]*fluxes[:,k]
-
-            # do not update ghost particle cells
-            if not ghost_map.has_key(j):
-                self.fields.field_data[:,j] += self.dt*area[k]*fluxes[:,k]
-
-            k += 1
+        sim.update(fields.field_data, fluxes, face_pairs, area, self.dt, num_faces, fields.num_real_particles, fields.num_fields)

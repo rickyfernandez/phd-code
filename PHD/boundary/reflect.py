@@ -2,6 +2,9 @@ import numpy as np
 from boundary_base import BoundaryBase
 
 class Reflect(BoundaryBase):
+    """
+    refect boundary class
+    """
 
     def __init__(self, left, right, bottom, top):
 
@@ -11,12 +14,17 @@ class Reflect(BoundaryBase):
         self.top = top
 
     def update(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
+        """
+        create ghost particles from real particles using reflective boundary conditins
+        """
 
         ghost_indices = particles_index["ghost"]
 
+        # position of ghost and real particles
         xg = particles[0,ghost_indices]; yg = particles[1,ghost_indices]
         x  = particles[0,:];              y = particles[1,:]
 
+        # arrays for position of new ghost particles
         x_ghost = np.empty(0)
         y_ghost = np.empty(0)
 
@@ -90,7 +98,6 @@ class Reflect(BoundaryBase):
         ghost_mapping_indices = np.append(ghost_mapping_indices, bottom_border)
 
 
-        #---------------------------------------------------------------------------
         # create the new list of particles
         real_indices = particles_index["real"]
 
@@ -102,8 +109,7 @@ class Reflect(BoundaryBase):
         x_new_particles = np.append(x_new_particles, x_ghost)
         y_new_particles = np.append(y_new_particles, y_ghost)
 
-        # update particle information
-        # generate new ghost map
+        # update particle information, generate new ghost map
         ghost_map = {}
         for i,j in enumerate(np.arange(real_indices.size, x_new_particles.size)):
             ghost_map[j] = ghost_mapping_indices[i]
@@ -115,6 +121,9 @@ class Reflect(BoundaryBase):
         return  np.array([x_new_particles, y_new_particles])
 
     def reverse_velocities(self, particles, primitive, particles_index):
+        """
+        reflect ghost velocities across the mirror axis
+        """
 
         ghost_indices = particles_index["ghost"]
 
@@ -129,19 +138,22 @@ class Reflect(BoundaryBase):
         primitive[2, ghost_indices[i]] *= -1.0
 
     def primitive_to_ghost(self, particles, primitive, particles_index):
+        """
+        copy primitive values to ghost particles from their correponding real particles
+        """
 
         # copy primitive values to ghost
         primitive = super(Reflect, self).primitive_to_ghost(particles, primitive, particles_index)
 
-        # for reflect boundary ghost particles velocities have to be reversed
+        # ghost particles velocities have to be reversed
         self.reverse_velocities(particles, primitive, particles_index)
 
         return primitive
 
     def gradient_to_ghost(self, particles, gradx, grady, particles_index):
-
-        if gradx == None and grady == None:
-            return None, None
+        """
+        copy gradient values to ghost particles from their correponding real particles
+        """
 
         gradx, grady = super(Reflect, self).gradient_to_ghost(particles, gradx, grady, particles_index)
 

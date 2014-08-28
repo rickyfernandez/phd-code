@@ -45,7 +45,7 @@ class RiemannBase(object):
         # hack for right now
         ghost_map = particles_index["ghost_map"]
         cell_com = np.hstack((cell_info["center of mass"], cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
-        self.reconstruction.extrapolate(left_face, right_face, faces_info, cell_com, gamma, dt)
+        self.reconstruction.extrapolate(faces_info, cell_com, gamma, dt)
 
         # rotate to face frame 
         self.rotate_state(left_face,  theta)

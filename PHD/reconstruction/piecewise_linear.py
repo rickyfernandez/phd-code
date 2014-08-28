@@ -3,8 +3,14 @@ import reconstruct as re
 import numpy as np
 
 class PiecewiseLinear(ReconstructBase):
+    """
+    piecewise linear reconstruction with half time step update
+    """
 
     def gradient(self, primitive, particles, particles_index, cell_info, neighbor_graph, neighbor_graph_sizes, face_graph, circum_centers):
+        """
+        construct gradient for real particles and then assign to ghost particles
+        """
 
         num_real_particles = particles_index["real"].size
 
@@ -18,12 +24,17 @@ class PiecewiseLinear(ReconstructBase):
 
         self.gradx = gradx
         self.grady = grady
-        #return gradx, grady
 
 
-    def extrapolate(self, left_face, right_face, faces_info, cell_com, gamma, dt):
+    def extrapolate(self, faces_info, cell_com, gamma, dt):
+        """
+        linearly predict states to the centroid of face with half time-step
+        prediction in time
+        """
 
-        num_faces = left_face.shape[1]
+        num_faces   = faces_info["number faces"]
+        left_faces  = faces_info["left faces"]
+        right_faces = faces_info["right faces"]
 
-        re.extrapolate(left_face, right_face, self.gradx, self.grady, faces_info["face center of mass"], faces_info["face pairs"],
+        re.extrapolate(left_faces, right_faces, self.gradx, self.grady, faces_info["face center of mass"], faces_info["face pairs"],
                 cell_com, gamma, dt, num_faces)

@@ -1,6 +1,9 @@
 import numpy as np
 
 class Fields(object):
+    """
+    field class that holds all physical data of the particles
+    """
 
     def __init__(self, num_real_particles, gamma, boundary):
 
@@ -79,7 +82,7 @@ class Fields(object):
 
     def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_sizes):
 
-        new_particles = self.boundary.update(particles, particles_index, neighbor_graph, neighbor_graph_sizes)
+        new_particles = self.boundary.update_boundary(particles, particles_index, neighbor_graph, neighbor_graph_sizes)
         self.num_real_particles = particles_index["real"].size
 
         return new_particles
