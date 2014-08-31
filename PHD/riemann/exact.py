@@ -4,10 +4,13 @@ import riemann
 
 class Exact(RiemannBase):
 
-    def fluxes(self, left_face, right_face, faces_info, gamma):
+    def fluxes(self, faces_info, gamma, dt, cell_info, particles_index):
 
-        num_faces    = left_face.shape[1]
-        face_states  = np.zeros((5,num_faces), dtype="float64")
+        left_face  = faces_info["left faces"]
+        right_face = faces_info["right faces"]
+
+        num_faces = faces_info["number faces"]
+        face_states = np.zeros((5,num_faces), dtype="float64")
 
         # The orientation of the face for all faces 
         theta = faces_info["face angles"]
@@ -19,6 +22,12 @@ class Exact(RiemannBase):
         # boost to frame of face
         left_face[1,:] -= wx; right_face[1,:] -= wx
         left_face[2,:] -= wy; right_face[2,:] -= wy
+
+        # reconstruct to states to faces
+        # hack for right now
+        ghost_map = particles_index["ghost_map"]
+        cell_com = np.hstack((cell_info["center of mass"], cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+        self.reconstruction.extrapolate(faces_info, cell_com, gamma, dt)
 
         # rotate to face frame 
         self.rotate_state(left_face,  theta)
