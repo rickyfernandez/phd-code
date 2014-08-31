@@ -139,7 +139,7 @@ def State(pstar, ustar, s, dl, ul, pl, cl, dr, ur, pr, cr, g):
     return d, u, p
 
 def riemann(domain_length=1.0, diaphram=0.5, cells=128, gamma=1.4, time_out=0.012,
-        density_left=1.0, velocity_left=0.0, pressure_left=1000.0, density_right=1.0, velocity_right=0.0, pressure_right=0.1,
+        density_left=1.0, velocity_left=0.0, pressure_left=1000.0, density_right=1.0, velocity_right=0.0, pressure_right=0.01,
         mpa=1.0):
 
     # Exact Riemann solver for the Euler equations
