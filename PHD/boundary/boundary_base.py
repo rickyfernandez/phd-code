@@ -6,7 +6,7 @@ class BoundaryBase(object):
     this class
     """
 
-    def update(self, particles, particles_index, neighbor_graph):
+    def update_boundaries(self, particles, particles_index, neighbor_graph):
         """
         every boundary class must have an update method which generates
         ghost particles from real particles

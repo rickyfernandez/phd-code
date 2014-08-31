@@ -13,7 +13,7 @@ class Reflect(BoundaryBase):
         self.bottom = bottom
         self.top = top
 
-    def update(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
+    def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
         """
         create ghost particles from real particles using reflective boundary conditins
         """

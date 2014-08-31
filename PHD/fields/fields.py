@@ -82,7 +82,7 @@ class Fields(object):
 
     def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_sizes):
 
-        new_particles = self.boundary.update_boundary(particles, particles_index, neighbor_graph, neighbor_graph_sizes)
+        new_particles = self.boundary.update_boundaries(particles, particles_index, neighbor_graph, neighbor_graph_sizes)
         self.num_real_particles = particles_index["real"].size
 
         return new_particles

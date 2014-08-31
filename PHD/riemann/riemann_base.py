@@ -26,7 +26,6 @@ class RiemannBase(object):
         left_face  = faces_info["left faces"]
         right_face = faces_info["right faces"]
 
-        #num_faces = left_face.shape[1]
         num_faces = faces_info["number faces"]
         fluxes = np.zeros((4,num_faces), dtype="float64")
 

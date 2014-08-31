@@ -13,5 +13,5 @@ class ReconstructBase(object):
     def gradient(self, primitive, particles, particles_index, cell_info, neighbor_graph, neighbor_graph_sizes, face_graph, circum_centers):
         pass
 
-    def extrapolate(self, left_face, right_face, faces_info, cell_com, gamma, dt):
+    def extrapolate(self, faces_info, cell_com, gamma, dt):
         pass

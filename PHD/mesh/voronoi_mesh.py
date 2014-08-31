@@ -17,7 +17,7 @@ class VoronoiMesh(object):
         if regular == True:
             w = self.regularization(primitive, particles, gamma, cell_info, particles_index)
         else:
-            w = np.zeros((2,particles_index["real"].size))
+            w = np.zeros((2,particles_index["real"].size), dtype="float64")
 
         # transfer particle velocities to ghost particles
         ghost_map = particles_index["ghost_map"]
