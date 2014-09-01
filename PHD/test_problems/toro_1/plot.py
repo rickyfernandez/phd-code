@@ -43,5 +43,5 @@ plt.xlim(0,1)
 plt.ylim(0,1.1)
 
 plt.tight_layout()
-#plt.savefig("torro_1")
+plt.savefig("toro_1")
 plt.show()

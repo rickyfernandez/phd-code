@@ -6,4 +6,7 @@
 *.hdf5
 *.so
 *.Rhistory
+*.out
+*.dat
+*.f
 build/
