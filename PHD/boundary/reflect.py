@@ -6,13 +6,6 @@ class Reflect(BoundaryBase):
     refect boundary class
     """
 
-    def __init__(self, left, right, bottom, top):
-
-        self.left = left
-        self.right = right
-        self.bottom = bottom
-        self.top = top
-
     def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
         """
         create ghost particles from real particles using reflective boundary conditins
