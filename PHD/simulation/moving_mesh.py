@@ -22,6 +22,20 @@ class MovingMesh(StaticMesh):
         # simulation parameters
         self.regularization = regularization
 
+    def get_dt(self):
+        """
+        Calculate the time step using the CFL condition.
+        """
+
+        vol = self.cell_info["volume"]
+
+        # moving mesh solvers have different courant restraint depending if solved
+        # in lab or moving frame
+        self.dt = self.CFL*self.riemann_solver.get_dt(self.fields, vol, self.gamma)
+
+        # correct time step if exceed max time
+        if self.time + self.dt > self.max_time:
+            self.dt = self.max_time - self.time
 
     def solve_one_step(self):
         """

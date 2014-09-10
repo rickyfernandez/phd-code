@@ -4,6 +4,21 @@ import riemann
 
 class Exact(RiemannBase):
 
+    def get_dt(self, fields, vol, gamma):
+
+        # grab values that correspond to real particles
+        dens = fields.get_field("density")
+        pres = fields.get_field("pressure")
+
+        # sound speed
+        c = np.sqrt(gamma*pres/dens)
+
+        # calculate approx radius of each voronoi cell
+        R = np.sqrt(vol/np.pi)
+
+        return np.min(R/c)
+
+
     def fluxes(self, faces_info, gamma, dt, cell_info, particles_index):
 
         left_face  = faces_info["left faces"]
