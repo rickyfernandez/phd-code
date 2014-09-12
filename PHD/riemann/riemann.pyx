@@ -40,7 +40,7 @@ def hllc(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[
             q_r[j] = face_r[j,i]
 
         # convert from primitive variables to conserative variables
-        prim_to_cons(u_state_l,  q_l, gamma)
+        prim_to_cons(u_state_l, q_l, gamma)
         prim_to_cons(u_state_r, q_r, gamma)
 
         w = w_face[i]
@@ -279,315 +279,26 @@ cdef construct_flux(double[:] flux_state, double[:] q, double gamma):
     flux_state[3] = q[1]*(0.5*q[0]*(q[1]*q[1] + q[2]*q[2]) + q[3]*gamma/(gamma - 1.0))
 
 
-def castro(double[:,::1] face_left, double[:,::1] face_right, double[:,::1] face_state, double gamma, int num_faces):
-
-
-    # Primative right and left states
-    cdef double  rho_left, rho_right
-    cdef double    u_left, u_right
-    cdef double    v_left, v_right
-    cdef double    p_left, p_right
-    cdef double    e_left, e_right
-    cdef double rhoe_left, rhoe_right
-
-    # Primative star states
-    cdef double p_star,         u_star
-    cdef double rho_star_left,  rho_star_right
-    cdef double rhoe_star_left, rhoe_star_right
-    cdef double a_star_left,   a_star_right
-
-    # Langrangian, sound, and shock speed
-    cdef double C_left, C_right, a_left, a_right, s
-
-
-    # The state at the orign of the interface
-    cdef double rho_state
-    cdef double u_state
-    cdef double v_state
-    cdef double p_state
-    cdef double e_state
-    cdef double a_state
-    cdef double rhoe_state
-
-    # Speed of head and tail of right and left rarefaction
-    cdef double head_left,  tail_left, shock_left
-    cdef double head_right, tail_right, shock_right
-
-    cdef double alpha
-    cdef double smallp   = 1.0E-10
-    cdef double smalla   = 1.0E-10
-    cdef double smallrho = 1.0E-10
-
-#----------------------------------------------------------------------------------------
-# Begin the calculation of the flux at the interface 
-
-
-    # Loop through all interfaces
-    cdef int i
-    for i in range(num_faces):
-
-
-        rho_left  = face_left[0,i]
-        u_left    = face_left[1,i]
-        v_left    = face_left[2,i]
-        p_left    = face_left[3,i]
-        rhoe_left = p_left/(gamma-1)
-
-
-        rho_right  = face_right[0,i]
-        u_right    = face_right[1,i]
-        v_right    = face_right[2,i]
-        p_right    = face_right[3,i]
-        rhoe_right = p_right/(gamma-1)
-
-        # Calculate left and right sound speed
-        a_left  = max(sqrt(gamma*p_left/rho_left), smalla)
-        a_right = max(sqrt(gamma*p_right/rho_right), smalla)
-
-
-        # Calcualte the Lagrangian sound speed, eq. 9.25 (Toro)
-        C_left  = max(sqrt(gamma*rho_left*p_left), smallrho*smalla)
-        C_right = max(sqrt(gamma*rho_right*p_right), smallrho*smalla)
-
-
-        # Linear approximation of star states, eq 9.28 (Toro)
-        p_star = (C_right*p_left + C_left*p_right +
-                  C_left*C_right*(u_left - u_right))/(C_left + C_right)
-        p_star = max(p_star, smallp)
-
-        u_star  = (C_left*u_left + C_right*u_right + p_left -
-                  p_right)/(C_left + C_right)
-
-        rho_star_left   = rho_left + (p_star - p_left)/(a_left*a_left)
-        rho_star_right  = rho_right + (p_star - p_right)/(a_right*a_right)
-
-        rhoe_star_left  = rhoe_left  + (p_star - p_left)*(rhoe_left/rho_left + p_left/rho_left)/(a_left*a_left)
-        rhoe_star_right = rhoe_right + (p_star - p_right)*(rhoe_right/rho_right + p_right/rho_right)/(a_right*a_right)
-
-        a_star_left  = max(sqrt(gamma*p_star/rho_star_left), smalla)
-        a_star_right = max(sqrt(gamma*p_star/rho_star_right), smalla)
-
-
-#----------------------------------------------------------------------------------------
-# Now calculate what state the interface is in
-
-       # Now we calculate which state we are in, see fig. 9.2 (Toro)
-        # for a visual of possible wave patterns.
-        if u_star > 0.0:
-
-            v_state = v_left
-
-            # The contact discontinuity is moving right so the origin
-            # can be a left state or a left star state
-
-            # Calculate the left head and tail wave speed
-            head_left = u_left - a_left
-            tail_left = u_star - a_star_left
-
-
-            if p_star > p_left:
-
-                # Its a shock, calculate the shock speed
-                s = 0.5*(head_left + tail_left)
-
-                if s > 0.0:
-
-                    # shock is moving to the right, its a
-                    # left state
-                    rho_state  = rho_left
-                    u_state    = u_left
-                    p_state    = p_left
-                    rhoe_state = rhoe_left
-
-                else:
-
-                    # shock is moving to the left, its a
-                    # left star state
-                    rho_state  = rho_star_left;
-                    u_state    = u_star;
-                    p_state    = p_star;
-                    rhoe_state = rhoe_star_left;
-
-
-
-            else:
-
-                # The wave is rarefaction
-                if (head_left < 0.0 and tail_left < 0.0):
-
-                    # Rarefaction wave is moving to the left, its
-                    # left star state
-                    rho_state  = rho_star_left
-                    u_state    = u_star
-                    p_state    = p_star
-                    rhoe_state = rhoe_star_left
-
-                elif head_left > 0.0 and tail_left > 0.0:
-
-                    # Rarefaction wave is moving to the right, its
-                    # a left state
-                    rho_state  = rho_left
-                    u_state    = u_left
-                    p_state    = p_left
-                    rhoe_state = rhoe_left
-
-                else:
-
-                    # Rarefaction wave spans the origin, eq 35 (Almgren et al. 2010)
-                    alpha = head_left/(head_left - tail_left)
-
-                    rho_state  = alpha*rho_star_left  + (1.0 - alpha)*rho_left
-                    u_state    = alpha*u_star         + (1.0 - alpha)*u_left
-                    p_state    = alpha*p_star         + (1.0 - alpha)*p_left
-                    rhoe_state = alpha*rhoe_star_left + (1.0 - alpha)*rhoe_left
-
-
-
-
-        elif u_star < 0.0:
-
-
-            v_state = v_right
-            # The contact discontinuity is moving left so the origin
-            # can be a right state or a right star state
-
-            # Calculate the right head and tail wave speed
-            head_right = u_right + a_right
-            tail_right = u_star + a_star_right
-
-
-            if p_star > p_right:
-
-                # Its a shock, calculate the shock speed
-                s = 0.5*(head_right + tail_right)
-
-                if s > 0.0:
-
-                    # shock is moving to the right, its a
-                    # right star state
-                    rho_state  = rho_star_right
-                    u_state    = u_star
-                    p_state    = p_star
-                    rhoe_state = rhoe_star_right
-
-                else:
-
-                    # shock is moving to the left, its a
-                    # right state
-                    rho_state  = rho_right
-                    u_state    = u_right
-                    p_state    = p_right
-                    rhoe_state = rhoe_right
-
-
-            else:
-
-                # The wave is rarefaction
-                if head_right < 0.0 and tail_right < 0.0:
-
-                    # rarefaction wave is moving to the left, its
-                    # a right state
-                    rho_state  = rho_right;
-                    u_state    = u_right;
-                    p_state    = p_right;
-                    rhoe_state = rhoe_right;
-
-                elif head_right > 0.0 and tail_right > 0.0:
-
-                    # Rarefaction wave is moving to the right, its
-                    # a right star state
-                    rho_state  = rho_star_right
-                    u_state    = u_star
-                    p_state    = p_star
-                    rhoe_state = rhoe_star_right
-
-                else:
-
-                    # Rarefaction wave spans the origin, eq 35 (Almgren et al. 2010)
-                    alpha = head_right/(head_right - tail_right)
-
-                    rho_state  = alpha*rho_star_right  + (1.0 - alpha)*rho_right
-                    u_state    = alpha*u_star          + (1.0 - alpha)*u_right
-                    p_state    = alpha*p_star          + (1.0 - alpha)*p_right
-                    rhoe_state = alpha*rhoe_star_right + (1.0 - alpha)*rhoe_right
-
-
-        else:
-
-            rho_state  = 0.5*(rho_star_left + rho_star_right)
-            u_state    = u_star
-            v_state    = 0.5*(v_left + v_right)
-            p_state    = p_star
-            rhoe_state = 0.5*(rhoe_star_left + rhoe_star_right)
-
-#----------------------------------------------------------------------------------------
-# Calculate the flux at each interface */
-
-        # Fluxes are left face valued for the i'th cell
-        face_state[0,i] = rho_state
-        face_state[1,i] = u_state
-        face_state[2,i] = v_state
-        face_state[3,i] = rhoe_state
-        face_state[4,i] = p_state
-
-
-
-
-def guessP(double rho_left, double u_left, double p_left, double rho_right, double u_right, double p_right, double gamma):
-
-    cdef double c_left, c_right
-    cdef double p_0
-    cdef double gl, gr
-    cdef double TOL = 1.0e-6
-
-    cdef double Q_max, Q_user
-    cdef double p_max, p_min
-    cdef double P_LR, P_TR, P_TL
-    cdef double u_star
-
-    c_left  = sqrt(gamma*p_left/rho_left)     # left sound speed
-    c_right = sqrt(gamma*p_right/rho_right)   # right sound speed
+def p_guess(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
+
+    cdef double c_l, c_r
+    cdef double ppv
+    cdef double gl, gr, p_0
+    cdef double TOL = 1.0E-6
+
+    c_l = sqrt(gamma*p_l/d_l)  # left sound speed
+    c_r = sqrt(gamma*p_r/d_r)  # right sound speed
 
     # initial guess for pressure
-    p_0 = 0.5*(p_left + p_right)-0.125*(u_right-u_left)*(rho_left+rho_right)*(c_left+c_right)
+    ppv = 0.5*(p_l + p_r) - 0.125*(u_r - u_l)*(d_l + d_r)*(c_l + c_r)
 
-    p_max = max(p_left, p_right)
-    p_min = min(p_left, p_right)
-    Q_max = p_max/p_min
+    if (ppv < 0.0):
+        ppv = 0.0
 
-#--->
-    Q_user = 2.0
-    if ((Q_max <= Q_user) and (p_min <= p_0 <= p_max)):
+    gl = sqrt((2.0/(d_l*(gamma+1)))/((gamma-1)*p_l/(gamma+1) + ppv))
+    gr = sqrt((2.0/(d_r*(gamma+1)))/((gamma-1)*p_r/(gamma+1) + ppv))
 
-        pass
-
-    elif (p_0 <= p_min):
-
-        P_LR   = pow((p_left/p_right),((gamma - 1.0)/(2.0*gamma)))
-        u_star = (P_LR*u_left/c_left + u_right/c_right + 2*(P_LR - 1)/(gamma - 1))
-        u_star = u_star/(P_LR/c_left + 1/c_right)
-        P_TL   = pow((1 + (gamma -1)*(u_left - u_star)/(2*c_left)), (2.0*gamma/(gamma - 1.0)))
-        P_TR   = pow((1 + (gamma -1)*(u_star - u_right)/(2*c_right)), (2.0*gamma/(gamma - 1.0)))
-
-        p_0 = 0.5*(p_left*P_TL + p_right*P_TR)
-
-    else:
-
-        gl = sqrt((2.0/(rho_left*(gamma+1)))/((gamma-1)*p_left/(gamma+1) + p_0))
-        gr = sqrt((2.0/(rho_right*(gamma+1)))/((gamma-1)*p_right/(gamma+1) + p_0))
-
-        p_0 = (gl*p_left + gr*p_right - (u_right-u_left))/(gr + gl)
-
-
-    #if (ppv < 0.0):
-    #    ppv = 0.0
-
-    #gl = sqrt((2.0/(rho_left*(gamma+1)))/((gamma-1)*p_left/(gamma+1) + ppv))
-    #gr = sqrt((2.0/(rho_right*(gamma+1)))/((gamma-1)*p_right/(gamma+1) + ppv))
-
-    #p_0 = (gl*p_left + gr*p_right - (u_right-u_left))/(gr + gl)
-
-#--->
+    p_0 = (gl*p_l + gr*p_r - (u_r - u_l))/(gr + gl)
 
     if (p_0 < 0.0):
         p_0 = TOL
@@ -595,250 +306,280 @@ def guessP(double rho_left, double u_left, double p_left, double rho_right, doub
     return p_0
 
 
-def PFunc(double rho, double u, double p, double gamma, double POld):
+#def p_guess(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
+#
+#    cdef double c_l, c_r
+#    cdef double ppv
+#    cdef double gl, gr, p_0
+#    cdef double p_star, p_max, p_min, q_max
+#    cdef double p_lr, p_tl
+#
+#    c_l = sqrt(gamma*p_l/d_l)
+#    c_r = sqrt(gamma*p_r/d_r)
+#
+#    # initial guess for pressure
+#    ppv = 0.5*(p_l + p_r) - 0.125*(u_r - u_l)*(d_l + d_r)*(c_l + c_r)
+#
+#    p_star = max(0.0, ppv)
+#    p_max  = max(p_l, p_r)
+#    p_min  = min(p_l, p_r)
+#    q_max  = p_max/p_min
+#
+#    if ((q_max <= 2.0) and (p_min <= ppv <= p_max)):
+#
+#        p_0 = ppv
+#
+#    elif (ppv <= p_min):
+#
+#        p_lr   = pow(p_l/p_r, (gamma - 1.0)/(2.0*gamma))
+#        u_star = (p_lr*u_l/c_l + u_r/c_r + 2*(p_lr - 1)/(gamma - 1))
+#        u_star = u_star/(p_lr/c_l + 1/c_r)
+#        p_tl   = pow(1 + (gamma - 1)*(u_l - u_star)/(2*c_l), 2.0*gamma/(gamma - 1.0))
+#        p_tr   = pow(1 + (gamma - 1)*(u_star - u_r)/(2*c_r), 2.0*gamma/(gamma - 1.0))
+#
+#        p_0 = 0.5*(p_l*p_tl + p_r*p_tr)
+#
+#    else:
+#
+#        gl = sqrt((2.0/(d_l*(gamma+1)))/((gamma-1)*p_l/(gamma+1) + ppv))
+#        gr = sqrt((2.0/(d_r*(gamma+1)))/((gamma-1)*p_r/(gamma+1) + ppv))
+#
+#        p_0 = (gl*p_l + gr*p_r - (u_r - u_l))/(gr + gl)
+#
+#
+#    return p_0
+
+def p_func(double d, double u, double p, double gamma, double p_old):
 
     cdef double f
-    cdef double a = sqrt(gamma*p/rho)
+    cdef double c = sqrt(gamma*p/d)
     cdef double Ak, Bk
 
     # rarefaction wave
-    if (POld <= p):
-        f = 2*a/(gamma-1) * (pow(POld/p, (gamma-1)/(2*gamma)) - 1)
+    if (p_old <= p):
+        f = 2*c/(gamma-1)*(pow(p_old/p, (gamma-1)/(2*gamma)) - 1)
 
     # shock wave
     else:
-        Ak = 2/(rho*(gamma+1))
+        Ak = 2/(d*(gamma+1))
         Bk = p*(gamma-1)/(gamma+1)
 
-        f = (POld - p) * sqrt(Ak/(POld + Bk))
+        f = (p_old - p)*sqrt(Ak/(p_old + Bk))
 
     return f
 
 
-def PFuncDeriv(double rho, double u, double p, double gamma, double POld):
+def p_func_deriv(double d, double u, double p, double gamma, double p_old):
 
-    cdef double fDer
-    cdef double a = sqrt(gamma*p/rho)
+    cdef double df
+    cdef double c = sqrt(gamma*p/d)
     cdef double Ak, Bk
 
     # rarefaction wave
-    if (POld <= p):
-        fDer = 1/(a * rho) * pow(POld/p, -(gamma+1)/(2*gamma))
+    if (p_old <= p):
+        df = 1/(c*d)*pow(p_old/p, -(gamma + 1)/(2*gamma))
 
     # shock wave
     else:
-        Ak = 2/(rho*(gamma+1))
-        Bk = p*(gamma-1)/(gamma+1)
+        Ak = 2/(d*(gamma + 1))
+        Bk = p*(gamma - 1)/(gamma + 1)
 
-        fDer = sqrt(Ak/(POld + Bk))*(1.0 - 0.5*(POld - p)/(Bk + POld))
+        df = sqrt(Ak/(p_old + Bk))*(1.0 - 0.5*(p_old - p)/(Bk + p_old))
 
-    return fDer
+    return df
 
 
-def get_pstar(double rho_left, double u_left, p_left, double rho_right, double u_right, double p_right, double gamma):
+def get_pstar(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
 
-    cdef double POld
-    cdef double VxDiff = u_right - u_left
+    cdef double p_old
+    cdef double u_diff = u_r - u_l
     cdef int i = 0
-    cdef double TOL = 1.0e-6
-    cdef double change, p, fr, fl, frder, flder
+    cdef double TOL = 1.0E-6
+    cdef double change, p, f_r, f_l, df_r, df_l
     cdef int MAX_ITER = 100
 
-    POld = guessP(rho_left, u_left, p_left, rho_right, u_right, p_right, gamma)
+    p_old = p_guess(d_l, u_l, p_l, d_r, u_r, p_r, gamma)
 
     while (i < MAX_ITER):
 
-        fl = PFunc(rho_left, u_left, p_left, gamma, POld)
-        fr = PFunc(rho_right, u_right, p_right, gamma, POld)
-        flder = PFuncDeriv(rho_left, u_left, p_left, gamma, POld)
-        frder = PFuncDeriv(rho_right, u_right, p_right, gamma, POld)
+        f_l  = p_func(d_l, u_l, p_l, gamma, p_old)
+        f_r  = p_func(d_r, u_r, p_r, gamma, p_old)
+        df_l = p_func_deriv(d_l, u_l, p_l, gamma, p_old)
+        df_r = p_func_deriv(d_r, u_r, p_r, gamma, p_old)
 
-        p = POld - (fl + fr + VxDiff)/(flder + frder);
+        p = p_old - (f_l + f_r + u_diff)/(df_l + df_r)
 
-        change = 2.0*fabs((p-POld)/(p+POld))
+        change = 2.0*fabs((p - p_old)/(p + p_old))
         if (change <= TOL):
             return p
 
         if (p < 0.0):
             p = TOL
 
-        POld = p
+        p_old = p
         i += 1
 
 
     # exit failure due to divergence
+    print "did not converge"
+    return p
 
 
 def exact(double[:,::1] face_left, double[:,::1] face_right, double[:,::1] face_state, double gamma, int num_faces):
 
-    cdef double rho_left, u_left, v_left, p_left
-    cdef double rho_right, u_right, v_right, p_right
-    cdef double rho_state, u_state, v_state, p_state
+    cdef double d_l, u_l, v_l, p_l
+    cdef double d_r, u_r, v_r, p_r
+    cdef double d, u, v, p
 
     cdef double p_star, u_star
-    cdef double fr, fl
-    cdef double s_HL, s_TL, s_left, s_right, c
-    cdef double c_left, c_right, c_star_left, c_star_right
-
-    #if(!(Ul.d > 0.0)||!(Ur.d > 0.0))
-    #ath_error("[exact flux]: Non-positive densities: dl = %e  dr = %e\n", 
-	#      Ul.d, Ur.d);
+    cdef double f_r, f_l
+    cdef double s_hl, s_tl, s_l, s_r, c
+    cdef double c_l, c_r, c_star_l, c_star_r
 
     for i in range(num_faces):
 
-        rho_left  = face_left[0,i]
-        u_left    = face_left[1,i]
-        v_left    = face_left[2,i]
-        p_left    = face_left[3,i]
+        d_l = face_left[0,i]
+        u_l = face_left[1,i]
+        v_l = face_left[2,i]
+        p_l = face_left[3,i]
 
-        rho_right = face_right[0,i]
-        u_right   = face_right[1,i]
-        v_right   = face_right[2,i]
-        p_right   = face_right[3,i]
+        d_r = face_right[0,i]
+        u_r = face_right[1,i]
+        v_r = face_right[2,i]
+        p_r = face_right[3,i]
 
-        c_left  = sqrt(gamma*p_left/rho_left)   # left sound speed
-        c_right = sqrt(gamma*p_right/rho_right) # right sound speed
+        c_l = sqrt(gamma*p_l/d_l)
+        c_r = sqrt(gamma*p_r/d_r)
 
         # newton rhapson 
-        p_star = get_pstar(rho_left, u_left, p_left, rho_right, u_right, p_right, gamma)
+        p_star = get_pstar(d_l, u_l, p_l, d_r, u_r, p_r, gamma)
 
         # calculate the contact wave speed
-        fr = PFunc(rho_right, u_right, p_right, gamma, p_star)
-        fl = PFunc(rho_left, u_left, p_left, gamma, p_star)
-        u_star = 0.5*(u_left + u_right) + 0.5*(fr - fl)
-
+        f_r = p_func(d_r, u_r, p_r, gamma, p_star)
+        f_l = p_func(d_l, u_l, p_l, gamma, p_star)
+        u_star = 0.5*(u_l + u_r + f_r - f_l)
 
         if(0.0 <= u_star):
 
-            # sampling point lies to the left of the contact discontinuity
-            if(p_star <= p_left):
+            # transverse velocity only jumps across the contact
+            v = v_l
+
+            # left of the contact discontinuity
+            if(p_star <= p_l):
 
                 # left rarefraction, below is the sound speed of the head
-                s_HL = u_left - c_left
+                s_hl = u_l - c_l
 
-                if(0.0 <= s_HL):
+                if(0.0 <= s_hl):
 
                     # sample point is left data state
-                    rho_state = rho_left
-                    u_state   = u_left
-                    v_state   = v_left
-                    p_state   = p_left
+                    d = d_l
+                    u = u_l
+                    p = p_l
 
                 else:
 
                     # sound speed of the star state and sound speed
                     # of the tail of the rarefraction
-                    #c_star_left = c_left*(p_star/p_left)**((g-1.0)/(2.0*g))
-                    c_star_left = pow(c_left*(p_star/p_left),((gamma-1.0)/(2.0*gamma)))
-                    s_TL = u_star - c_star_left
+                    c_star_l = c_l*pow(p_star/p_l, (gamma - 1.0)/(2.0*gamma))
+                    s_tl = u_star - c_star_l
 
-                    if(0.0 >= s_TL):
+                    if(0.0 >= s_tl):
 
                         # sample point is star left state
-                        #d = dl*(pstar/pl)**(1.0/g)
-                        rho_state = pow(rho_left*(p_star/p_left), (1.0/gamma))
-                        u_state   = u_star
-                        v_state   = v_left
-                        p_state   = p_star
+                        d = d_l*pow(p_star/p_l, 1.0/gamma)
+                        u = u_star
+                        p = p_star
 
                     else:
 
                         # sampled point is inside left fan
-                        #c = (2.0/(gamma+1.0))*(c_left + 0.5*(gamma-1.0)*(u_left - s))
-                        #u = (2.0/(g+1.0))*(cl + 0.5*(g-1.0)*ul + s)
+                        c = (2.0/(gamma + 1.0))*(c_l + 0.5*(gamma - 1.0)*u_l)
 
-                        c = (2.0/(gamma+1.0))*(c_left + 0.5*(gamma-1.0)*u_left)
-
-                        rho_state = pow(rho_left*(c/c_left), (2.0/(gamma-1.0)))
-                        u_state   = (2.0/(gamma+1.0))*(c_left + 0.5*(gamma-1.0)*u_left)
-                        v_state   = v_left
-                        p_state   = pow(p_left*(c/c_left), (2.0*gamma/(gamma-1.0)))
+                        d = d_l*pow(c/c_l, 2.0/(gamma - 1.0))
+                        u = c
+                        p = p_l*pow(c/c_l, 2.0*gamma/(gamma - 1.0))
             else:
 
                 # left shock
-                s_left = u_left - c_left*sqrt((gamma+1.0)*p_star/(2.0*gamma*p_left) + (gamma-1.0)/(2.0*gamma))
+                s_l = u_l - c_l*sqrt((gamma + 1.0)*p_star/(2.0*gamma*p_l) + (gamma - 1.0)/(2.0*gamma))
 
-                if(0.0 <= s_left):
+                if(0.0 <= s_l):
 
                     # sampled point is a left data state
-                    rho_state = rho_left
-                    u_state   = u_left
-                    v_state   = v_left
-                    p_state   = p_left
+                    d = d_l
+                    u = u_l
+                    p = p_l
 
                 else:
 
                     # sampled point is star left state
-                    rho_state = rho_left*((p_star/p_left + (gamma-1.0)/(gamma+1.0))/(p_star*(gamma-1.0)/((gamma+1.0)*p_left) + 1.0))
-                    u_state   = u_star
-                    v_state   = v_left
-                    p_state   = p_star
+                    d = d_l*(p_star/p_l + (gamma - 1.0)/(gamma + 1.0))/(p_star*(gamma - 1.0)/((gamma + 1.0)*p_l) + 1.0)
+                    u = u_star
+                    p = p_star
 
 
         else:
 
+            # transverse velocity only jumps across the contact
+            v = v_r
+
             # sampling point lies to the right of the contact
-            if(p_star >= p_right):
+            if(p_star >= p_r):
 
                 # right shock
-                s_right = u_right + c_right*sqrt((gamma+1.0)*p_star/(2.0*gamma*p_right) + (gamma-1.0)/(2.0*gamma))
+                s_r = u_r + c_r*sqrt((gamma + 1.0)*p_star/(2.0*gamma*p_r) + (gamma-1.0)/(2.0*gamma))
 
-                if(0.0 >= s_right):
+                if(0.0 >= s_r):
 
                     # sampled point is right data states
-                    rho_state = rho_right
-                    u_state   = u_right
-                    v_state   = v_right
-                    p_state   = p_right
+                    d = d_r
+                    u = u_r
+                    p = p_r
 
                 else:
 
                     # sample point is star right state
-                    rho_state = rho_right*((p_star/p_right + (gamma-1.0)/(gamma+1.0))/(p_star*(gamma-1.0)/((gamma+1.0)*p_right) + 1.0))
-                    u_state   = u_star
-                    v_state   = v_right
-                    p_state   = p_star
+                    d = d_r*(p_star/p_r + (gamma - 1.0)/(gamma + 1.0))/(p_star*(gamma - 1.0)/((gamma + 1.0)*p_r) + 1.0)
+                    u = u_star
+                    p = p_star
 
             else:
 
                 # right rarefaction
-                s_HR = u_right + c_right
+                s_hr = u_r + c_r
 
-                if(0.0 >= s_HR):
+                if(0.0 >= s_hr):
 
                     # sample point is right data state
-                    rho_state = rho_right
-                    u_state   = u_right
-                    v_state   = v_right
-                    p_state   = p_right
+                    d = d_r
+                    u = u_r
+                    p = p_r
 
                 else:
 
                     # sound speed of the star state and sound speed
                     # of the tail of the rarefraction
-                    c_star_right = pow(c_right*(p_star/p_right), ((gamma-1.0)/(2.0*gamma)))
-                    s_TR = u_star + c_star_right
+                    c_star_r = c_r*pow(p_star/p_r, (gamma-1.0)/(2.0*gamma))
+                    s_tr = u_star + c_star_r
 
-                    if(0.0 <= s_TR):
+                    if(0.0 <= s_tr):
 
                         # sample point is star left state
-                        rho_state = pow(rho_right*(p_star/p_right), (1.0/gamma))
-                        u_state   = u_star
-                        v_state   = v_right
-                        p_state   = p_star
+                        d = d_r*pow(p_star/p_r, 1.0/gamma)
+                        u = u_star
+                        p = p_star
 
                     else:
 
                         # sampled point is inside right fan
-                        c = (2.0/(gamma+1.0))*(c_right - 0.5*(gamma-1.0)*u_right)
+                        c = (2.0/(gamma + 1.0))*(c_r - 0.5*(gamma - 1.0)*u_r)
 
-                        rho_state = pow(rho_right*(c/c_right), (2.0/(gamma-1.0)))
-                        u_state   = (2.0/(gamma+1.0))*(-c_right + 0.5*(gamma-1.0)*u_right)
-                        v_state   = v_right
-                        p_state   = pow(p_right*(c/c_right), (2.0*gamma/(gamma-1.0)))
+                        d = d_r*pow(c/c_r, 2.0/(gamma - 1.0))
+                        u = (2.0/(gamma + 1.0))*(-c_r + 0.5*(gamma-1.0)*u_r)
+                        p = p_r*pow(c/c_r, 2.0*gamma/(gamma - 1.0))
 
-        face_state[0,i] = rho_state
-        face_state[1,i] = u_state
-        face_state[2,i] = v_state
-        face_state[3,i] = p_state/(gamma - 1.0)
-        face_state[4,i] = p_state
+        face_state[0,i] = d
+        face_state[1,i] = u
+        face_state[2,i] = v
+        face_state[3,i] = p

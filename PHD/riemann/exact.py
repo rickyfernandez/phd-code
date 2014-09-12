@@ -25,7 +25,7 @@ class Exact(RiemannBase):
         right_face = faces_info["right faces"]
 
         num_faces = faces_info["number faces"]
-        face_states = np.zeros((5,num_faces), dtype="float64")
+        face_states = np.zeros((4,num_faces), dtype="float64")
 
         # The orientation of the face for all faces 
         theta = faces_info["face angles"]
@@ -51,11 +51,10 @@ class Exact(RiemannBase):
         # solve the riemann problem
         riemann.exact(left_face, right_face, face_states, gamma, num_faces)
 
-        rho = face_states[0,:]
-        u   = face_states[1,:]
-        v   = face_states[2,:]
-        rhoe= face_states[3,:]
-        p   = face_states[4,:]
+        d = face_states[0,:]
+        u = face_states[1,:]
+        v = face_states[2,:]
+        p = face_states[3,:]
 
         # rotate state back to labrotary frame
         u_lab = np.cos(theta)*u - np.sin(theta)*v
@@ -66,23 +65,23 @@ class Exact(RiemannBase):
         v_lab += wy
 
         # calculate energy density in lab frame
-        E = 0.5*rho*(u_lab**2 + v_lab**2) + rhoe
+        E = 0.5*d*(u_lab**2 + v_lab**2) + p/(gamma - 1)
 
         # components of the flux vector
-        F = np.zeros((4, rho.size))
-        G = np.zeros((4, rho.size))
+        F = np.zeros((4, d.size))
+        G = np.zeros((4, d.size))
 
         # flux component in the x-direction
-        F[0,:] = rho*(u_lab - wx)
-        F[1,:] = rho*u_lab*(u_lab-wx) + p
-        F[2,:] = rho*v_lab*(u_lab-wx)
-        F[3,:] = E*(u_lab-wx) + p*u_lab
+        F[0,:] = d*(u_lab - wx)
+        F[1,:] = d*u_lab*(u_lab - wx) + p
+        F[2,:] = d*v_lab*(u_lab - wx)
+        F[3,:] = E*(u_lab - wx) + p*u_lab
 
         # flux component in the y-direction
-        G[0,:] = rho*(v_lab - wy)
-        G[1,:] = rho*u_lab*(v_lab-wy)
-        G[2,:] = rho*v_lab*(v_lab-wy) + p
-        G[3,:] = E*(v_lab-wy) + p*v_lab
+        G[0,:] = d*(v_lab - wy)
+        G[1,:] = d*u_lab*(v_lab - wy)
+        G[2,:] = d*v_lab*(v_lab - wy) + p
+        G[3,:] = E*(v_lab - wy) + p*v_lab
 
         # dot product flux in orientation of face
         return np.cos(theta)*F + np.sin(theta)*G
