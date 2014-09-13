@@ -279,77 +279,77 @@ cdef construct_flux(double[:] flux_state, double[:] q, double gamma):
     flux_state[3] = q[1]*(0.5*q[0]*(q[1]*q[1] + q[2]*q[2]) + q[3]*gamma/(gamma - 1.0))
 
 
-def p_guess(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
-
-    cdef double c_l, c_r
-    cdef double ppv
-    cdef double gl, gr, p_0
-    cdef double TOL = 1.0E-6
-
-    c_l = sqrt(gamma*p_l/d_l)  # left sound speed
-    c_r = sqrt(gamma*p_r/d_r)  # right sound speed
-
-    # initial guess for pressure
-    ppv = 0.5*(p_l + p_r) - 0.125*(u_r - u_l)*(d_l + d_r)*(c_l + c_r)
-
-    if (ppv < 0.0):
-        ppv = 0.0
-
-    gl = sqrt((2.0/(d_l*(gamma+1)))/((gamma-1)*p_l/(gamma+1) + ppv))
-    gr = sqrt((2.0/(d_r*(gamma+1)))/((gamma-1)*p_r/(gamma+1) + ppv))
-
-    p_0 = (gl*p_l + gr*p_r - (u_r - u_l))/(gr + gl)
-
-    if (p_0 < 0.0):
-        p_0 = TOL
-
-    return p_0
-
-
 #def p_guess(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
 #
 #    cdef double c_l, c_r
 #    cdef double ppv
 #    cdef double gl, gr, p_0
-#    cdef double p_star, p_max, p_min, q_max
-#    cdef double p_lr, p_tl
+#    cdef double TOL = 1.0E-6
 #
-#    c_l = sqrt(gamma*p_l/d_l)
-#    c_r = sqrt(gamma*p_r/d_r)
+#    c_l = sqrt(gamma*p_l/d_l)  # left sound speed
+#    c_r = sqrt(gamma*p_r/d_r)  # right sound speed
 #
 #    # initial guess for pressure
 #    ppv = 0.5*(p_l + p_r) - 0.125*(u_r - u_l)*(d_l + d_r)*(c_l + c_r)
 #
-#    p_star = max(0.0, ppv)
-#    p_max  = max(p_l, p_r)
-#    p_min  = min(p_l, p_r)
-#    q_max  = p_max/p_min
+#    if (ppv < 0.0):
+#        ppv = 0.0
 #
-#    if ((q_max <= 2.0) and (p_min <= ppv <= p_max)):
+#    gl = sqrt((2.0/(d_l*(gamma+1)))/((gamma-1)*p_l/(gamma+1) + ppv))
+#    gr = sqrt((2.0/(d_r*(gamma+1)))/((gamma-1)*p_r/(gamma+1) + ppv))
 #
-#        p_0 = ppv
+#    p_0 = (gl*p_l + gr*p_r - (u_r - u_l))/(gr + gl)
 #
-#    elif (ppv <= p_min):
-#
-#        p_lr   = pow(p_l/p_r, (gamma - 1.0)/(2.0*gamma))
-#        u_star = (p_lr*u_l/c_l + u_r/c_r + 2*(p_lr - 1)/(gamma - 1))
-#        u_star = u_star/(p_lr/c_l + 1/c_r)
-#        p_tl   = pow(1 + (gamma - 1)*(u_l - u_star)/(2*c_l), 2.0*gamma/(gamma - 1.0))
-#        p_tr   = pow(1 + (gamma - 1)*(u_star - u_r)/(2*c_r), 2.0*gamma/(gamma - 1.0))
-#
-#        p_0 = 0.5*(p_l*p_tl + p_r*p_tr)
-#
-#    else:
-#
-#        gl = sqrt((2.0/(d_l*(gamma+1)))/((gamma-1)*p_l/(gamma+1) + ppv))
-#        gr = sqrt((2.0/(d_r*(gamma+1)))/((gamma-1)*p_r/(gamma+1) + ppv))
-#
-#        p_0 = (gl*p_l + gr*p_r - (u_r - u_l))/(gr + gl)
-#
+#    if (p_0 < 0.0):
+#        p_0 = TOL
 #
 #    return p_0
 
-def p_func(double d, double u, double p, double gamma, double p_old):
+
+cdef p_guess(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
+
+    cdef double c_l, c_r
+    cdef double ppv
+    cdef double gl, gr, p_0
+    cdef double p_star, p_max, p_min, q_max
+    cdef double p_lr, p_tl
+
+    c_l = sqrt(gamma*p_l/d_l)
+    c_r = sqrt(gamma*p_r/d_r)
+
+    # initial guess for pressure
+    ppv = 0.5*(p_l + p_r) - 0.125*(u_r - u_l)*(d_l + d_r)*(c_l + c_r)
+
+    p_star = max(0.0, ppv)
+    p_max  = max(p_l, p_r)
+    p_min  = min(p_l, p_r)
+    q_max  = p_max/p_min
+
+    if ((q_max <= 2.0) and (p_min <= ppv <= p_max)):
+
+        p_0 = ppv
+
+    elif (ppv <= p_min):
+
+        p_lr   = pow(p_l/p_r, (gamma - 1.0)/(2.0*gamma))
+        u_star = (p_lr*u_l/c_l + u_r/c_r + 2*(p_lr - 1)/(gamma - 1))
+        u_star = u_star/(p_lr/c_l + 1/c_r)
+        p_tl   = pow(1 + (gamma - 1)*(u_l - u_star)/(2*c_l), 2.0*gamma/(gamma - 1.0))
+        p_tr   = pow(1 + (gamma - 1)*(u_star - u_r)/(2*c_r), 2.0*gamma/(gamma - 1.0))
+
+        p_0 = 0.5*(p_l*p_tl + p_r*p_tr)
+
+    else:
+
+        gl = sqrt((2.0/(d_l*(gamma+1)))/((gamma-1)*p_l/(gamma+1) + ppv))
+        gr = sqrt((2.0/(d_r*(gamma+1)))/((gamma-1)*p_r/(gamma+1) + ppv))
+
+        p_0 = (gl*p_l + gr*p_r - (u_r - u_l))/(gr + gl)
+
+
+    return p_0
+
+cdef p_func(double d, double u, double p, double gamma, double p_old):
 
     cdef double f
     cdef double c = sqrt(gamma*p/d)
@@ -369,7 +369,7 @@ def p_func(double d, double u, double p, double gamma, double p_old):
     return f
 
 
-def p_func_deriv(double d, double u, double p, double gamma, double p_old):
+cdef p_func_deriv(double d, double u, double p, double gamma, double p_old):
 
     cdef double df
     cdef double c = sqrt(gamma*p/d)
@@ -389,14 +389,14 @@ def p_func_deriv(double d, double u, double p, double gamma, double p_old):
     return df
 
 
-def get_pstar(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
+cdef get_pstar(double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma):
 
     cdef double p_old
     cdef double u_diff = u_r - u_l
     cdef int i = 0
     cdef double TOL = 1.0E-6
     cdef double change, p, f_r, f_l, df_r, df_l
-    cdef int MAX_ITER = 100
+    cdef int MAX_ITER = 1000
 
     p_old = p_guess(d_l, u_l, p_l, d_r, u_r, p_r, gamma)
 
