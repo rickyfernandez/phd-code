@@ -2,7 +2,17 @@ import numpy as np
 
 def simulation():
 
-    gamma = 1.4
+    parameters = {
+            "CFL" : 0.3,
+            "gamma" : 1.4,
+            "max_steps" : 1000,
+            "max_time" : 0.15,
+            "output_name" : "Sod",
+            "output_cycle" : 1000,
+            "regularization" : True
+            }
+
+    gamma = parameters["gamma"]
 
     Lx = 1.       # domain size in x
     Ly = .1       # domain size in y
@@ -55,4 +65,4 @@ def simulation():
     # particle list of real and ghost particles
     particles = np.array([x_particles, y_particles])
 
-    return data, particles, particles_index
+    return parameters, data, particles, particles_index
