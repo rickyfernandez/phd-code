@@ -38,11 +38,6 @@ class StaticMesh(object):
 
         # particle graph information
         self.graphs = None
-        #self.neighbor_graph = None
-        #self.neighbor_graph_sizes = None
-        #self.face_graph = None
-        #self.face_graph_sizes = None
-        #self.voronoi_vertices = None
 
         # runtime parameters
         self.dt = 0.
@@ -74,15 +69,6 @@ class StaticMesh(object):
 
         # calculate approx radius of each voronoi cell
         R = np.sqrt(vol/np.pi)
-        #u = np.sqrt(velx**2 + vely**2)
-
-        # largest eigenvalue
-        #lam = np.maximum.reduce([np.absolute(u-c), np.absolute(u), np.absolute(u+c)])
-
-        #self.dt = self.CFL*np.min(R/lam)
-        #self.dt = self.CFL*np.min(R/c)
-        dt_x = R/(abs(velx) + c)
-        dt_y = R/(abs(vely) + c)
 
         self.dt = self.CFL*min(dt_x.min(), dt_y.min())
 
@@ -149,12 +135,9 @@ class StaticMesh(object):
         self.particles_index = dict(initial_particles_index)
 
         # make initial tesellation
-        #self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.face_graph_sizes, self.voronoi_vertices = self.mesh.tessellate(self.particles)
         self.graphs= self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
-        #        self.voronoi_vertices, self.particles_index)
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
 
         num_particles = self.particles_index["real"].size
@@ -291,16 +274,12 @@ class StaticMesh(object):
         """
 
         # generate ghost particles with links to original real particles 
-        #self.particles = self.fields.update_boundaries(self.particles, self.particles_index, self.neighbor_graph, self.neighbor_graph_sizes)
         self.particles = self.fields.update_boundaries(self.particles, self.particles_index, self.graphs)
 
         # construct the new mesh 
-        #self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph, self.face_graph_sizes, self.voronoi_vertices = self.mesh.tessellate(self.particles)
         self.graphs = self.mesh.tessellate(self.particles)
 
         # calculate volume and center of mass of real particles
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.neighbor_graph, self.neighbor_graph_sizes, self.face_graph,
-        #        self.voronoi_vertices, self.particles_index)
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
 
         # calculate primitive variables of real particles and pass to ghost particles with give boundary conditions
@@ -313,13 +292,9 @@ class StaticMesh(object):
         w = np.zeros((2, self.fields.num_real_particles), dtype="float64")
 
         # grab left and right states for each face
-        #faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.neighbor_graph,
-        #        self.neighbor_graph_sizes, self.face_graph, self.voronoi_vertices)
         faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.graphs)
 
         # calculate gradient for real particles and pass to ghost particles
-        #self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.neighbor_graph, self.neighbor_graph_sizes,
-        #        self.face_graph, self.voronoi_vertices)
         self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.graphs)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back

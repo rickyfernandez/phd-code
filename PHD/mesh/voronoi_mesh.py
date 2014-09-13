@@ -106,12 +106,9 @@ class VoronoiMesh(object):
                 "voronoi vertices" : vor.vertices
                 }
 
-        #return neighbor_graph, neighbor_graph_sizes, face_graph, face_graph_sizes, vor.vertices
         return graphs
 
 
-    #def volume_center_mass(self, particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
-    #        particles_index):
     def volume_center_mass(self, particles, particles_index, graphs):
         """
         find the volume and center of mass for all real particles
@@ -124,15 +121,12 @@ class VoronoiMesh(object):
                 "center of mass": np.zeros((2, num_particles), dtype="float64")
                 }
 
-        #cv.cell_volume_center(particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
-        #        cell_info["volume"], cell_info["center of mass"], num_particles)
         cv.cell_volume_center(particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"], graphs["voronoi vertices"],
                 cell_info["volume"], cell_info["center of mass"], num_particles)
 
         return cell_info
 
 
-    #def faces_for_flux(self, particles, primitive, w, particles_index, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices):
     def faces_for_flux(self, particles, primitive, w, particles_index, graphs):
         """
         find the area, orientation, center of mass, and velocity of each face as well
@@ -140,7 +134,6 @@ class VoronoiMesh(object):
         """
 
         num_real_particles = particles_index["real"].size
-        #num_faces = cv.number_of_faces(neighbor_graph, neighbor_graph_size, num_real_particles)
         num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
 
         faces_info = {
@@ -152,9 +145,6 @@ class VoronoiMesh(object):
                 "number faces":        num_faces
                 }
 
-        #cv.faces_for_flux(faces_info["face areas"], faces_info["face velocities"], faces_info["face angles"], faces_info["face pairs"],
-        #        faces_info["face center of mass"], particles, neighbor_graph, neighbor_graph_size, face_graph, voronoi_vertices,
-        #        w, num_real_particles)
         cv.faces_for_flux(faces_info["face areas"], faces_info["face velocities"], faces_info["face angles"], faces_info["face pairs"],
                 faces_info["face center of mass"], particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"],
                 graphs["voronoi vertices"], w, num_real_particles)

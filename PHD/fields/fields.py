@@ -80,10 +80,8 @@ class Fields(object):
 
         self.prim = self.boundary.primitive_to_ghost(particles, self.prim, particles_index)
 
-    #def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_sizes):
     def update_boundaries(self, particles, particles_index, graphs):
 
-        #new_particles = self.boundary.update_boundaries(particles, particles_index, neighbor_graph, neighbor_graph_sizes)
         new_particles = self.boundary.update_boundaries(particles, particles_index, graphs["neighbors"], graphs["number of neighbors"])
         self.num_real_particles = particles_index["real"].size
 
