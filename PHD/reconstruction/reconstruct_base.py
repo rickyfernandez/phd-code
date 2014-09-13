@@ -10,7 +10,8 @@ class ReconstructBase(object):
         self.grady = None
         self.boundary = boundary
 
-    def gradient(self, primitive, particles, particles_index, cell_info, neighbor_graph, neighbor_graph_sizes, face_graph, circum_centers):
+    #def gradient(self, primitive, particles, particles_index, cell_info, neighbor_graph, neighbor_graph_sizes, face_graph, circum_centers):
+    def gradient(self, primitive, particles, particles_index, cell_info, graphs):
         pass
 
     def extrapolate(self, faces_info, cell_com, gamma, dt):
