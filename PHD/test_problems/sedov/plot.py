@@ -3,7 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 f1 = h5py.File("sedov_hllc.hdf5", "r")
-f2 = h5py.File("sedov_hll.hdf5", "r")
+#f2 = h5py.File("sedov_hll.hdf5", "r")
+f2 = h5py.File("sedov_exact.hdf5", "r")
 
 # get the exact solution
 exact = np.loadtxt("sedov_2d.dat")
@@ -25,7 +26,8 @@ r2 = np.sqrt((x2-0.5)**2 + (y2-0.5)**2)
 plt.figure(figsize=(6,6))
 
 plt.scatter(r1, f1["/density"][:], facecolors='none', edgecolors='b', label="Hllc")
-plt.scatter(r2, f2["/density"][:], facecolors='none', edgecolors='c', label="Hll")
+#plt.scatter(r2, f2["/density"][:], facecolors='none', edgecolors='c', label="Hll")
+plt.scatter(r2, f2["/density"][:], facecolors='none', edgecolors='c', label="Exact")
 plt.plot(x_exact, rho_exact, "r")
 plt.xlim(0,0.5)
 plt.ylim(0,7)
@@ -34,5 +36,5 @@ plt.ylabel("Density")
 plt.title("Linear Reconstruction, Time: %0.2f" % f1.attrs["time"], fontsize=12)
 l = plt.legend(loc="upper left", prop={"size":12})
 l.draw_frame(False)
-plt.savefig("sedov")
+#plt.savefig("sedov")
 plt.show()
