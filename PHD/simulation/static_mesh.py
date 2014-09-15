@@ -70,6 +70,9 @@ class StaticMesh(object):
         # calculate approx radius of each voronoi cell
         R = np.sqrt(vol/np.pi)
 
+        dt_x = R/(abs(velx) + c)
+        dt_y = R/(abs(vely) + c)
+
         self.dt = self.CFL*min(dt_x.min(), dt_y.min())
 
         # correct time step if exceed max time
@@ -135,7 +138,7 @@ class StaticMesh(object):
         self.particles_index = dict(initial_particles_index)
 
         # make initial tesellation
-        self.graphs= self.mesh.tessellate(self.particles)
+        self.graphs = self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
         self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
@@ -289,7 +292,8 @@ class StaticMesh(object):
         self.get_dt()
 
         # assign fluid velocities to particles, regularize if needed, and pass to ghost particles
-        w = np.zeros((2, self.fields.num_real_particles), dtype="float64")
+        w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cell_info, self.gamma, False)
+        w = np.zeros(w.shape, dtype="float64")
 
         # grab left and right states for each face
         faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.graphs)

@@ -92,7 +92,6 @@ class VoronoiMesh(object):
 
         # sizes for 1d graphs
         neighbor_graph_sizes = np.array([len(n) for n in neighbor_graph], dtype=np.int32)
-        face_graph_sizes = np.array([len(n) for n in face_graph], dtype=np.int32)
 
         # graphs in 1d
         neighbor_graph = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
@@ -102,7 +101,6 @@ class VoronoiMesh(object):
                 "neighbors" : neighbor_graph,
                 "number of neighbors" : neighbor_graph_sizes,
                 "faces" : face_graph,
-                "number vertices faces" : face_graph_sizes,
                 "voronoi vertices" : vor.vertices
                 }
 
@@ -139,9 +137,9 @@ class VoronoiMesh(object):
         faces_info = {
                 "face angles":         np.empty(num_faces, dtype="float64"),
                 "face areas":          np.empty(num_faces, dtype="float64"),
-                "face center of mass": np.empty((2, num_faces), dtype="float64"),
+                "face center of mass": np.zeros((2, num_faces), dtype="float64"),
                 "face pairs":          np.empty((2, num_faces), dtype="int32"),
-                "face velocities":     np.empty((2, num_faces), dtype="float64"),
+                "face velocities":     np.zeros((2, num_faces), dtype="float64"),
                 "number faces":        num_faces
                 }
 
