@@ -148,7 +148,6 @@ def faces_for_flux(double[:] face_areas, double[:,::1] face_velocities, double[:
                 y = y2 - y1
 
                 # area
-                #faces_info[1, k] = sqrt(x*x + y*y)
                 face_areas[k] = sqrt(x*x + y*y)
 
                 # step 2: calculate angle of normal
@@ -192,3 +191,308 @@ def faces_for_flux(double[:] face_areas, double[:,::1] face_velocities, double[:
                 # face accounted for, go to next neighbor and face
                 ind += 1
                 ind_face += 2
+
+#cdef det(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2):
+#    return a0*b1*c2 + a1*b2*c0 + a2*b0*c1 - a2*b1*c0 - a1*b0*c2 - a0*b2*c1
+#
+#cdef dot(double a0, double a1, double a2, double b0, double b1, double b2):
+#    return a0*b0 + a1*b1 + a2*b2
+#
+#def cross(double a0, double a1, double a2, double b0, double b1, double b2, double[:] result):
+#
+#    result[0] = a1 * b2 - a2 * b1
+#    result[1] = a2 * b0 - a0 * b2
+#    result[2] = a0 * b1 - a1 * b0
+
+#def norm(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2,
+#        double[:] result):
+#
+#    cdef double x, y, z
+#
+#    x = det(1.0, a1, a2, 1.0, b1, b2, 1.0, c1, c2)
+#    y = det(a0, 1.0, a2, b0, 1.0, b2, c0, 1.0, c2)
+#    z = det(a0, a1, 1.0, b0, b1, 1.0, c0, c1, 1.0)
+#
+#    magni = sqrt(x*x + y*y + z*z)
+#
+#    result[0] = x/magni
+#    result[1] = y/magni
+#    result[2] = z/magni
+
+#def vol_3d(double[:,::1] points, num_points):
+#
+#    cdef double a0, a1, a2, b0, b1, b2
+#    cdef int i, j
+#
+#    cdef double[:] n   = np.zeros(3,dtype=np.float64)
+#    cdef double[:] cr  = np.zeros(3,dtype=np.float64)
+#    cdef double[:] tot = np.zeros(3,dtype=np.float64)
+#
+#    for i in range(num_points):
+#
+#        a0 = points[0,i]
+#        a1 = points[1,i]
+#        a2 = points[2,i]
+#
+#        j = (i+1) % num_points
+#        b0 = points[0,j]
+#        b1 = points[1,j]
+#        b2 = points[2,j]
+#
+#        cross(a0, a1, a2, b0, b1, b2, cr)
+#
+#        tot[0] += cr[0]
+#        tot[1] += cr[1]
+#        tot[2] += cr[2]
+#
+#    norm(points[0,0], points[1,0], points[2,0], points[0,1], points[1,1], points[2,1],
+#            points[0,2], points[1,2], points[2,2], n)
+#
+#    return abs(0.5*dot(tot[0], tot[1], tot[2], n[0], n[1], n[2]))
+
+
+#def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
+#        int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts, double[:] volume, int num_real_particles):
+#
+#    cdef int id_p      # particle id 
+#    cdef int id_n      # neighbor id 
+#    cdef int id_v      # voronoi id 
+#
+#    cdef int ind_n     # neighbor index
+#    cdef int ind_f     # face vertex index
+#
+#    cdef int p1, p2, p3
+#
+#    cdef int j, k
+#
+#    cdef double xp, yp, zp, xn, yn, zn
+#    cdef double a0, a1, a2, b0, b1, b2
+#
+#    cdef double area, h
+#
+#    cdef double[:] n   = np.zeros(3,dtype=np.float64)
+#    cdef double[:] cr  = np.zeros(3,dtype=np.float64)
+#    cdef double[:] tot = np.zeros(3,dtype=np.float64)
+#
+#    ind_n = 0
+#    ind_f = 0
+#
+#    # loop over real particles
+#    for id_p in range(num_real_particles):
+#
+#        # get particle position 
+#        xp = particles[0,id_p]
+#        yp = particles[1,id_p]
+#        zp = particles[2,id_p]
+#
+#        # loop over neighbors
+#        for j in range(num_neighbors[id_p]):
+#
+#            # index of neighbor
+#            id_n = neighbor_graph[ind_n]
+#
+#            # neighbor position
+#            xn = particles[0,id_n]
+#            yn = particles[1,id_n]
+#            zn = particles[2,id_n]
+#
+#            # distance from particle to face
+#            h = 0.5*sqrt((xn-xp)*(xn-xp) + (yn-yp)*(yn-yp) + (zn-zp)*(zn-zp))
+#
+#            # calculate area of the face between particle and neighbor 
+#            area = 0
+#            tot[0] = tot[1] = tot[2] = 0
+#
+#            # the last vetex is the previous one to the first
+#            j = face_graph[num_face_verts[ind_n] - 1 + ind_f]
+#            for k in range(num_face_verts[ind_n]):
+#
+#                ind_v = face_graph[ind_f]
+#
+#                # position of voronoi vertice
+#                a0 = voronoi_verts[ind_v,0]
+#                a1 = voronoi_verts[ind_v,1]
+#                a2 = voronoi_verts[ind_v,2]
+#
+#                b0 = voronoi_verts[j,0]
+#                b1 = voronoi_verts[j,1]
+#                b2 = voronoi_verts[j,2]
+#
+#                cross(a0, a1, a2, b0, b1, b2, cr)
+#
+#                # total sum of cross products
+#                tot[0] += cr[0]
+#                tot[1] += cr[1]
+#                tot[2] += cr[2]
+#
+#                j = ind_v   # j is previous vertex to ind_v
+#                ind_f += 1  # move to next vertex
+#
+#            # grab the last three points to construct two vectors to make the normal of the face
+#            p3 = face_graph[ind_f - 1]; p2 = face_graph[ind_f - 2]; p1 = face_graph[ind_f - 3]
+#
+#            # calculate norm of face
+#            norm(voronoi_verts[p1,0], voronoi_verts[p1,1], voronoi_verts[p1,2],
+#                    voronoi_verts[p2,0], voronoi_verts[p2,1], voronoi_verts[p2,2],
+#                    voronoi_verts[p3,0], voronoi_verts[p3,1], voronoi_verts[p3,2], n)
+#
+#            # area = 0.5 * norm dot sum of cross products
+#            area = abs(0.5*dot(tot[0], tot[1], tot[2], n[0], n[1], n[2]))
+#
+#            # volume is sum of of pyrmaids
+#            volume[id_p] += area*h/3.0
+#
+#            # go to next neighbor
+#            ind_n += 1
+
+def triangle_area(double[:,::1] t):
+    """
+    Purpose:
+        compute the area of a triangle 3d
+
+    Discussion:
+        The area of a parallelogram is the cross product of two sides of the parallelogram.
+        The triangle formed from the parallelogram is half the area
+
+    Parameters:
+        Input, 3x3 array of vertices of the triangle. Each column is a point and the rows
+        are the x, y, and z dimension.
+
+        Output, the area of the triangle.
+
+    Author:
+        Ricky Fernandez
+
+    Reference:
+        www.people.sc.fsu.edu/~jburkardt/c_src/geometry/geometry.c
+    """
+
+    cdef double x, y, z
+
+    x = (t[1,1] - t[1,0])*(t[2,2] - t[2,0]) - (t[2,1] - t[2,0])*(t[1,2] - t[1,0])
+    y = (t[2,1] - t[2,0])*(t[0,2] - t[0,0]) - (t[0,1] - t[0,0])*(t[2,2] - t[2,0])
+    z = (t[0,1] - t[0,0])*(t[1,2] - t[1,0]) - (t[1,1] - t[1,0])*(t[0,2] - t[0,0])
+
+    return 0.5*sqrt(x*x + y*y + z*z)
+
+
+def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
+        int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts, double[:] volume,
+        double[:,::1] center_of_mass, int num_real_particles):
+
+    cdef int id_p      # particle id 
+    cdef int id_n      # neighbor id 
+    cdef int id_v      # voronoi id 
+
+    cdef int ind_n     # neighbor index
+    cdef int ind_f     # face vertex index
+
+    cdef int j, k, p
+    cdef double xp, yp, zp, xn, yn, zn
+    cdef double vol, area, tri_area, h
+
+    cdef double[:]   com = np.zeros(3,dtype=np.float64)
+    cdef double[:,:] tri = np.zeros((3,3),dtype=np.float64)
+
+    ind_n = 0
+    ind_f = 0
+
+    # loop over real particles
+    for id_p in range(num_real_particles):
+
+        # get particle position 
+        xp = particles[0,id_p]
+        yp = particles[1,id_p]
+        zp = particles[2,id_p]
+
+        # loop over neighbors
+        for j in range(num_neighbors[id_p]):
+
+            # index of neighbor
+            id_n = neighbor_graph[ind_n]
+
+            # neighbor position
+            xn = particles[0,id_n]
+            yn = particles[1,id_n]
+            zn = particles[2,id_n]
+
+            # distance from particle to face
+            h = 0.5*sqrt((xn-xp)*(xn-xp) + (yn-yp)*(yn-yp) + (zn-zp)*(zn-zp))
+
+            # calculate area of the face between particle and neighbor 
+
+            # area and center of mass of face
+            area = 0
+            com[0] = com[1] = com[2] = 0
+
+            # last vertex of face
+            j = face_graph[num_face_verts[ind_n] - 1 + ind_f]
+
+            # there are n vertices that make up the face but we need
+            # only to loop through n-2 vertices
+
+            # decompose polygon into n-2 triangles
+            for k in range(num_face_verts[ind_n]-2):
+
+                # index of face vertice
+                ind_v = face_graph[ind_f]
+
+                # form a triangle from three vertices
+                tri[0,0] = voronoi_verts[ind_v,0]
+                tri[1,0] = voronoi_verts[ind_v,1]
+                tri[2,0] = voronoi_verts[ind_v,2]
+
+                p = face_graph[ind_f+1]
+                tri[0,1] = voronoi_verts[p,0]
+                tri[1,1] = voronoi_verts[p,1]
+                tri[2,1] = voronoi_verts[p,2]
+                #tri[0,1] = voronoi_verts[ind_v+1,0]
+                #tri[1,1] = voronoi_verts[ind_v+1,1]
+                #tri[2,1] = voronoi_verts[ind_v+1,2]
+
+                tri[0,2] = voronoi_verts[j,0]
+                tri[1,2] = voronoi_verts[j,1]
+                tri[2,2] = voronoi_verts[j,2]
+
+                # calcualte area of the triangle
+                tri_area = triangle_area(tri)
+
+                # face area is the sum of all triangle areas
+                area += tri_area
+
+                # the center of mass of the face is the weighted sum of center mass
+                # of triangles, the center of mass of a triange is the mean of its vertices
+                com[0] += tri_area*(tri[0,0] + tri[0,1] + tri[0,2])/3.0
+                com[1] += tri_area*(tri[1,0] + tri[1,1] + tri[1,2])/3.0
+                com[2] += tri_area*(tri[2,0] + tri[2,1] + tri[2,2])/3.0
+
+                # skip to next vertex in face
+                ind_f += 1
+
+            # skip the remaining two vertices of the face
+            ind_f += 2
+
+            # complete the weighted sum for the face
+            com[0] /= area
+            com[1] /= area
+            com[2] /= area
+
+            # the volume of the cell is a collection pyramids 
+            # the volume of a pyramid
+            vol = area*h/3
+
+            # center of mass of the cell is the sum weighted center of mass of pyramids
+            center_of_mass[0,id_p] += vol*(3*com[0] + xp)/4
+            center_of_mass[1,id_p] += vol*(3*com[1] + yp)/4
+            center_of_mass[2,id_p] += vol*(3*com[2] + zp)/4
+
+            # volume is sum of of pyrmaids
+            volume[id_p] += vol
+
+            # go to next neighbor
+            ind_n += 1
+
+        # complete the weighted sum for the cell
+        center_of_mass[0,id_p] /= volume[id_p]
+        center_of_mass[1,id_p] /= volume[id_p]
+        center_of_mass[2,id_p] /= volume[id_p]
