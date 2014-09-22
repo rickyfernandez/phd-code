@@ -4,7 +4,7 @@ def simulation():
 
 
     parameters = {
-            "CFL" : 0.7,
+            "CFL" : 0.3,
             "gamma" : 1.4,
             "max_steps" : 1000,
             "max_time" : 0.10,
@@ -44,9 +44,11 @@ def simulation():
     data[0,:] = 1.0                    # density
     data[3,:] = 1.0E-5                 # energy density
 
-    r = 0.1
+    r = 0.01
     cells = ((x_in-.5)**2 + (y_in-.5)**2) <= r**2
-    data[3, cells] = 1.0/(np.pi*r**2)
+    #data[3, cells] = 1.0/(np.pi*r**2)
+    data[3, cells] = 1.0/(dx*dy)
+    print "number of cells:", np.sum(cells)
 
     # interior particles are real particles
     x_particles = np.copy(x_in); y_particles = np.copy(y_in)
