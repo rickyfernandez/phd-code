@@ -192,158 +192,6 @@ def faces_for_flux(double[:] face_areas, double[:,::1] face_velocities, double[:
                 ind += 1
                 ind_face += 2
 
-#cdef det(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2):
-#    return a0*b1*c2 + a1*b2*c0 + a2*b0*c1 - a2*b1*c0 - a1*b0*c2 - a0*b2*c1
-#
-#cdef dot(double a0, double a1, double a2, double b0, double b1, double b2):
-#    return a0*b0 + a1*b1 + a2*b2
-#
-#def cross(double a0, double a1, double a2, double b0, double b1, double b2, double[:] result):
-#
-#    result[0] = a1 * b2 - a2 * b1
-#    result[1] = a2 * b0 - a0 * b2
-#    result[2] = a0 * b1 - a1 * b0
-
-#def norm(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2,
-#        double[:] result):
-#
-#    cdef double x, y, z
-#
-#    x = det(1.0, a1, a2, 1.0, b1, b2, 1.0, c1, c2)
-#    y = det(a0, 1.0, a2, b0, 1.0, b2, c0, 1.0, c2)
-#    z = det(a0, a1, 1.0, b0, b1, 1.0, c0, c1, 1.0)
-#
-#    magni = sqrt(x*x + y*y + z*z)
-#
-#    result[0] = x/magni
-#    result[1] = y/magni
-#    result[2] = z/magni
-
-#def vol_3d(double[:,::1] points, num_points):
-#
-#    cdef double a0, a1, a2, b0, b1, b2
-#    cdef int i, j
-#
-#    cdef double[:] n   = np.zeros(3,dtype=np.float64)
-#    cdef double[:] cr  = np.zeros(3,dtype=np.float64)
-#    cdef double[:] tot = np.zeros(3,dtype=np.float64)
-#
-#    for i in range(num_points):
-#
-#        a0 = points[0,i]
-#        a1 = points[1,i]
-#        a2 = points[2,i]
-#
-#        j = (i+1) % num_points
-#        b0 = points[0,j]
-#        b1 = points[1,j]
-#        b2 = points[2,j]
-#
-#        cross(a0, a1, a2, b0, b1, b2, cr)
-#
-#        tot[0] += cr[0]
-#        tot[1] += cr[1]
-#        tot[2] += cr[2]
-#
-#    norm(points[0,0], points[1,0], points[2,0], points[0,1], points[1,1], points[2,1],
-#            points[0,2], points[1,2], points[2,2], n)
-#
-#    return abs(0.5*dot(tot[0], tot[1], tot[2], n[0], n[1], n[2]))
-
-
-#def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
-#        int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts, double[:] volume, int num_real_particles):
-#
-#    cdef int id_p      # particle id 
-#    cdef int id_n      # neighbor id 
-#    cdef int id_v      # voronoi id 
-#
-#    cdef int ind_n     # neighbor index
-#    cdef int ind_f     # face vertex index
-#
-#    cdef int p1, p2, p3
-#
-#    cdef int j, k
-#
-#    cdef double xp, yp, zp, xn, yn, zn
-#    cdef double a0, a1, a2, b0, b1, b2
-#
-#    cdef double area, h
-#
-#    cdef double[:] n   = np.zeros(3,dtype=np.float64)
-#    cdef double[:] cr  = np.zeros(3,dtype=np.float64)
-#    cdef double[:] tot = np.zeros(3,dtype=np.float64)
-#
-#    ind_n = 0
-#    ind_f = 0
-#
-#    # loop over real particles
-#    for id_p in range(num_real_particles):
-#
-#        # get particle position 
-#        xp = particles[0,id_p]
-#        yp = particles[1,id_p]
-#        zp = particles[2,id_p]
-#
-#        # loop over neighbors
-#        for j in range(num_neighbors[id_p]):
-#
-#            # index of neighbor
-#            id_n = neighbor_graph[ind_n]
-#
-#            # neighbor position
-#            xn = particles[0,id_n]
-#            yn = particles[1,id_n]
-#            zn = particles[2,id_n]
-#
-#            # distance from particle to face
-#            h = 0.5*sqrt((xn-xp)*(xn-xp) + (yn-yp)*(yn-yp) + (zn-zp)*(zn-zp))
-#
-#            # calculate area of the face between particle and neighbor 
-#            area = 0
-#            tot[0] = tot[1] = tot[2] = 0
-#
-#            # the last vetex is the previous one to the first
-#            j = face_graph[num_face_verts[ind_n] - 1 + ind_f]
-#            for k in range(num_face_verts[ind_n]):
-#
-#                ind_v = face_graph[ind_f]
-#
-#                # position of voronoi vertice
-#                a0 = voronoi_verts[ind_v,0]
-#                a1 = voronoi_verts[ind_v,1]
-#                a2 = voronoi_verts[ind_v,2]
-#
-#                b0 = voronoi_verts[j,0]
-#                b1 = voronoi_verts[j,1]
-#                b2 = voronoi_verts[j,2]
-#
-#                cross(a0, a1, a2, b0, b1, b2, cr)
-#
-#                # total sum of cross products
-#                tot[0] += cr[0]
-#                tot[1] += cr[1]
-#                tot[2] += cr[2]
-#
-#                j = ind_v   # j is previous vertex to ind_v
-#                ind_f += 1  # move to next vertex
-#
-#            # grab the last three points to construct two vectors to make the normal of the face
-#            p3 = face_graph[ind_f - 1]; p2 = face_graph[ind_f - 2]; p1 = face_graph[ind_f - 3]
-#
-#            # calculate norm of face
-#            norm(voronoi_verts[p1,0], voronoi_verts[p1,1], voronoi_verts[p1,2],
-#                    voronoi_verts[p2,0], voronoi_verts[p2,1], voronoi_verts[p2,2],
-#                    voronoi_verts[p3,0], voronoi_verts[p3,1], voronoi_verts[p3,2], n)
-#
-#            # area = 0.5 * norm dot sum of cross products
-#            area = abs(0.5*dot(tot[0], tot[1], tot[2], n[0], n[1], n[2]))
-#
-#            # volume is sum of of pyrmaids
-#            volume[id_p] += area*h/3.0
-#
-#            # go to next neighbor
-#            ind_n += 1
 
 def triangle_area(double[:,::1] t):
     """
@@ -361,7 +209,7 @@ def triangle_area(double[:,::1] t):
         Output, the area of the triangle.
 
     Author:
-        Ricky Fernandez
+        Ricardo Fernandez
 
     Reference:
         www.people.sc.fsu.edu/~jburkardt/c_src/geometry/geometry.c
@@ -369,16 +217,62 @@ def triangle_area(double[:,::1] t):
 
     cdef double x, y, z
 
+    # perform cross product from the vertices that make up the triangle
+    # (v1 - v0) x (v2 - v0)
     x = (t[1,1] - t[1,0])*(t[2,2] - t[2,0]) - (t[2,1] - t[2,0])*(t[1,2] - t[1,0])
     y = (t[2,1] - t[2,0])*(t[0,2] - t[0,0]) - (t[0,1] - t[0,0])*(t[2,2] - t[2,0])
     z = (t[0,1] - t[0,0])*(t[1,2] - t[1,0]) - (t[1,1] - t[1,0])*(t[0,2] - t[0,0])
 
+    # the are of the triangle is one half the magnitude
     return 0.5*sqrt(x*x + y*y + z*z)
 
 
 def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
         int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts, double[:] volume,
         double[:,::1] center_of_mass, int num_real_particles):
+    """
+    Purpose:
+        compute the area and center of mass of each face in 3d
+
+    Discussion:
+        The center of mass of the face is the are-weighted sum of the center of mass of
+        disjoint triangles that make up the face. Likewise the area of the face is the
+        sum of areas of the disjoint triangles.
+
+    Parameters:
+        Input, 3xn array of particles positions. Each column is a particle and the rows
+        are the x, y, z dimension.
+
+        Input, 1d array of neighbor indices. All neighbors of particle 0 are placed at
+        the beginning of the array followed by all the neighbors of particle 1 and so
+        on.
+
+        Input, 1d array of number of neighbors. The first value is the number of neighbors
+        for particle 0 followed by the number of neighbors for particle 1 and so on. These
+        values used to stride the neighbors array.
+
+        Input, 1d array of indices that make up the voronoi faces. For particle 0 all the
+        faces are randomly grouped. Then for each face the indices are assigned to this
+        array and then repeated for the rest of the particles.
+
+        Input, 1d array of number of vertices that make up each face.
+
+        Input, mx3 array of voronoi positions. Each row corresponds to a particle and
+        the columns are the x, y, z and dimension.
+
+        Output, 1d array of volumes for each particle.
+
+        Output, 3xn array of center of mass of voronoi cell. Each column is a particle and
+        the rows are x, y, and z dimension.
+
+        Input, the number of real particles.
+
+    Author:
+        Ricardo Fernandez
+
+    Reference:
+        www.people.sc.fsu.edu/~jburkardt/c_src/geometry/geometry.c
+    """
 
     cdef int id_p      # particle id 
     cdef int id_n      # neighbor id 
@@ -446,9 +340,6 @@ def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_ne
                 tri[0,1] = voronoi_verts[p,0]
                 tri[1,1] = voronoi_verts[p,1]
                 tri[2,1] = voronoi_verts[p,2]
-                #tri[0,1] = voronoi_verts[ind_v+1,0]
-                #tri[1,1] = voronoi_verts[ind_v+1,1]
-                #tri[2,1] = voronoi_verts[ind_v+1,2]
 
                 tri[0,2] = voronoi_verts[j,0]
                 tri[1,2] = voronoi_verts[j,1]
