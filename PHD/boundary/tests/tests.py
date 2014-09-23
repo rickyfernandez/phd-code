@@ -49,7 +49,7 @@ def test_boundary():
     particles = np.array([x_particles, y_particles])
 
     # generate voronoi mesh to generate graphs 
-    m = mesh.VoronoiMesh()
+    m = mesh.VoronoiMesh2D()
     neighbor_graph, neighbor_graph_sizes, face_graph, face_graph_sizes, voronoi_vertices = m.tessellate(particles)
 
     # create ghost particels 

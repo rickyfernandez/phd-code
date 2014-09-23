@@ -3,7 +3,7 @@ import cell_volume_center as cv
 import numpy as np
 import itertools
 
-class VoronoiMesh(object):
+class VoronoiMesh2D(object):
     """
     voronoi mesh class
     """
@@ -153,7 +153,7 @@ class VoronoiMesh(object):
 
         return faces_info
 
-class VoronoiMesh3d(VoronoiMesh):
+class VoronoiMesh3D(VoronoiMesh2D):
 
     def tessellate(self, particles):
         """

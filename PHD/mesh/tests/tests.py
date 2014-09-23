@@ -1,5 +1,5 @@
 import numpy as np
-from PHD.mesh import VoronoiMesh
+from PHD.mesh import VoronoiMesh2D
 
 def test_volume():
     """Test if particle volumes are created correctly.
@@ -49,7 +49,7 @@ def test_volume():
     particles = np.array([x_particles, y_particles])
 
     # generate voronoi mesh 
-    mesh = VoronoiMesh()
+    mesh = VoronoiMesh2D()
     neighbor_graph, neighbor_graph_sizes, face_graph, face_graph_sizes, voronoi_vertices = mesh.tessellate(particles)
 
     # calculate voronoi volumes of all real particles 
@@ -99,7 +99,7 @@ def test_center_of_mass():
     particles = np.array([x_particles, y_particles])
 
     # generate voronoi mesh 
-    mesh = VoronoiMesh()
+    mesh = VoronoiMesh2D()
     neighbor_graph, neighbor_graph_sizes, face_graph, face_graph_sizes, voronoi_vertices = mesh.tessellate(particles)
 
     # calculate voronoi volumes of all real particles 

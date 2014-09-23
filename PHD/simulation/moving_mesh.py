@@ -2,11 +2,6 @@ import h5py
 import numpy as np
 import simulation as sim
 from static_mesh import StaticMesh
-from PHD.fields import Fields
-from PHD.mesh import VoronoiMesh
-from PHD.riemann.riemann_base import RiemannBase
-from PHD.boundary.boundary_base import BoundaryBase
-from PHD.reconstruction.reconstruct_base import ReconstructBase
 
 
 class MovingMesh(StaticMesh):

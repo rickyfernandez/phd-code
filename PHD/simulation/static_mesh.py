@@ -2,7 +2,7 @@ import h5py
 import numpy as np
 import simulation as sim
 from PHD.fields import Fields
-from PHD.mesh import VoronoiMesh
+from PHD.mesh import VoronoiMesh2D
 from PHD.riemann.riemann_base import RiemannBase
 from PHD.boundary.boundary_base import BoundaryBase
 from PHD.reconstruction.reconstruct_base import ReconstructBase
@@ -45,7 +45,7 @@ class StaticMesh(object):
         self.num_steps = 0
 
         # simulation classes
-        self.mesh = VoronoiMesh()
+        self.mesh = VoronoiMesh2D()
         self.boundary = None
         self.reconstruction = None
         self.riemann_solver = None
