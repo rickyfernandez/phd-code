@@ -7,6 +7,12 @@ class RiemannBase(object):
     def __init__(self, reconstruction=None):
         self.reconstruction = reconstruction
 
+    def left_right_states(self, primitive, faces_info):
+
+        # grab left and right states for each face
+        faces_info["left faces"]  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
+        faces_info["right faces"] = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
+
     def rotate_state(self, state, theta):
 
         # only the velocity components are affected
@@ -21,7 +27,9 @@ class RiemannBase(object):
         state[1,:] = u_tmp
         state[2,:] = v_tmp
 
-    def fluxes(self, faces_info, gamma, dt, cell_info, particles_index):
+    def fluxes(self, primitive, faces_info, gamma, dt, cell_info, particles_index):
+
+        self.left_right_states(primitive, faces_info)
 
         left_face  = faces_info["left faces"]
         right_face = faces_info["right faces"]

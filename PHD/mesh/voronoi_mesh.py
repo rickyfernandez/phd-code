@@ -29,6 +29,16 @@ class VoronoiMesh2D(object):
 
         return w
 
+    def assign_face_velocities(self, particles, particles_index, graphs, faces_info, w):
+
+        num_real_particles = particles_index["real"].size
+        num_faces = faces_info["number faces"]
+
+        faces_info["face velocities"] = np.zeros((2, num_faces), dtype="float64")
+
+        cv.assign_face_velocities(particles, graphs["neighbors"], graphs["number of neighbors"],
+                faces_info["face center of mass"], faces_info["face velocities"], w, num_real_particles)
+
 
     def regularization(self, prim, particles, gamma, cell_info, particles_index):
         """
@@ -107,31 +117,23 @@ class VoronoiMesh2D(object):
         return graphs
 
 
-    def volume_center_mass(self, particles, particles_index, graphs):
-        """
-        find the volume and center of mass for all real particles
-        """
+    def cell_and_faces_info(self, particles, particles_index, graphs):
 
-        num_particles = particles_index["real"].size
+        #num_particles = particles_index["real"].size
+        num_real_particles = particles_index["real"].size
 
         cell_info = {
-                "volume":         np.zeros(num_particles, dtype="float64"),
-                "center of mass": np.zeros((2, num_particles), dtype="float64")
+                "volume":         np.zeros(num_real_particles, dtype="float64"),
+                "center of mass": np.zeros((2, num_real_particles), dtype="float64")
                 }
 
-        cv.cell_volume_center(particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"], graphs["voronoi vertices"],
-                cell_info["volume"], cell_info["center of mass"], num_particles)
+        #self.cell_volume_and_center(particles, graphs, cell_info, num_particles)
+        #cv.cell_volume_center(particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"], graphs["voronoi vertices"],
+        #        cell_info["volume"], cell_info["center of mass"], num_particles)
 
-        return cell_info
+#        return cell_info
 
-
-    def faces_for_flux(self, particles, primitive, w, particles_index, graphs):
-        """
-        find the area, orientation, center of mass, and velocity of each face as well
-        the particles that share the face and total numbe of faces
-        """
-
-        num_real_particles = particles_index["real"].size
+        #num_real_particles = particles_index["real"].size
         num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
 
         faces_info = {
@@ -139,19 +141,75 @@ class VoronoiMesh2D(object):
                 "face areas":          np.empty(num_faces, dtype="float64"),
                 "face center of mass": np.zeros((2, num_faces), dtype="float64"),
                 "face pairs":          np.empty((2, num_faces), dtype="int32"),
-                "face velocities":     np.zeros((2, num_faces), dtype="float64"),
+#                "face velocities":     np.zeros((2, num_faces), dtype="float64"),
                 "number faces":        num_faces
                 }
 
-        cv.faces_for_flux(faces_info["face areas"], faces_info["face velocities"], faces_info["face angles"], faces_info["face pairs"],
-                faces_info["face center of mass"], particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"],
-                graphs["voronoi vertices"], w, num_real_particles)
+        self.compute_cell_face_info(particles, graphs, cell_info, faces_info, num_real_particles)
 
-        # grab left and right states for each face
-        faces_info["left faces"]  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
-        faces_info["right faces"] = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
+#        cv.faces_for_flux(faces_info["face areas"], faces_info["face velocities"], faces_info["face angles"], faces_info["face pairs"],
+#                faces_info["face center of mass"], particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"],
+#                graphs["voronoi vertices"], w, num_real_particles)
 
-        return faces_info
+#        # grab left and right states for each face
+#        faces_info["left faces"]  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
+#        faces_info["right faces"] = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
+
+        return cell_info, faces_info
+
+    def compute_cell_face_info(self, particles, graphs, cell_info, faces_info, num_particles):
+
+        cv.cell_face_info(particles, graphs["neighbors"], graphs["number of neighbors"],
+                graphs["faces"], graphs["voronoi vertices"],
+                cell_info["volume"], cell_info["center of mass"],
+                faces_info["face areas"], faces_info["face angles"], faces_info["face pairs"], faces_info["face center of mass"],
+                num_particles)
+
+#    def volume_center_mass(self, particles, particles_index, graphs):
+#        """
+#        find the volume and center of mass for all real particles
+#        """
+#
+#        num_particles = particles_index["real"].size
+#
+#        cell_info = {
+#                "volume":         np.zeros(num_particles, dtype="float64"),
+#                "center of mass": np.zeros((2, num_particles), dtype="float64")
+#                }
+#
+#        cv.cell_volume_center(particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"], graphs["voronoi vertices"],
+#                cell_info["volume"], cell_info["center of mass"], num_particles)
+#
+#        return cell_info
+
+#    def faces_for_flux(self, particles, primitive, w, particles_index, graphs):
+#        """
+#        find the area, orientation, center of mass, and velocity of each face as well
+#        the particles that share the face and total numbe of faces
+#        """
+#
+#        num_real_particles = particles_index["real"].size
+#        num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
+#
+#        faces_info = {
+#                "face angles":         np.empty(num_faces, dtype="float64"),
+#                "face areas":          np.empty(num_faces, dtype="float64"),
+#                "face center of mass": np.zeros((2, num_faces), dtype="float64"),
+#                "face pairs":          np.empty((2, num_faces), dtype="int32"),
+#                "face velocities":     np.zeros((2, num_faces), dtype="float64"),
+#                "number faces":        num_faces
+#                }
+#
+#        cv.faces_for_flux(faces_info["face areas"], faces_info["face velocities"], faces_info["face angles"], faces_info["face pairs"],
+#                faces_info["face center of mass"], particles, graphs["neighbors"], graphs["number of neighbors"], graphs["faces"],
+#                graphs["voronoi vertices"], w, num_real_particles)
+#
+#        # grab left and right states for each face
+#        faces_info["left faces"]  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
+#        faces_info["right faces"] = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
+#
+#        return faces_info
+
 
 class VoronoiMesh3D(VoronoiMesh2D):
 

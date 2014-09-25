@@ -19,7 +19,9 @@ class Exact(RiemannBase):
         return np.min(R/c)
 
 
-    def fluxes(self, faces_info, gamma, dt, cell_info, particles_index):
+    def fluxes(self, primitive, faces_info, gamma, dt, cell_info, particles_index):
+
+        self.left_right_states(primitive, faces_info)
 
         left_face  = faces_info["left faces"]
         right_face = faces_info["right faces"]

@@ -141,7 +141,8 @@ class StaticMesh(object):
         self.graphs = self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
+        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
+        self.cell_info, _ = self.mesh.cell_and_faces_info(self.particles, self.particles_index, self.graphs)
 
         num_particles = self.particles_index["real"].size
 
@@ -283,7 +284,8 @@ class StaticMesh(object):
         self.graphs = self.mesh.tessellate(self.particles)
 
         # calculate volume and center of mass of real particles
-        self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
+        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
+        self.cell_info, faces_info = self.mesh.cell_and_faces_info(self.particles, self.particles_index, self.graphs)
 
         # calculate primitive variables of real particles and pass to ghost particles with give boundary conditions
         self.fields.update_primitive(self.cell_info["volume"], self.particles, self.particles_index)
@@ -296,13 +298,14 @@ class StaticMesh(object):
         w = np.zeros(w.shape, dtype="float64")
 
         # grab left and right states for each face
-        faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.graphs)
+        #faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.graphs)
 
         # calculate gradient for real particles and pass to ghost particles
         self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.graphs)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
-        fluxes = self.riemann_solver.fluxes(faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
+        #fluxes = self.riemann_solver.fluxes(faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
+        fluxes = self.riemann_solver.fluxes(self.fields.prim, faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
 
         # update conserved variables
         self.update(self.fields, fluxes, faces_info)
