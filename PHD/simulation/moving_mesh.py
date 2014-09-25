@@ -44,7 +44,6 @@ class MovingMesh(StaticMesh):
         self.graphs = self.mesh.tessellate(self.particles)
 
         # calculate volume and center of mass of real particles
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
         self.cell_info, faces_info = self.mesh.cell_and_faces_info(self.particles, self.particles_index, self.graphs)
 
         # calculate primitive variables of real particles and pass to ghost particles with give boundary conditions
@@ -58,9 +57,6 @@ class MovingMesh(StaticMesh):
 
         # assign face velocities
         self.mesh.assign_face_velocities(self.particles, self.particles_index, self.graphs, faces_info, w)
-
-        # grab left and right states for each face
-        #faces_info = self.mesh.faces_for_flux(self.particles, self.fields.prim, w, self.particles_index, self.graphs)
 
         # calculate gradient for real particles and pass to ghost particles
         self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.graphs)
