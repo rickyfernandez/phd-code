@@ -19,22 +19,22 @@ class Exact(RiemannBase):
         return np.min(R/c)
 
 
-    def fluxes(self, primitive, faces_info, gamma, dt, cell_info, particles_index):
+    def fluxes(self, primitive, faces_info, gamma, dt, cells_info, particles_index):
 
         self.left_right_states(primitive, faces_info)
 
         left_face  = faces_info["left faces"]
         right_face = faces_info["right faces"]
 
-        num_faces = faces_info["number faces"]
+        num_faces = faces_info["number of faces"]
         face_states = np.zeros((4,num_faces), dtype="float64")
 
         # The orientation of the face for all faces 
-        theta = faces_info["face angles"]
+        theta = faces_info["angles"]
 
         # velocity of all faces
-        wx = faces_info["face velocities"][0,:]
-        wy = faces_info["face velocities"][1,:]
+        wx = faces_info["velocities"][0,:]
+        wy = faces_info["velocities"][1,:]
 
         # boost to frame of face
         left_face[1,:] -= wx; right_face[1,:] -= wx
@@ -43,7 +43,7 @@ class Exact(RiemannBase):
         # reconstruct to states to faces
         # hack for right now
         ghost_map = particles_index["ghost_map"]
-        cell_com = np.hstack((cell_info["center of mass"], cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+        cell_com = np.hstack((cells_info["center of mass"], cells_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
         self.reconstruction.extrapolate(faces_info, cell_com, gamma, dt)
 
         # rotate to face frame 

@@ -33,7 +33,7 @@ class StaticMesh(object):
         # particle information
         self.particles = None
         self.fields = None
-        self.cell_info = None
+        self.cells_info = None
         self.particles_index = None
 
         # particle graph information
@@ -56,7 +56,7 @@ class StaticMesh(object):
         Calculate the time step using the CFL condition.
         """
 
-        vol = self.cell_info["volume"]
+        vol = self.cells_info["volume"]
 
         # grab values that correspond to real particles
         dens = self.fields.get_field("density")
@@ -141,8 +141,7 @@ class StaticMesh(object):
         self.graphs = self.mesh.tessellate(self.particles)
 
         # calculate volume of real particles 
-        #self.cell_info = self.mesh.volume_center_mass(self.particles, self.particles_index, self.graphs)
-        self.cell_info, _ = self.mesh.cell_and_faces_info(self.particles, self.particles_index, self.graphs)
+        self.cells_info, _ = self.mesh.cell_and_faces_info(self.particles, self.particles_index, self.graphs)
 
         num_particles = self.particles_index["real"].size
 
@@ -155,7 +154,7 @@ class StaticMesh(object):
         momy = self.fields.get_field("momentum-y")
         ener = self.fields.get_field("energy")
 
-        vol = self.cell_info["volume"]
+        vol = self.cells_info["volume"]
 
         mass[:] = initial_data[0,:] * vol
         momx[:] = initial_data[1,:] * vol
@@ -284,23 +283,23 @@ class StaticMesh(object):
         self.graphs = self.mesh.tessellate(self.particles)
 
         # calculate volume and center of mass of real particles
-        self.cell_info, faces_info = self.mesh.cell_and_faces_info(self.particles, self.particles_index, self.graphs)
+        self.cells_info, faces_info = self.mesh.cell_and_faces_info(self.particles, self.particles_index, self.graphs)
 
         # calculate primitive variables of real particles and pass to ghost particles with give boundary conditions
-        self.fields.update_primitive(self.cell_info["volume"], self.particles, self.particles_index)
+        self.fields.update_primitive(self.cells_info["volume"], self.particles, self.particles_index)
 
         # calculate global time step
         self.get_dt()
 
         # assign fluid velocities to particles, regularize if needed, and pass to ghost particles
-        w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cell_info, self.gamma, False)
+        w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cells_info, self.gamma, False)
         w = np.zeros(w.shape, dtype="float64")
 
         # calculate gradient for real particles and pass to ghost particles
-        self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cell_info, self.graphs)
+        self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cells_info, self.graphs)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
-        fluxes = self.riemann_solver.fluxes(self.fields.prim, faces_info, self.gamma, self.dt, self.cell_info, self.particles_index)
+        fluxes = self.riemann_solver.fluxes(self.fields.prim, faces_info, self.gamma, self.dt, self.cells_info, self.particles_index)
 
         # update conserved variables
         self.update(self.fields, fluxes, faces_info)
@@ -311,8 +310,5 @@ class StaticMesh(object):
         update state variables from fluxes
         """
 
-        area = faces_info["face areas"]
-        face_pairs = faces_info["face pairs"]
-        num_faces = faces_info["number faces"]
-
-        sim.update(fields.field_data, fluxes, face_pairs, area, self.dt, num_faces, fields.num_real_particles, fields.num_fields)
+        sim.update(fields.field_data, fluxes, faces_info["pairs"], faces_info["areas"], self.dt, faces_info["number of faces"],
+                fields.num_real_particles, fields.num_fields)

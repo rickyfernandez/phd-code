@@ -10,8 +10,8 @@ class RiemannBase(object):
     def left_right_states(self, primitive, faces_info):
 
         # grab left and right states for each face
-        faces_info["left faces"]  = np.ascontiguousarray(primitive[:, faces_info["face pairs"][0,:]])
-        faces_info["right faces"] = np.ascontiguousarray(primitive[:, faces_info["face pairs"][1,:]])
+        faces_info["left faces"]  = np.ascontiguousarray(primitive[:, faces_info["pairs"][0,:]])
+        faces_info["right faces"] = np.ascontiguousarray(primitive[:, faces_info["pairs"][1,:]])
 
     def rotate_state(self, state, theta):
 
@@ -27,22 +27,22 @@ class RiemannBase(object):
         state[1,:] = u_tmp
         state[2,:] = v_tmp
 
-    def fluxes(self, primitive, faces_info, gamma, dt, cell_info, particles_index):
+    def fluxes(self, primitive, faces_info, gamma, dt, cells_info, particles_index):
 
         self.left_right_states(primitive, faces_info)
 
         left_face  = faces_info["left faces"]
         right_face = faces_info["right faces"]
 
-        num_faces = faces_info["number faces"]
+        num_faces = faces_info["number of faces"]
         fluxes = np.zeros((4,num_faces), dtype="float64")
 
         # The orientation of the face for all faces 
-        theta = faces_info["face angles"]
+        theta = faces_info["angles"]
 
         # velocity of all faces
-        wx = faces_info["face velocities"][0,:]
-        wy = faces_info["face velocities"][1,:]
+        wx = faces_info["velocities"][0,:]
+        wy = faces_info["velocities"][1,:]
 
         # velocity of the faces in the direction of the faces
         # dot product invariant under rotation
@@ -51,7 +51,7 @@ class RiemannBase(object):
         # reconstruct to states to faces
         # hack for right now
         ghost_map = particles_index["ghost_map"]
-        cell_com = np.hstack((cell_info["center of mass"], cell_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+        cell_com = np.hstack((cells_info["center of mass"], cells_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
         self.reconstruction.extrapolate(faces_info, cell_com, gamma, dt)
 
         # rotate to face frame 
