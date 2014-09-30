@@ -292,7 +292,8 @@ class StaticMesh(object):
         self.get_dt()
 
         # assign fluid velocities to particles, regularize if needed, and pass to ghost particles
-        w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cells_info, self.gamma, False)
+#        w = self.mesh.assign_particle_velocities(self.particles, self.fields.prim, self.particles_index, self.cells_info, self.gamma, False)
+        w = self.mesh.assign_particle_velocities(self.particles, self.fields, self.particles_index, self.cells_info, self.gamma, False)
         w = np.zeros(w.shape, dtype="float64")
 
         # calculate gradient for real particles and pass to ghost particles

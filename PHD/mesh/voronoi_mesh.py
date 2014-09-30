@@ -3,44 +3,41 @@ import cell_volume_center as cv
 import numpy as np
 import itertools
 
-class VoronoiMesh2D(object):
+class VoronoiMeshBase(object):
     """
     voronoi mesh class
     """
 
-    def assign_particle_velocities(self, particles, primitive, particles_index, cell_info, gamma, regular):
+    def __init__(self):
+        self.dim = None
+
+#    def assign_particle_velocities(self, particles, primitive, particles_index, cells_info, gamma, regular):
+    def assign_particle_velocities(self, particles, fields, particles_index, cells_info, gamma, regular):
         """
         give particles local fluid velocities, regularization can be added
         """
 
         # mesh regularization
         if regular == True:
-            w = self.regularization(primitive, particles, gamma, cell_info, particles_index)
+#            w = self.regularization(primitive, particles, gamma, cells_info, particles_index)
+            w = self.regularization(fields, particles, gamma, cells_info, particles_index)
         else:
-            w = np.zeros((2,particles_index["real"].size), dtype="float64")
+            w = np.zeros((self.dim,particles_index["real"].size), dtype="float64")
 
         # transfer particle velocities to ghost particles
         ghost_map = particles_index["ghost_map"]
         w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
 
         # add particle velocities
-        w[:, particles_index["real"]]  += primitive[1:3, particles_index["real"]]
-        w[:, particles_index["ghost"]] += primitive[1:3, particles_index["ghost"]]
+#        w[:, particles_index["real"]]  += primitive[1:(self.dim + 1), particles_index["real"]]
+#        w[:, particles_index["ghost"]] += primitive[1:(self.dim + 1), particles_index["ghost"]]
+        w[:, particles_index["real"]]  += fields.prim[1:(self.dim + 1), particles_index["real"]]
+        w[:, particles_index["ghost"]] += fields.prim[1:(self.dim + 1), particles_index["ghost"]]
 
         return w
 
-    def assign_face_velocities(self, particles, particles_index, graphs, faces_info, w):
-
-        num_real_particles = particles_index["real"].size
-        num_faces = faces_info["number faces"]
-
-        faces_info["face velocities"] = np.zeros((2, num_faces), dtype="float64")
-
-        cv.assign_face_velocities(particles, graphs["neighbors"], graphs["number of neighbors"],
-                faces_info["face center of mass"], faces_info["face velocities"], w, num_real_particles)
-
-
-    def regularization(self, prim, particles, gamma, cell_info, particles_index):
+#    def regularization(self, prim, particles, gamma, cells_info, particles_index):
+    def regularization(self, fields, particles, gamma, cells_info, particles_index):
         """
         give particles additional velocity to steer to center of mass
         """
@@ -49,20 +46,24 @@ class VoronoiMesh2D(object):
 
         indices = particles_index["real"]
 
-        pressure = prim[3, indices]
-        rho      = prim[0, indices]
+        #pressure = prim[3, indices]
+        #rho      = prim[0, indices]
 
-        c = np.sqrt(gamma*pressure/rho)
+        # grab values that correspond to real particles
+        dens = fields.get_field("density")
+        pres = fields.get_field("pressure")
+
+        #c = np.sqrt(gamma*pressure/rho)
+        c = np.sqrt(gamma*pres/dens)
 
         # generate distance for center mass to particle position
         r = particles[:,indices]
-        s = cell_info["center of mass"]
+        s = cells_info["center of mass"]
 
         d = s - r
         d = np.sqrt(np.sum(d**2,axis=0))
 
-        R = np.sqrt(cell_info["volume"]/np.pi)
-
+        R = np.sqrt(cells_info["volume"]/np.pi)
         w = np.zeros(s.shape)
 
         i = (0.9 <= d/(eta*R)) & (d/(eta*R) < 1.1)
@@ -76,13 +77,147 @@ class VoronoiMesh2D(object):
         return w
 
 
+    def assign_face_velocities(self, particles, particles_index, graphs, faces_info, w):
+
+        num_real_particles = particles_index["real"].size
+        num_faces = faces_info["number of faces"]
+
+        faces_info["velocities"] = np.zeros((self.dim, num_faces), dtype="float64")
+
+        self.compute_assign_face_velocities(particles, graphs, faces_info, w, num_real_particles)
+
+#        cv.assign_face_velocities(particles, graphs["neighbors"], graphs["number of neighbors"],
+#                faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
+
+    def compute_assign_face_velocities(self,):
+        pass
+
+
+    def tessellate(self, particles):
+        """
+        create voronoi tesselation from particle positions
+        """
+        pass
+
+
+    def cell_and_faces_info(self, particles, particles_index, graphs):
+
+        num_real_particles = particles_index["real"].size
+
+        cells_info = {
+                "volume":         np.zeros(num_real_particles, dtype="float64"),
+                "center of mass": np.zeros((self.dim, num_real_particles), dtype="float64")
+                }
+
+        num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
+
+        faces_info = {
+                "angles":          np.empty(num_faces, dtype="float64"),
+                "areas":           np.empty(num_faces, dtype="float64"),
+                "center of mass":  np.zeros((self.dim, num_faces), dtype="float64"),
+                "pairs":           np.empty((self.dim, num_faces), dtype="int32"),
+                "number of faces": num_faces
+                }
+
+        self.compute_cell_face_info(particles, graphs, cells_info, faces_info, num_real_particles)
+
+        return cells_info, faces_info
+
+
+    def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
+        pass
+
+
+class VoronoiMesh2D(VoronoiMeshBase):
+    """
+    voronoi mesh class
+    """
+
+    def __init__(self):
+        self.dim = 2
+
+#    def assign_particle_velocities(self, particles, primitive, particles_index, cells_info, gamma, regular):
+#        """
+#        give particles local fluid velocities, regularization can be added
+#        """
+#
+#        # mesh regularization
+#        if regular == True:
+#            w = self.regularization(primitive, particles, gamma, cells_info, particles_index)
+#        else:
+#            w = np.zeros((self.dim,particles_index["real"].size), dtype="float64")
+#
+#        # transfer particle velocities to ghost particles
+#        ghost_map = particles_index["ghost_map"]
+#        w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+#
+#        # add particle velocities
+#        w[:, particles_index["real"]]  += primitive[1:(self.dim + 1), particles_index["real"]]
+#        w[:, particles_index["ghost"]] += primitive[1:(self.dim + 1), particles_index["ghost"]]
+#
+#        return w
+
+#    def assign_face_velocities(self, particles, particles_index, graphs, faces_info, w):
+#
+#        num_real_particles = particles_index["real"].size
+#        num_faces = faces_info["number of faces"]
+#
+#        faces_info["velocities"] = np.zeros((self.dim, num_faces), dtype="float64")
+#
+#        cv.assign_face_velocities(particles, graphs["neighbors"], graphs["number of neighbors"],
+#                faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
+
+    def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
+
+        cv.assign_face_velocities(particles, graphs["neighbors"], graphs["number of neighbors"],
+                faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
+
+
+#    def regularization(self, prim, particles, gamma, cells_info, particles_index):
+#        """
+#        give particles additional velocity to steer to center of mass
+#        """
+#
+#        eta = 0.25
+#
+#        indices = particles_index["real"]
+#
+#        pressure = prim[3, indices]
+#        rho      = prim[0, indices]
+#
+#        c = np.sqrt(gamma*pressure/rho)
+#
+#        # generate distance for center mass to particle position
+#        r = particles[:,indices]
+#        s = cells_info["center of mass"]
+#
+#        d = s - r
+#        d = np.sqrt(np.sum(d**2,axis=0))
+#
+#        R = np.sqrt(cells_info["volume"]/np.pi)
+#
+#        w = np.zeros(s.shape)
+#
+#        i = (0.9 <= d/(eta*R)) & (d/(eta*R) < 1.1)
+#        if i.any():
+#            w[:,i] += c[i]*(s[:,i] - r[:,i])*(d[i] - 0.9*eta*R[i])/(d[i]*0.2*eta*R[i])
+#
+#        j = 1.1 <= d/(eta*R)
+#        if j.any():
+#            w[:,j] += c[j]*(s[:,j] - r[:,j])/d[j]
+#
+#        return w
+
+
     def tessellate(self, particles):
         """
         create voronoi tesselation from particle positions
         """
 
+        # create the tesselation
         vor = Voronoi(particles.T)
 
+        # total number of particles
         num_particles = particles.shape[1]
 
         # create neighbor and face graph
@@ -117,40 +252,43 @@ class VoronoiMesh2D(object):
         return graphs
 
 
-    def cell_and_faces_info(self, particles, particles_index, graphs):
+#    def cell_and_faces_info(self, particles, particles_index, graphs):
+#
+#        num_real_particles = particles_index["real"].size
+#
+#        cells_info = {
+#                "volume":         np.zeros(num_real_particles, dtype="float64"),
+#                "center of mass": np.zeros((self.dim, num_real_particles), dtype="float64")
+#                }
+#
+#        num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
+#
+#        faces_info = {
+#                "angles":          np.empty(num_faces, dtype="float64"),
+#                "areas":           np.empty(num_faces, dtype="float64"),
+#                "center of mass":  np.zeros((self.dim, num_faces), dtype="float64"),
+#                "pairs":           np.empty((self.dim, num_faces), dtype="int32"),
+#                "number of faces": num_faces
+#                }
+#
+#        self.compute_cell_face_info(particles, graphs, cells_info, faces_info, num_real_particles)
+#
+#        return cells_info, faces_info
 
-        num_real_particles = particles_index["real"].size
 
-        cell_info = {
-                "volume":         np.zeros(num_real_particles, dtype="float64"),
-                "center of mass": np.zeros((2, num_real_particles), dtype="float64")
-                }
-
-        num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
-
-        faces_info = {
-                "face angles":         np.empty(num_faces, dtype="float64"),
-                "face areas":          np.empty(num_faces, dtype="float64"),
-                "face center of mass": np.zeros((2, num_faces), dtype="float64"),
-                "face pairs":          np.empty((2, num_faces), dtype="int32"),
-                "number faces":        num_faces
-                }
-
-        self.compute_cell_face_info(particles, graphs, cell_info, faces_info, num_real_particles)
-
-        return cell_info, faces_info
-
-
-    def compute_cell_face_info(self, particles, graphs, cell_info, faces_info, num_particles):
+    def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
 
         cv.cell_face_info(particles, graphs["neighbors"], graphs["number of neighbors"],
                 graphs["faces"], graphs["voronoi vertices"],
-                cell_info["volume"], cell_info["center of mass"],
-                faces_info["face areas"], faces_info["face angles"], faces_info["face pairs"], faces_info["face center of mass"],
+                cells_info["volume"], cells_info["center of mass"],
+                faces_info["areas"], faces_info["angles"], faces_info["pairs"], faces_info["center of mass"],
                 num_particles)
 
 
 class VoronoiMesh3D(VoronoiMesh2D):
+
+    def __init__(self):
+        self.dim = 3
 
     def tessellate(self, particles):
         """
@@ -217,3 +355,9 @@ class VoronoiMesh3D(VoronoiMesh2D):
                 }
 
         return graphs
+
+    def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
+
+        cv.cell_volume_3d(particles, graphs["neighbors"], graphs["number of neighbors"],
+        graphs["faces"], graphs["number of face vertices"], graphs["voronoi vertices"],
+        cells_info["volume"], cells_info["center of mass"], num_particles)
