@@ -4,9 +4,9 @@ import riemann
 
 class Hll(RiemannBase):
 
-    def solver(self, left_face, right_face, fluxes, w, gamma, num_faces):
-        riemann.hll(left_face, right_face, fluxes, w, gamma, num_faces)
-
+    """
+    Riemann base class. All riemann solvers should inherit this class
+    """
     def get_dt(self, fields, vol, gamma):
 
         # grab values that correspond to real particles
@@ -25,3 +25,19 @@ class Hll(RiemannBase):
         dt_y = R/(abs(vely) + c)
 
         return min(dt_x.min(), dt_y.min())
+
+    def reconstruct_face_states(self, particles, particles_index, graphs, primitive, cells_info, faces_info, gamma, dt):
+
+        # construct left and right states and each face
+        self.left_right_states(primitive, faces_info)
+
+        # calculate gradients for each primitive variable
+        self.reconstruction.gradient(primitive, particles, particles_index, cells_info, graphs)
+
+        # reconstruct states at faces - hack for right now
+        ghost_map = particles_index["ghost_map"]
+        cell_com = np.hstack((cells_info["center of mass"], cells_info["center of mass"][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+        self.reconstruction.extrapolate(faces_info, cell_com, gamma, dt)
+
+    def solver(self, left_face, right_face, fluxes, normal, faces_info, gamma, num_faces):
+        riemann.hll(left_face, right_face, fluxes, normal, faces_info["velocities"], gamma, num_faces)

@@ -59,10 +59,11 @@ class MovingMesh(StaticMesh):
         self.mesh.assign_face_velocities(self.particles, self.particles_index, self.graphs, faces_info, w)
 
         # calculate gradient for real particles and pass to ghost particles
-        self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cells_info, self.graphs)
+        #self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cells_info, self.graphs)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
-        fluxes = self.riemann_solver.fluxes(self.fields.prim, faces_info, self.gamma, self.dt, self.cells_info, self.particles_index)
+        fluxes = self.riemann_solver.fluxes(self.particles, self.particles_index, self.graphs, self.fields.prim, self.cells_info,
+                faces_info, self.gamma, self.dt)
 
         # update conserved variables
         self.update(self.fields, fluxes, faces_info)
@@ -75,5 +76,4 @@ class MovingMesh(StaticMesh):
         """
         advance real particles positions for one time step
         """
-
         self.particles[:,self.particles_index["real"]] += self.dt*w[:, self.particles_index["real"]]
