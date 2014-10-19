@@ -61,7 +61,7 @@ class StaticMesh(object):
         # grab values that correspond to real particles
         dens = self.fields.get_field("density")
         velx = self.fields.get_field("velocity-x")
-        vely = self.fields.get_field("velocity-x")
+        vely = self.fields.get_field("velocity-y")
         pres = self.fields.get_field("pressure")
 
         # sound speed
@@ -297,6 +297,8 @@ class StaticMesh(object):
 
         # calculate gradient for real particles and pass to ghost particles
         #self.reconstruction.gradient(self.fields.prim, self.particles, self.particles_index, self.cells_info, self.graphs)
+        # assign face velocities
+        self.mesh.assign_face_velocities(self.particles, self.particles_index, self.graphs, faces_info, w)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
         fluxes = self.riemann_solver.fluxes(self.particles, self.particles_index, self.graphs, self.fields.prim, self.cells_info,

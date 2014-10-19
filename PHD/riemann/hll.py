@@ -12,7 +12,7 @@ class Hll(RiemannBase):
         # grab values that correspond to real particles
         dens = fields.get_field("density")
         velx = fields.get_field("velocity-x")
-        vely = fields.get_field("velocity-x")
+        vely = fields.get_field("velocity-y")
         pres = fields.get_field("pressure")
 
         # sound speed
