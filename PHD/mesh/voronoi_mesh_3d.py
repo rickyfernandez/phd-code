@@ -1,5 +1,5 @@
 from scipy.spatial import Voronoi
-from voronoi_mesh_base import VoronoiMeshBase
+from voronoi_mesh_2d import VoronoiMesh2D
 import cell_volume_center as cv
 import numpy as np
 import itertools
