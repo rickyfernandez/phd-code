@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.collections import LineCollection, PolyCollection, PatchCollection
 
-def test_boundary():
+def test_reflect2d_boundary():
     """
     Test if reflection boundary picks the right real particles for creating ghost
     particles
@@ -50,14 +50,14 @@ def test_boundary():
 
     # generate voronoi mesh to generate graphs 
     m = mesh.VoronoiMesh2D()
-    neighbor_graph, neighbor_graph_sizes, face_graph, face_graph_sizes, voronoi_vertices = m.tessellate(particles)
+    graphs = m.tessellate(particles)
 
     # create ghost particels 
-    reflect = boundary.Reflect(0.,1.,0.,1.)
-    particles = reflect.update_boundaries(particles, particles_index, neighbor_graph, neighbor_graph_sizes)
+    reflect = boundary.Reflect2D(0.,1.,0.,1.)
+    particles = reflect.update_boundaries(particles, particles_index, graphs["neighbors"], graphs["number of neighbors"])
 
     # update the graphs with the new ghost particles
-    neighbor_graph, neighbor_graph_sizes, face_graph, face_graph_sizes, voronoi_vertices = m.tessellate(particles)
+    graphs = m.tessellate(particles)
 
     # brute force find the indices of real particles that will be used to make ghost particles
 
@@ -88,9 +88,9 @@ def test_boundary():
     for ip in particles_index["real"]:
 
         # plot each cell
-        jj += neighbor_graph_sizes[ip]*2
-        verts_indices = np.unique(face_graph[ii:jj])
-        verts = voronoi_vertices[verts_indices]
+        jj += graphs["number of neighbors"][ip]*2
+        verts_indices = np.unique(graphs["faces"][ii:jj])
+        verts = graphs["voronoi vertices"][verts_indices]
 
         # coordinates of neighbors relative to particle p
         xc = verts[:,0] - particles[0,ip]
