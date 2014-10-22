@@ -1,12 +1,18 @@
 import numpy as np
 from boundary_base import BoundaryBase
 
-class Reflect(BoundaryBase):
+class Reflect2D(BoundaryBase):
     """
     refect boundary class
     """
-    def __init__(self):
+    def __init__(self, xl, xr, yl, yr):
+
         self.dim = 2
+        self.boundaries = [
+                [xl, xr],   # x dim
+                [yl, yr]    # y dim
+                ]
+
 
     def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
         """
@@ -27,9 +33,8 @@ class Reflect(BoundaryBase):
         # grab all neighbors of ghost particles, this includes border cells and 
         # neighbors of border cells, then remove ghost particles leaving two layers
 
-        for k, bound in enumerate(self.boundaries.itervalues()):
+        for k, bound in enumerate(self.boundaries):
 
-            q = range(self.dim); q = q.remove(k)
             do_min = True
 
             for qm in bound:
@@ -46,10 +51,10 @@ class Reflect(BoundaryBase):
                 border = self.find_boundary_particles(neighbor_graph, neighbor_graph_size, ghost_indices[i], ghost_indices)
 
                 # allocate space for new ghost particles
-                tmp = np.empty((self.dim, len(border), dtype="float64")
+                tmp = np.empty((self.dim, len(border)), dtype="float64")
 
                 # reflect particles across boundary
-                tmp[q,:] = particles[q,border]
+                tmp[:,:] = particles[:,border]
                 tmp[k,:] = 2*qm - particles[k,border]
 
                 # add the new ghost particles
@@ -77,6 +82,7 @@ class Reflect(BoundaryBase):
 
         return new_particles
 
+
     def reverse_velocities(self, particles, primitive, particles_index):
         """
         reflect ghost velocities across the mirror axis
@@ -85,14 +91,19 @@ class Reflect(BoundaryBase):
         ghost_indices = particles_index["ghost"]
 
         # reverse velocities in x direction
+        xl = self.boundaries[0][0]
+        xr = self.boundaries[0][1]
         x = particles[0,ghost_indices]
-        i = np.where((x < self.left) | (self.right < x))[0]
+        i = np.where((x < xl) | (xr < x))[0]
         primitive[1, ghost_indices[i]] *= -1.0
 
         # reverse velocities in y direction
+        yl = self.boundaries[1][0]
+        yr = self.boundaries[1][1]
         y = particles[1,ghost_indices]
-        i = np.where((y < self.bottom) | (self.top < y))[0]
+        i = np.where((y < yl) | (yr < y))[0]
         primitive[2, ghost_indices[i]] *= -1.0
+
 
     def primitive_to_ghost(self, particles, primitive, particles_index):
         """
@@ -100,32 +111,33 @@ class Reflect(BoundaryBase):
         """
 
         # copy primitive values to ghost
-        primitive = super(Reflect, self).primitive_to_ghost(particles, primitive, particles_index)
+        primitive = super(Reflect2D, self).primitive_to_ghost(particles, primitive, particles_index)
 
         # ghost particles velocities have to be reversed
         self.reverse_velocities(particles, primitive, particles_index)
 
         return primitive
 
-    def gradient_to_ghost(self, particles, gradx, grady, particles_index):
+
+    def gradient_to_ghost(self, particles, grad, particles_index):
         """
         copy gradient values to ghost particles from their correponding real particles
         """
 
-        gradx, grady = super(Reflect, self).gradient_to_ghost(particles, gradx, grady, particles_index)
+        new_grad = super(Reflect2D, self).gradient_to_ghost(particles, grad, particles_index)
 
         ghost_indices = particles_index["ghost"]
 
         # reverse velocities in x direction
-        x = particles[0,ghost_indices]
-        i = np.where((x < self.left) | (self.right < x))[0]
-        gradx[1, ghost_indices[i]] *= -1.0
+        #x = particles[0,ghost_indices]
+        #i = np.where((x < self.left) | (self.right < x))[0]
+        #gradx[1, ghost_indices[i]] *= -1.0
         #grady[1, ghost_indices[i]] *= -1.0
 
         # reverse velocities in y direction
-        y = particles[1,ghost_indices]
-        i = np.where((y < self.bottom) | (self.top < y))[0]
-        gradx[2, ghost_indices[i]] *= -1.0
+        #y = particles[1,ghost_indices]
+        #i = np.where((y < self.bottom) | (self.top < y))[0]
+        #gradx[2, ghost_indices[i]] *= -1.0
         #grady[2, ghost_indices[i]] *= -1.0
 
-        return gradx, grady
+        return new_grad

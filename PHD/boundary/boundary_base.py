@@ -8,10 +8,8 @@ class BoundaryBase(object):
 
     def __init__(self, left, right, bottom, top):
 
-        self.left = left
-        self.right = right
-        self.bottom = bottom
-        self.top = top
+        self.dim = None
+        self.boundaries = None
 
 
     def update_boundaries(self, particles, particles_index, neighbor_graph):
@@ -20,6 +18,7 @@ class BoundaryBase(object):
         ghost particles from real particles
         """
         pass
+
 
     def find_boundary_particles(self, neighbor_graph, neighbors_graph_size, ghost_indices, total_ghost_indices):
         """
@@ -48,6 +47,7 @@ class BoundaryBase(object):
 
         return np.array(list(border))
 
+
     def primitive_to_ghost(self, particles, primitive, particles_index):
         """
         copy primitive values from real particles to associated ghost particles
@@ -55,12 +55,16 @@ class BoundaryBase(object):
         ghost_map = particles_index["ghost_map"]
         return np.hstack((primitive, primitive[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
 
-    def gradient_to_ghost(self, particles, gradx, grady, particles_index):
+
+    def gradient_to_ghost(self, particles, grad, particles_index):
         """
         copy gradient values from real particles to associated ghost particles
         """
         ghost_map = particles_index["ghost_map"]
-        grad_x = np.hstack((gradx, gradx[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
-        grad_y = np.hstack((grady, grady[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
 
-        return grad_x, grad_y
+        # new gradient that has values for real and ghost particles
+        new_grad = {}
+        for key in grad.keys():
+            new_grad[key] = np.hstack((grad[key], grad[key][:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
+
+        return new_grad
