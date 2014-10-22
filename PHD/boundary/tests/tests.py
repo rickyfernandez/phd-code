@@ -131,5 +131,109 @@ def test_reflect2d_boundary():
 
     assert set(map_indices).issubset(s)
 
+
+def test_reflect3d_boundary():
+    """
+    Test if reflection boundary picks the right real particles for creating ghost
+    particles
+    """
+
+    L = 1.0
+    n = 5
+
+    dx = L/n
+    q = (np.arange(n+6, dtype=np.float64) - 3)*dx + 0.5*dx
+
+    N = q.size
+    x = np.zeros(N**3)
+    y = np.zeros(N**3)
+    z = np.zeros(N**3)
+
+    part = 0
+    for i in xrange(N):
+        for j in xrange(N):
+            for k in xrange(N):
+                x[part] = q[i]
+                y[part] = q[j]
+                z[part] = q[k]
+                part += 1
+
+
+    # find all particles inside the unit box 
+    indices = (((0. <= x) & (x <= 1.)) & ((0. <= y) & (y <= 1.)) & ((0. <= z) & (z <= 1.)))
+    x_in = x[indices]; y_in = y[indices]; z_in = z[indices]
+
+    # find particles in the interior box
+    k = (((0.25 < x_in) & (x_in < 0.5)) & ((0.25 < y_in) & (y_in < 0.5)) & ((0.25 < z_in) & (z_in < 0.5)))
+
+    # randomly perturb their positions
+    num_points = k.sum()
+    x_in[k] += 0.2*dx*(2.0*np.random.random(num_points)-1.0)
+    y_in[k] += 0.2*dx*(2.0*np.random.random(num_points)-1.0)
+    z_in[k] += 0.2*dx*(2.0*np.random.random(num_points)-1.0)
+
+    # store real particles
+    x_particles = np.copy(x_in); y_particles = np.copy(y_in); z_particles = np.copy(z_in)
+    particles_index = {"real": np.arange(x_particles.size)}
+
+    # store ghost particles
+    x_particles = np.append(x_particles, x[~indices])
+    y_particles = np.append(y_particles, y[~indices])
+    z_particles = np.append(z_particles, z[~indices])
+
+    # store indices of ghost particles
+    particles_index["ghost"] = np.arange(particles_index["real"].size, x_particles.size)
+
+    # particle list of real and ghost particles
+    particles = np.array([x_particles, y_particles, z_particles])
+
+    # generate voronoi mesh to generate graphs 
+    m = mesh.VoronoiMesh3D()
+    graphs = m.tessellate(particles)
+
+    # create ghost particels 
+    reflect = boundary.Reflect3D(0.,1.,0.,1.,0.,1.)
+    particles = reflect.update_boundaries(particles, particles_index, graphs["neighbors"], graphs["number of neighbors"])
+
+    # update the graphs with the new ghost particles
+    graphs = m.tessellate(particles)
+
+    # brute force find the indices of real particles that will be used to make ghost particles
+
+    x = particles[0,:]; y = particles[1,:]; z = particles[2,:]
+
+    # store the indices
+    s = set()
+
+    # grab left boundary, two layers
+    k = np.where(((0.0 < x) & (x < 2.0*dx)) & ((0.0 < y) & (y < 1.0)) & ((0.0 < z) & (z < 1.0)))[0]
+    s.update(k)
+
+    # grab right boundary, two layers
+    k = np.where((((1.0-2.0*dx) < x) & (x < 1.0)) & ((0.0 < y) & (y < 1.0)) & ((z < 1.0) & (z < 1.0)))[0]
+    s.update(k)
+
+    # grab bottom boundary, two layers
+    k = np.where(((0.0 < y) & (y < 2.0*dx)) & ((0.0 < x) & (x < 1.0)) & ((0.0 < z) & (z < 1.0)))[0]
+    s.update(k)
+
+    # grab top boundary, two layers
+    k = np.where((((1.0-2.0*dx) < y) & (y < 1.0)) & ((0.0 < x) & (x < 1.0)) & ((0.0 < z) & (z < 1.0)))[0]
+    s.update(k)
+
+    # grab bottom boundary, two layers
+    k = np.where(((0.0 < z) & (z < 2.0*dx)) & ((0.0 < x) & (x < 1.0)) & ((0.0 < y) & (y < 1.0)))[0]
+    s.update(k)
+
+    # grab top boundary, two layers
+    k = np.where((((1.0-2.0*dx) < z) & (z < 1.0)) & ((0.0 < x) & (x < 1.0)) & ((0.0 < y) & (y < 1.0)))[0]
+    s.update(k)
+
+    # make shure indices picked from boundary class match brute force calculation 
+    ghost_map = particles_index["ghost_map"]
+    map_indices = [ghost_map[i] for i in particles_index["ghost"]]
+
+    assert set(map_indices).issubset(s)
+
 if __name__ == "__main__":
     test_boundary()
