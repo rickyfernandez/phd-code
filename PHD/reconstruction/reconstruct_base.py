@@ -6,8 +6,7 @@ class ReconstructBase(object):
     """
 
     def __init__(self, boundary=None):
-        self.gradx = None
-        self.grady = None
+        self.grad = None
         self.boundary = boundary
 
     def gradient(self, primitive, particles, particles_index, cells_info, graphs):

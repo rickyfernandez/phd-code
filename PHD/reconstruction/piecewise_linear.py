@@ -14,13 +14,15 @@ class PiecewiseLinear(ReconstructBase):
 
         num_real_particles = particles_index["real"].size
 
-        gradx = np.zeros((4, num_real_particles), dtype="float64")
-        grady = np.zeros((4, num_real_particles), dtype="float64")
+        grad = {
+                "x": np.zeros((4, num_real_particles), dtype="float64"),
+                "y": np.zeros((4, num_real_particles), dtype="float64")
+                }
 
-        re.gradient(primitive, gradx, grady, particles, cells_info["volume"], cells_info["center of mass"], graphs["neighbors"],
+        re.gradient(primitive, grad["x"], grad["y"], particles, cells_info["volume"], cells_info["center of mass"], graphs["neighbors"],
                 graphs["number of neighbors"], graphs["faces"], graphs["voronoi vertices"], num_real_particles)
 
-        self.gradx, self.grady = self.boundary.gradient_to_ghost(particles, gradx, grady, particles_index)
+        self.grad = self.boundary.gradient_to_ghost(particles, grad, particles_index)
 
 
     def extrapolate(self, faces_info, cell_com, gamma, dt):
@@ -33,5 +35,5 @@ class PiecewiseLinear(ReconstructBase):
         left_faces  = faces_info["left faces"]
         right_faces = faces_info["right faces"]
 
-        re.extrapolate(left_faces, right_faces, self.gradx, self.grady, faces_info["center of mass"], faces_info["pairs"],
+        re.extrapolate(left_faces, right_faces, self.grad["x"], self.grad["y"], faces_info["center of mass"], faces_info["pairs"],
                 cell_com, gamma, dt, num_faces)
