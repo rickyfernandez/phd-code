@@ -5,4 +5,4 @@ from Cython.Distutils import build_ext
 
 setup(
         cmdclass = {'build_ext': build_ext},
-        ext_modules = [Extension("cell_volume_center",["cell_volume_center.pyx"], include_dirs=[np.get_include()])])
+        ext_modules = [Extension("mesh",["mesh.pyx"], include_dirs=[np.get_include()])])
