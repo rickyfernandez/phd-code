@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 import simulation as sim
-from PHD.fields import Fields
+from PHD.fields import Fields2D
 from PHD.mesh import VoronoiMesh2D
 from PHD.riemann.riemann_base import RiemannBase
 from PHD.boundary.boundary_base import BoundaryBase
@@ -146,7 +146,7 @@ class StaticMesh(object):
         num_particles = self.particles_index["real"].size
 
         # setup data container
-        self.fields = Fields(num_particles, self.gamma, self.boundary)
+        self.fields = Fields2D(num_particles, self.gamma, self.boundary)
         self.fields.create_fields()
 
         mass = self.fields.get_field("mass")

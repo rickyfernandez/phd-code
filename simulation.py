@@ -8,7 +8,7 @@ import PHD.test_problems.sedov as sedov
 parameters, data, particles, particles_index = sedov.simulation()
 
 # create boundary and riemann objects
-boundary_condition = boundary.Reflect2d(0.,1.,0.,1.)
+boundary_condition = boundary.Reflect2D(0.,1.,0.,1.)
 #reconstruction = reconstruction.PiecewiseConstant(boundary_condition)
 reconstruction = reconstruction.PiecewiseLinear(boundary_condition)
 riemann_solver = riemann.Exact(reconstruction)
