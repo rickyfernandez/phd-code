@@ -5,7 +5,7 @@ cimport cython
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def cell_face_info(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors, int[:] face_graph, double[:,::1] circum_centers,
+def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors, int[:] face_graph, double[:,::1] circum_centers,
         double[:] volume, double[:,::1] center_of_mass,
         double[:] face_areas, double[:] face_angles, int[:,::1] face_pairs, double[:,::1] face_com,
         int num_particles):
@@ -119,7 +119,7 @@ def cell_face_info(double[:,::1] particles, int[:] neighbor_graph, int[:] num_ne
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def assign_face_velocities(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
+def assign_face_velocities_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
         double[:,::1] face_com, double[:,::1] face_velocities, double[:,::1] w, int num_particles):
 
     cdef int id_p, id_n, ind, j, k
@@ -196,6 +196,63 @@ def number_of_faces(int[:] neighbor_graph, int[:] neighbor_graph_size, int num_p
 
     return num_faces
 
+def assign_face_velocities_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
+        double[:,::1] face_com, double[:,::1] face_velocities, double[:,::1] w, int num_particles):
+
+    cdef int id_p, id_n, ind, j, k
+    cdef double xp, yp, zp, xn, yn, zn
+    cdef double fx, fy, fz
+    cdef double factor
+
+    k = 0
+    ind = 0
+
+    for id_p in range(num_particles):
+
+        # position of particle
+        xp = particles[0,id_p]
+        yp = particles[1,id_p]
+        zp = particles[1,id_p]
+
+        for j in range(num_neighbors[id_p]):
+
+            # index of neighbor
+            id_n = neighbor_graph[ind]
+
+            if id_p < id_n:
+
+                # position of neighbor
+                xn = particles[0,id_n]
+                yn = particles[1,id_n]
+                zn = particles[2,id_n]
+
+                # the face velocity is approx the mean of velocities
+                # of the particles 
+                face_velocities[0,k] = 0.5*(w[0, id_p] + w[0, id_n])
+                face_velocities[1,k] = 0.5*(w[1, id_p] + w[1, id_n])
+                face_velocities[2,k] = 0.5*(w[2, id_p] + w[2, id_n])
+
+                fx = face_com[0,k]
+                fy = face_com[1,k]
+                fz = face_com[2,k]
+
+                # correct face velocity due to residual motion - eq. 33
+                factor  = (w[0,id_p]-w[0,id_n])*(fx-0.5*(xp+xn)) + (w[1,id_p]-w[1,id_n])*(fy-0.5*(yp+yn)) + (w[2,id_p]-w[2,id_n])*(fz-0.5*(zp+zn))
+                factor /= (xn-xp)*(xn-xp) + (yn-yp)*(yn-yp) + (zn-zp)*(zn-zp)
+
+                face_velocities[0,k] += factor*(xn-xp)
+                face_velocities[1,k] += factor*(yn-yp)
+                face_velocities[2,k] += factor*(zn-zp)
+
+                # update counter
+                k   += 1
+                ind += 1
+
+            else:
+
+                # face accounted for, go to next neighbor and face
+                ind += 1
+
 
 def triangle_area(double[:,::1] t):
     """
@@ -231,9 +288,32 @@ def triangle_area(double[:,::1] t):
     return 0.5*sqrt(x*x + y*y + z*z)
 
 
-def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
-        int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts, double[:] volume,
-        double[:,::1] center_of_mass, int num_real_particles):
+def det(double a0, double a1, double a2 double b0, double b1, double b2, double c0, double c1, double c2):
+    return a0*b1*c2 + a1*b2*c0 + a2*b0*c1 - a2*b1*c0 - a1*b0*c2 - a0*b2*c1
+
+
+def norm(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2,
+        double[:] result):
+
+    cdef double x, y, z
+    cdef double mag
+
+    x = det(1.0, a1, a2, 1.0, b1, b2, 1.0, c1, c2)
+    y = det(a0, 1.0, a2, b0, 1.0, b2, c0, 1.0, c2)
+    z = det(a0, a1, 1.0, b0, b1, 1.0, c0, c1, 1.0)
+
+    mag = sqrt(x*x + y*y + z*z)
+
+    result[0] = x/mag
+    result[1] = y/mag
+    result[2] = z/mag
+
+def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
+        int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts,
+        double[:] volume, double[:,::1] center_of_mass,
+        double[:] face_areas, double[:,::1] normal, int[:,::1] face_pairs, double[:,::1] face_com
+        int num_real_particles):
+
     """
     Purpose:
         compute the area and center of mass of each face in 3d
@@ -284,6 +364,7 @@ def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_ne
 
     cdef int ind_n     # neighbor index
     cdef int ind_f     # face vertex index
+    cdef int k         # face index
 
     cdef int j, k, p
     cdef double xp, yp, zp, xn, yn, zn
@@ -292,6 +373,10 @@ def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_ne
     cdef double[:]   com = np.zeros(3,dtype=np.float64)
     cdef double[:,:] tri = np.zeros((3,3),dtype=np.float64)
 
+    cdef int p1, p2, p3
+    cdef double[:] n = np.zeros(3,dtype=np.float64)
+
+    k = 0
     ind_n = 0
     ind_f = 0
 
@@ -383,6 +468,48 @@ def cell_volume_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_ne
 
             # volume is sum of of pyrmaids
             volume[id_p] += vol
+
+
+
+
+
+
+            # expermintal 
+            # store face information
+            if id_p < id_n:
+
+                # grab the last three points to construct two vectors to make the normal of the face
+                p3 = face_graph[ind_f-1]; p2 = face_graph[indf_f-2]; p1 = face_graph[ind_f-3]
+
+                # calculate the normal of the face
+                norm(voronoi_verts[p1,0], voronoi_verts[p1,1], voronoi_verts[p1,2],
+                        voronoi_verts[p2,0], voronoi_verts[p2,1], voronoi_verts[p2,2],
+                        voronoi_verts[p3,0], voronoi_verts[p3,1], voronoi_verts[p3,2], n)
+
+                # store the area of the face
+                face_areas[k] = area
+
+                # store the normal vector of the face
+                normal[0,k] = n[0]
+                normal[1,k] = n[1]
+                normal[2,k] = n[2]
+
+                # store the center mass of the face
+                face_com[0,k] = com[0]
+                face_com[1,k] = com[1]
+                face_com[2,k] = com[2]
+
+                # store the particles that make up the face
+                face_pairs[0,k] = id_p
+                face_pairs[1,k] = id_n
+
+                # go to next face 
+                k += 1
+
+
+
+
+
 
             # go to next neighbor
             ind_n += 1

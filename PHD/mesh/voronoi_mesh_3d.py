@@ -10,11 +10,21 @@ class VoronoiMesh3D(VoronoiMesh2D):
     def __init__(self):
         self.dim = 3
 
+
+    def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
+
+        cv.assign_face_velocities_3d(particles, graphs["neighbors"], graphs["number of neighbors"],
+                faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
+
+
     def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
 
-        cv.cell_volume_3d(particles, graphs["neighbors"], graphs["number of neighbors"],
+        cv.cell_face_info_3d(particles, graphs["neighbors"], graphs["number of neighbors"],
         graphs["faces"], graphs["number of face vertices"], graphs["voronoi vertices"],
-        cells_info["volume"], cells_info["center of mass"], num_particles)
+        cells_info["volume"], cells_info["center of mass"],
+        faces_info["areas"], faces_info["normal"], faces_info["pairs"], faces_info["center of mass"],
+        num_particles)
+
 
     def tessellate(self, particles):
         """

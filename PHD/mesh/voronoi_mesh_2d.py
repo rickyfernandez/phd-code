@@ -16,13 +16,13 @@ class VoronoiMesh2D(VoronoiMeshBase):
 
     def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
 
-        cv.assign_face_velocities(particles, graphs["neighbors"], graphs["number of neighbors"],
+        cv.assign_face_velocities_2d(particles, graphs["neighbors"], graphs["number of neighbors"],
                 faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
 
 
     def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
 
-        cv.cell_face_info(particles, graphs["neighbors"], graphs["number of neighbors"],
+        cv.cell_face_info_2d(particles, graphs["neighbors"], graphs["number of neighbors"],
                 graphs["faces"], graphs["voronoi vertices"],
                 cells_info["volume"], cells_info["center of mass"],
                 faces_info["areas"], faces_info["angles"], faces_info["pairs"], faces_info["center of mass"],
