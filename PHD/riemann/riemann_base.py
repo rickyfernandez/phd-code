@@ -18,16 +18,12 @@ class RiemannBase(object):
         # extrapolate primitive variables to com of faces
         self.reconstruct_face_states(particles, particles_index, graphs, primitive, cells_info, faces_info, gamma, dt)
 
-        # The orientation of all faces 
-        theta = faces_info["angles"]
-        normal = np.array([np.cos(theta), np.sin(theta)])
-
         # allocate storage for fluxes
         num_faces = faces_info["number of faces"]
         fluxes = np.zeros((4,num_faces), dtype="float64")
 
         # solve the riemann problem along face normal then project back lab axes
-        self.solver(faces_info["left faces"], faces_info["right faces"], fluxes, normal, faces_info, gamma, num_faces)
+        self.solver(faces_info["left faces"], faces_info["right faces"], fluxes, faces_info["normal"], faces_info, gamma, num_faces)
 
         return fluxes
 

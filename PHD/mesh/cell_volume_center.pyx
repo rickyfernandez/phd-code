@@ -1,4 +1,4 @@
-from libc.math cimport sqrt, atan2
+from libc.math cimport sqrt, atan2, sin, cos
 import numpy as np
 cimport numpy as np
 cimport cython
@@ -7,7 +7,7 @@ cimport cython
 @cython.wraparound(False)
 def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors, int[:] face_graph, double[:,::1] circum_centers,
         double[:] volume, double[:,::1] center_of_mass,
-        double[:] face_areas, double[:] face_angles, int[:,::1] face_pairs, double[:,::1] face_com,
+        double[:] face_areas, double[:,::1] face_normal, int[:,::1] face_pairs, double[:,::1] face_com,
         int num_particles):
 
     cdef int id_p          # particle index 
@@ -19,6 +19,7 @@ def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
 
     cdef double xp, yp, xn, yn, x1, y1, x2, y2, xr, yr, x, y
     cdef double face_area, h
+    cdef double theta
 
     cdef double fx, fy, tx, ty
 
@@ -96,7 +97,9 @@ def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
                     x, y = -y, x
 
                 # store the orientation of the norm of the face
-                face_angles[k] = atan2(y, x)
+                theta = atan2(y, x)
+                face_normal[0,k] = cos(theta)
+                face_normal[1,k] = sin(theta)
 
                 # store the center mass of the face
                 face_com[0,k] = fx
@@ -288,7 +291,7 @@ def triangle_area(double[:,::1] t):
     return 0.5*sqrt(x*x + y*y + z*z)
 
 
-def det(double a0, double a1, double a2 double b0, double b1, double b2, double c0, double c1, double c2):
+def det(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2):
     return a0*b1*c2 + a1*b2*c0 + a2*b0*c1 - a2*b1*c0 - a1*b0*c2 - a0*b2*c1
 
 
@@ -311,7 +314,7 @@ def norm(double a0, double a1, double a2, double b0, double b1, double b2, doubl
 def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
         int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts,
         double[:] volume, double[:,::1] center_of_mass,
-        double[:] face_areas, double[:,::1] normal, int[:,::1] face_pairs, double[:,::1] face_com
+        double[:] face_areas, double[:,::1] normal, int[:,::1] face_pairs, double[:,::1] face_com,
         int num_real_particles):
 
     """
@@ -364,7 +367,7 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
 
     cdef int ind_n     # neighbor index
     cdef int ind_f     # face vertex index
-    cdef int k         # face index
+    cdef int fi        # face index
 
     cdef int j, k, p
     cdef double xp, yp, zp, xn, yn, zn
@@ -376,7 +379,7 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
     cdef int p1, p2, p3
     cdef double[:] n = np.zeros(3,dtype=np.float64)
 
-    k = 0
+    fi = 0
     ind_n = 0
     ind_f = 0
 
@@ -479,7 +482,7 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
             if id_p < id_n:
 
                 # grab the last three points to construct two vectors to make the normal of the face
-                p3 = face_graph[ind_f-1]; p2 = face_graph[indf_f-2]; p1 = face_graph[ind_f-3]
+                p3 = face_graph[ind_f-1]; p2 = face_graph[ind_f-2]; p1 = face_graph[ind_f-3]
 
                 # calculate the normal of the face
                 norm(voronoi_verts[p1,0], voronoi_verts[p1,1], voronoi_verts[p1,2],
@@ -487,24 +490,24 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
                         voronoi_verts[p3,0], voronoi_verts[p3,1], voronoi_verts[p3,2], n)
 
                 # store the area of the face
-                face_areas[k] = area
+                face_areas[fi] = area
 
                 # store the normal vector of the face
-                normal[0,k] = n[0]
-                normal[1,k] = n[1]
-                normal[2,k] = n[2]
+                normal[0,fi] = n[0]
+                normal[1,fi] = n[1]
+                normal[2,fi] = n[2]
 
                 # store the center mass of the face
-                face_com[0,k] = com[0]
-                face_com[1,k] = com[1]
-                face_com[2,k] = com[2]
+                face_com[0,fi] = com[0]
+                face_com[1,fi] = com[1]
+                face_com[2,fi] = com[2]
 
                 # store the particles that make up the face
-                face_pairs[0,k] = id_p
-                face_pairs[1,k] = id_n
+                face_pairs[0,fi] = id_p
+                face_pairs[1,fi] = id_n
 
                 # go to next face 
-                k += 1
+                fi += 1
 
 
 

@@ -53,9 +53,9 @@ class VoronoiMeshBase(object):
         num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
 
         faces_info = {
-                "angles":          np.empty(num_faces, dtype="float64"),
                 "areas":           np.empty(num_faces, dtype="float64"),
                 "center of mass":  np.zeros((self.dim, num_faces), dtype="float64"),
+                "normal":          np.empty((self.dim, num_faces), dtype="float64"),
                 "pairs":           np.empty((self.dim, num_faces), dtype="int32"),
                 "number of faces": num_faces
                 }

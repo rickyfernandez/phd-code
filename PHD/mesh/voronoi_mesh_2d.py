@@ -25,7 +25,7 @@ class VoronoiMesh2D(VoronoiMeshBase):
         cv.cell_face_info_2d(particles, graphs["neighbors"], graphs["number of neighbors"],
                 graphs["faces"], graphs["voronoi vertices"],
                 cells_info["volume"], cells_info["center of mass"],
-                faces_info["areas"], faces_info["angles"], faces_info["pairs"], faces_info["center of mass"],
+                faces_info["areas"], faces_info["normal"], faces_info["pairs"], faces_info["center of mass"],
                 num_particles)
 
 
