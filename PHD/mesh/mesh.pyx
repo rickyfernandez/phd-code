@@ -489,6 +489,17 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
                         voronoi_verts[p2,0], voronoi_verts[p2,1], voronoi_verts[p2,2],
                         voronoi_verts[p3,0], voronoi_verts[p3,1], voronoi_verts[p3,2], n)
 
+                # difference vector between particles
+                xr = xn - xp
+                yr = yn - yp
+                zr = zn - zp
+
+                # make sure the normal is pointing toward the neighbor
+                if((xn-xp)*n[0] + (yn-yp)*n[1] + (zn-zp)*n[2]) < 0.0:
+                    n[0] *= -1.0
+                    n[1] *= -1.0
+                    n[2] *= -1.0
+
                 # store the area of the face
                 face_areas[fi] = area
 
