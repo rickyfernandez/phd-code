@@ -42,7 +42,7 @@ class Fields3D(FieldsBase):
         dens = self.get_field("density")
         velx = self.get_field("velocity-x")
         vely = self.get_field("velocity-y")
-        velz = self.get_field("velocitz-y")
+        velz = self.get_field("velocity-z")
         pres = self.get_field("pressure")
 
         dens[:] = mass/vol
