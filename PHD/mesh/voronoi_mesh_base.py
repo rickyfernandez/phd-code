@@ -56,7 +56,7 @@ class VoronoiMeshBase(object):
                 "areas":           np.empty(num_faces, dtype="float64"),
                 "center of mass":  np.zeros((self.dim, num_faces), dtype="float64"),
                 "normal":          np.empty((self.dim, num_faces), dtype="float64"),
-                "pairs":           np.empty((self.dim, num_faces), dtype="int32"),
+                "pairs":           np.empty((2, num_faces), dtype="int32"),
                 "number of faces": num_faces
                 }
 
