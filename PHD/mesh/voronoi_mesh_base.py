@@ -1,6 +1,6 @@
 from scipy.spatial import Voronoi
-import cell_volume_center as cv
 import numpy as np
+import mesh
 
 class VoronoiMeshBase(object):
     """
@@ -50,7 +50,7 @@ class VoronoiMeshBase(object):
                 "center of mass": np.zeros((self.dim, num_real_particles), dtype="float64")
                 }
 
-        num_faces = cv.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
+        num_faces = mesh.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
 
         faces_info = {
                 "areas":           np.empty(num_faces, dtype="float64"),
