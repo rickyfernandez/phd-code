@@ -19,7 +19,6 @@ def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
 
     cdef double xp, yp, xn, yn, x1, y1, x2, y2, xr, yr, x, y
     cdef double face_area, h
-    cdef double theta
 
     cdef double fx, fy, tx, ty
 
@@ -44,8 +43,12 @@ def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
             xn = particles[0,id_n]
             yn = particles[1,id_n]
 
-            # half distance between particles
-            h = 0.5*sqrt((xn-xp)*(xn-xp) + (yn-yp)*(yn-yp))
+            # difference vector between particles 
+            xr = xn - xp
+            yr = yn - yp
+
+            # distance between particles
+            h = sqrt(xr*xr + yr*yr)
 
             # calculate area of face between particle and neighbor 
             # in 2d each face is made up of two vertices
@@ -57,15 +60,15 @@ def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
             y2 = circum_centers[face_graph[ind_face],1]
             ind_face += 1 # go to next face
 
+            # edge vector
             x = x2 - x1
             y = y2 - y1
 
-            # face area in 2d is length between vertices  
+            # face area in 2d is length between voronoi vertices  
             face_area = sqrt(x*x + y*y)
 
-            # the volume of the cell is the sum of triangle
-            # areas - eq. 27
-            volume[id_p] += 0.5*face_area*h
+            # the volume of the cell is the sum of triangle areas - eq. 27
+            volume[id_p] += 0.25*face_area*h
 
             # center of mass of face
             fx = 0.5*(x1 + x2)
@@ -77,8 +80,8 @@ def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
 
             # center of mass of the cell is the sum weighted center of mass of
             # the triangles - eq. 29
-            center_of_mass[0,id_p] += 0.5*face_area*h*tx
-            center_of_mass[1,id_p] += 0.5*face_area*h*ty
+            center_of_mass[0,id_p] += 0.25*face_area*h*tx
+            center_of_mass[1,id_p] += 0.25*face_area*h*ty
 
             # store face information
             if id_p < id_n:
@@ -86,20 +89,9 @@ def cell_face_info_2d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
                 # store the area of the face
                 face_areas[k] = face_area
 
-                # difference vector between particles 
-                xr = xn - xp
-                yr = yn - yp
-
-                # make sure the normal is pointing toward the neighbor 
-                if (xr*y - yr*x) > 0.0:
-                    x, y = y, -x
-                else:
-                    x, y = -y, x
-
                 # store the orientation of the norm of the face
-                theta = atan2(y, x)
-                face_normal[0,k] = cos(theta)
-                face_normal[1,k] = sin(theta)
+                face_normal[0,k] = xr/h
+                face_normal[1,k] = yr/h
 
                 # store the center mass of the face
                 face_com[0,k] = fx
@@ -149,11 +141,11 @@ def assign_face_velocities_2d(double[:,::1] particles, int[:] neighbor_graph, in
                 xn = particles[0,id_n]
                 yn = particles[1,id_n]
 
-                # the face velocity is approx the mean of velocities
-                # of the particles 
+                # the face velocity is approx the mean of velocities  of the particles
                 face_velocities[0,k] = 0.5*(w[0, id_p] + w[0, id_n])
                 face_velocities[1,k] = 0.5*(w[1, id_p] + w[1, id_n])
 
+                # coordinates of face center of mass
                 fx = face_com[0,k]
                 fy = face_com[1,k]
 
@@ -161,6 +153,7 @@ def assign_face_velocities_2d(double[:,::1] particles, int[:] neighbor_graph, in
                 factor  = (w[0,id_p]-w[0,id_n])*(fx-0.5*(xp+xn)) + (w[1,id_p]-w[1,id_n])*(fy-0.5*(yp+yn))
                 factor /= (xn-xp)*(xn-xp) + (yn-yp)*(yn-yp)
 
+                # store the face velocity
                 face_velocities[0,k] += factor*(xn-xp)
                 face_velocities[1,k] += factor*(yn-yp)
 
@@ -199,6 +192,7 @@ def number_of_faces(int[:] neighbor_graph, int[:] neighbor_graph_size, int num_p
 
     return num_faces
 
+
 def assign_face_velocities_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
         double[:,::1] face_com, double[:,::1] face_velocities, double[:,::1] w, int num_particles):
 
@@ -215,7 +209,7 @@ def assign_face_velocities_3d(double[:,::1] particles, int[:] neighbor_graph, in
         # position of particle
         xp = particles[0,id_p]
         yp = particles[1,id_p]
-        zp = particles[1,id_p]
+        zp = particles[2,id_p]
 
         for j in range(num_neighbors[id_p]):
 
@@ -229,12 +223,12 @@ def assign_face_velocities_3d(double[:,::1] particles, int[:] neighbor_graph, in
                 yn = particles[1,id_n]
                 zn = particles[2,id_n]
 
-                # the face velocity is approx the mean of velocities
-                # of the particles 
+                # the face velocity is approx the mean of velocities of the particles
                 face_velocities[0,k] = 0.5*(w[0, id_p] + w[0, id_n])
                 face_velocities[1,k] = 0.5*(w[1, id_p] + w[1, id_n])
                 face_velocities[2,k] = 0.5*(w[2, id_p] + w[2, id_n])
 
+                # coordinates of face center of mass
                 fx = face_com[0,k]
                 fy = face_com[1,k]
                 fz = face_com[2,k]
@@ -290,26 +284,6 @@ def triangle_area(double[:,::1] t):
     # the are of the triangle is one half the magnitude
     return 0.5*sqrt(x*x + y*y + z*z)
 
-
-def det(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2):
-    return a0*b1*c2 + a1*b2*c0 + a2*b0*c1 - a2*b1*c0 - a1*b0*c2 - a0*b2*c1
-
-
-def norm(double a0, double a1, double a2, double b0, double b1, double b2, double c0, double c1, double c2,
-        double[:] result):
-
-    cdef double x, y, z
-    cdef double mag
-
-    x = det(1.0, a1, a2, 1.0, b1, b2, 1.0, c1, c2)
-    y = det(a0, 1.0, a2, b0, 1.0, b2, c0, 1.0, c2)
-    z = det(a0, a1, 1.0, b0, b1, 1.0, c0, c1, 1.0)
-
-    mag = sqrt(x*x + y*y + z*z)
-
-    result[0] = x/mag
-    result[1] = y/mag
-    result[2] = z/mag
 
 def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num_neighbors,
         int[:] face_graph, int[:] num_face_verts, double[:,::1] voronoi_verts,
@@ -376,7 +350,6 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
     cdef double[:]   com = np.zeros(3,dtype=np.float64)
     cdef double[:,:] tri = np.zeros((3,3),dtype=np.float64)
 
-    cdef int p1, p2, p3
     cdef double[:] n = np.zeros(3,dtype=np.float64)
 
     fi = 0
@@ -481,24 +454,24 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
             # store face information
             if id_p < id_n:
 
-                # grab the last three points to construct two vectors to make the normal of the face
-                p3 = face_graph[ind_f-1]; p2 = face_graph[ind_f-2]; p1 = face_graph[ind_f-3]
-
-                # calculate the normal of the face
-                norm(voronoi_verts[p1,0], voronoi_verts[p1,1], voronoi_verts[p1,2],
-                        voronoi_verts[p2,0], voronoi_verts[p2,1], voronoi_verts[p2,2],
-                        voronoi_verts[p3,0], voronoi_verts[p3,1], voronoi_verts[p3,2], n)
-
                 # difference vector between particles
                 xr = xn - xp
                 yr = yn - yp
                 zr = zn - zp
 
-                # make sure the normal is pointing toward the neighbor
-                if((xn-xp)*n[0] + (yn-yp)*n[1] + (zn-zp)*n[2]) < 0.0:
-                    n[0] *= -1.0
-                    n[1] *= -1.0
-                    n[2] *= -1.0
+                # calculate face normal
+                mag = sqrt(xr*xr + yr*yr + zr*zr)
+                n[0] = xr/mag
+                n[1] = yr/mag
+                n[2] = zr/mag
+
+                if area < 1.0E-15:
+                    print "error"
+                    print "face area:", area
+                    print "norm:", sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])
+                    print "x norm:", n[0]
+                    print "y norm:", n[1]
+                    print "z norm:", n[2], "\n"
 
                 # store the area of the face
                 face_areas[fi] = area
