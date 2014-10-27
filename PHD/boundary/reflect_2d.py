@@ -3,7 +3,7 @@ from boundary_base import BoundaryBase
 
 class Reflect2D(BoundaryBase):
     """
-    refect boundary class
+    2d refect boundary class
     """
     def __init__(self, xl, xr, yl, yr):
 
@@ -16,9 +16,8 @@ class Reflect2D(BoundaryBase):
 
     def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
         """
-        create ghost particles from real particles using reflective boundary conditins
+        create ghost particles from real particles using reflective boundary conditins. This works in 2d and 3d
         """
-
         ghost_indices = particles_index["ghost"]
 
         # position of old ghost 
@@ -28,7 +27,7 @@ class Reflect2D(BoundaryBase):
         new_ghost = np.empty((self.dim,0), dtype="float64")
 
         # hold all the indices of real particles used to create ghost particles
-        ghost_mapping_indices = np.empty(0, dtype=np.int32)
+        ghost_mapping_indices = np.empty(0, dtype="int32")
 
         # grab all neighbors of ghost particles, this includes border cells and 
         # neighbors of border cells, then remove ghost particles leaving two layers
@@ -85,7 +84,7 @@ class Reflect2D(BoundaryBase):
 
     def reverse_velocities(self, particles, primitive, particles_index):
         """
-        reflect ghost velocities across the mirror axis
+        reflect ghost velocities across mirror axis
         """
 
         ghost_indices = particles_index["ghost"]
@@ -109,7 +108,6 @@ class Reflect2D(BoundaryBase):
         """
         copy primitive values to ghost particles from their correponding real particles
         """
-
         # copy primitive values to ghost
         primitive = super(Reflect2D, self).primitive_to_ghost(particles, primitive, particles_index)
 
@@ -123,7 +121,6 @@ class Reflect2D(BoundaryBase):
         """
         copy gradient values to ghost particles from their correponding real particles
         """
-
         new_grad = super(Reflect2D, self).gradient_to_ghost(particles, grad, particles_index)
 
         ghost_indices = particles_index["ghost"]

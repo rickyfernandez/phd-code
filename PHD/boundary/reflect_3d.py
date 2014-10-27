@@ -3,7 +3,7 @@ from reflect_2d import Reflect2D
 
 class Reflect3D(Reflect2D):
     """
-    refect boundary class
+    3d refect boundary class
     """
     def __init__(self, xl, xr, yl, yr, zl, zr):
 
@@ -17,12 +17,8 @@ class Reflect3D(Reflect2D):
 
     def reverse_velocities(self, particles, primitive, particles_index):
         """
-        reflect ghost velocities across the mirror axis
+        reflect ghost velocities across mirror axis
         """
-        """
-        reflect ghost velocities across the mirror axis
-        """
-
         ghost_indices = particles_index["ghost"]
 
         # reverse velocities in x direction
@@ -51,7 +47,6 @@ class Reflect3D(Reflect2D):
         """
         copy primitive values to ghost particles from their correponding real particles
         """
-
         # copy primitive values to ghost
         primitive = super(Reflect3D, self).primitive_to_ghost(particles, primitive, particles_index)
 
@@ -65,7 +60,6 @@ class Reflect3D(Reflect2D):
         """
         copy gradient values to ghost particles from their correponding real particles
         """
-
         new_grad = super(Reflect3D, self).gradient_to_ghost(particles, grad, particles_index)
 
         ghost_indices = particles_index["ghost"]
