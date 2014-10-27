@@ -6,17 +6,18 @@ class VoronoiMeshBase(object):
     """
     voronoi mesh class
     """
-
     def __init__(self):
         self.dim = None
 
     def assign_face_velocities(self, particles, particles_index, graphs, faces_info, w):
-
+        """
+        give velocities to faces from neighboring particles
+        """
         num_real_particles = particles_index["real"].size
         num_faces = faces_info["number of faces"]
 
+        # allocate space for face velocities and the array to faces info dictionary
         faces_info["velocities"] = np.zeros((self.dim, num_faces), dtype="float64")
-
         self.compute_assign_face_velocities(particles, graphs, faces_info, w, num_real_particles)
 
 
@@ -24,34 +25,34 @@ class VoronoiMeshBase(object):
         """
         give particles local fluid velocities, regularization can be added
         """
-
         # mesh regularization
         if regular == True:
             w = self.regularization(fields, particles, gamma, cells_info, particles_index)
         else:
             w = np.zeros((self.dim,particles_index["real"].size), dtype="float64")
 
-        # transfer particle velocities to ghost particles
+        # transfer particle velocities to ghost particles - there might be an error here?
         ghost_map = particles_index["ghost_map"]
         w = np.hstack((w, w[:, np.asarray([ghost_map[i] for i in particles_index["ghost"]])]))
 
         # add particle velocities
-        w[:, particles_index["real"]]  += fields.prim[1:(self.dim + 1), particles_index["real"]]
-        w[:, particles_index["ghost"]] += fields.prim[1:(self.dim + 1), particles_index["ghost"]]
+        w[:, particles_index["real"]]  += fields.prim[1:self.dim + 1, particles_index["real"]]
+        w[:, particles_index["ghost"]] += fields.prim[1:self.dim + 1, particles_index["ghost"]]
 
         return w
 
     def cell_and_faces_info(self, particles, particles_index, graphs):
-
+        """
+        compute volume and center of mass of all real particles and compute areas, center of mass, normal
+        face pairs, and number of faces for faces
+        """
         num_real_particles = particles_index["real"].size
-
         cells_info = {
                 "volume":         np.zeros(num_real_particles, dtype="float64"),
                 "center of mass": np.zeros((self.dim, num_real_particles), dtype="float64")
                 }
 
         num_faces = mesh.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
-
         faces_info = {
                 "areas":           np.empty(num_faces, dtype="float64"),
                 "center of mass":  np.zeros((self.dim, num_faces), dtype="float64"),
@@ -67,9 +68,8 @@ class VoronoiMeshBase(object):
 
     def regularization(self, fields, particles, gamma, cells_info, particles_index):
         """
-        give particles additional velocity to steer to center of mass
+        give particles additional velocity to steer towards center of mass. This works in 2d and 3d
         """
-
         eta = 0.25
 
         indices = particles_index["real"]
@@ -90,7 +90,7 @@ class VoronoiMeshBase(object):
         d = np.sqrt(np.sum(d**2,axis=0))
 
         # approximate length of cells
-        R = np.sqrt(cells_info["volume"]/np.pi)
+        R = self.cell_length(cells_info["volume"])
         w = np.zeros(s.shape)
 
         # regularize
@@ -105,14 +105,15 @@ class VoronoiMeshBase(object):
         return w
 
 
+    def cell_length(self, vol):
+        pass
+
+
     def compute_assign_face_velocities(self,):
         pass
 
 
     def tessellate(self, particles):
-        """
-        create voronoi tesselation from particle positions
-        """
         pass
 
 

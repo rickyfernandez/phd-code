@@ -7,21 +7,32 @@ import mesh
 
 class VoronoiMesh2D(VoronoiMeshBase):
     """
-    voronoi mesh class
+    2d voronoi mesh class
     """
-
     def __init__(self):
         self.dim = 2
 
 
-    def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
+    def cell_length(self, vol):
+        """
+        compute length scale of the cell
+        """
+        return np.sqrt(vol/np.pi)
 
+
+    def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
+        """
+        compute the face velocity from neighboring particles and it's residual motion
+        """
         mesh.assign_face_velocities_2d(particles, graphs["neighbors"], graphs["number of neighbors"],
                 faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
 
 
     def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
-
+        """
+        compute volume and center of mass of all real particles and compute areas, center of mass, normal
+        face pairs, and number of faces for faces
+        """
         mesh.cell_face_info_2d(particles, graphs["neighbors"], graphs["number of neighbors"],
                 graphs["faces"], graphs["voronoi vertices"],
                 cells_info["volume"], cells_info["center of mass"],
@@ -31,9 +42,8 @@ class VoronoiMesh2D(VoronoiMeshBase):
 
     def tessellate(self, particles):
         """
-        create voronoi tesselation from particle positions
+        create 2d voronoi tesselation from particle positions
         """
-
         # create the tesselation
         vor = Voronoi(particles.T)
 

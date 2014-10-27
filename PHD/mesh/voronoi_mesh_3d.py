@@ -1,24 +1,38 @@
-from voronoi_mesh_2d import VoronoiMesh2D
+from voronoi_mesh_base import VoronoiMeshBase
 from scipy.spatial import Voronoi
 import numpy as np
 import itertools
 import mesh
 
 
-class VoronoiMesh3D(VoronoiMesh2D):
-
+class VoronoiMesh3D(VoronoiMeshBase):
+    """
+    3d voronoi mesh class
+    """
     def __init__(self):
         self.dim = 3
 
 
-    def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
+    def cell_length(self, vol):
+        """
+        compute length scale of the cell
+        """
+        return (3.*vol/(4.*np.pi))**(1.0/3.0)
 
+
+    def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
+        """
+        compute the face velocity from neighboring particles and it's residual motion
+        """
         mesh.assign_face_velocities_3d(particles, graphs["neighbors"], graphs["number of neighbors"],
                 faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
 
 
     def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
-
+        """
+        compute volume and center of mass of all real particles and compute areas, center of mass, normal
+        face pairs, and number of faces for faces
+        """
         mesh.cell_face_info_3d(particles, graphs["neighbors"], graphs["number of neighbors"],
         graphs["faces"], graphs["number of face vertices"], graphs["voronoi vertices"],
         cells_info["volume"], cells_info["center of mass"],
@@ -28,11 +42,10 @@ class VoronoiMesh3D(VoronoiMesh2D):
 
     def tessellate(self, particles):
         """
-        create voronoi tesselation from particle positions
+        create 3d voronoi tesselation from particle positions
         """
-
         # create the voronoi tessellation
-        vor = Voronoi(particles.T)
+        vor = Voronoi(particles.T, qhull_options="Qbb")
 
         num_particles = particles.shape[1]
 
@@ -66,16 +79,7 @@ class VoronoiMesh3D(VoronoiMesh2D):
 
         # sizes for 1d graphs, some particles do not have neighbors (coplanar precission error), these
         # are the outside boundaries which does not cause a problem
-        #neighbor_graph_sizes = np.array([1 if n == [] else len(n) for n in neighbor_graph], dtype=np.int32)
         neighbor_graph_sizes = np.array([len(n) for n in neighbor_graph], dtype=np.int32)
-
-        # have to clean up the particles that do not have neighbors
-        #neighbor_graph = [[-1] if n == [] else n for n in neighbor_graph]
-
-        # there elements with no faces, list must have zero size not empty
-        # faces need to be cleaned up too
-        #face_graph = [[-1] if x == [] else x for x in face_graph]
-        #face_graph_sizes = [[1] if x == [] else x for x in face_graph]
 
         # graphs in 1d
         neighbor_graph = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
