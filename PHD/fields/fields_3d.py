@@ -3,9 +3,8 @@ from fields_base import FieldsBase
 
 class Fields3D(FieldsBase):
     """
-    field class that holds all physical data of the particles
+    3d field class that holds all physical data of the particles
     """
-
     def __init__(self, num_real_particles, gamma, boundary):
 
         self.num_real_particles = num_real_particles

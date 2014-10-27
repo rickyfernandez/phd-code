@@ -2,9 +2,8 @@ import numpy as np
 
 class FieldsBase(object):
     """
-    field class that holds all physical data of the particles
+    base field class that holds all physical data of the particles
     """
-
     def __init__(self, num_real_particles, gamma, boundary):
 
         self.num_real_particles = num_real_particles
