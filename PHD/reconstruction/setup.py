@@ -5,4 +5,4 @@ from Cython.Distutils import build_ext
 
 setup(
         cmdclass = {'build_ext': build_ext},
-        ext_modules = [Extension("reconstruct",["reconstruct.pyx"], include_dirs=[np.get_include()])])
+        ext_modules = [Extension("reconstruction",["reconstruction.pyx"], include_dirs=[np.get_include()])])
