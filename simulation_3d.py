@@ -2,22 +2,22 @@ import PHD.riemann as riemann
 import PHD.boundary as boundary
 import PHD.simulation as simulation
 import PHD.reconstruction as reconstruction
-import PHD.test_problems.two_dim.sedov as sedov
+import PHD.test_problems.three_dim.toro_1_3d as toro_1_3d
 
 # parameters and initial state of the simulation
-parameters, data, particles, particles_index = sedov.simulation()
+parameters, data, particles, particles_index = toro_1_3d.simulation()
 
 # create boundary and riemann objects
-boundary_condition = boundary.Reflect2D(0.,1.,0.,1.)
-#reconstruction = reconstruction.PiecewiseConstant2D(boundary_condition)
-reconstruction = reconstruction.PiecewiseLinear2D(boundary_condition)
-riemann_solver = riemann.Exact2D(reconstruction)
-#riemann_solver = riemann.Hllc2D(reconstruction)
-#riemann_solver = riemann.Hll2D(reconstruction)
+boundary_condition = boundary.Reflect3D(0.,1.,0.,.1,0.,.1)
+reconstruction = reconstruction.PiecewiseConstant(boundary_condition)
+#reconstruction = reconstruction.PiecewiseLinear(boundary_condition)
+#riemann_solver = riemann.Exact(reconstruction)
+riemann_solver = riemann.Hllc3D(reconstruction)
+#riemann_solver = riemann.Hll(reconstruction)
 
 # setup the moving mesh simulation
-simulation = simulation.MovingMesh()
-#simulation = simulation.StaticMesh()
+simulation = simulation.MovingMesh3D()
+#simulation = simulation.StaticMesh3D()
 
 for key, value in parameters.iteritems():
     simulation.set_parameter(key, value)
