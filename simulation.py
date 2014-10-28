@@ -11,9 +11,9 @@ parameters, data, particles, particles_index = sedov.simulation()
 boundary_condition = boundary.Reflect2D(0.,1.,0.,1.)
 #reconstruction = reconstruction.PiecewiseConstant(boundary_condition)
 reconstruction = reconstruction.PiecewiseLinear(boundary_condition)
-riemann_solver = riemann.Exact(reconstruction)
-#riemann_solver = riemann.Hllc(reconstruction)
-#riemann_solver = riemann.Hll(reconstruction)
+riemann_solver = riemann.Exact2D(reconstruction)
+#riemann_solver = riemann.Hllc2D(reconstruction)
+#riemann_solver = riemann.Hll2D(reconstruction)
 
 # setup the moving mesh simulation
 simulation = simulation.MovingMesh()
