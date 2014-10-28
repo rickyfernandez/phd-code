@@ -4,7 +4,6 @@ class ReconstructBase(object):
     reconstruction base class, every reconstruction class must inherit
     this class
     """
-
     def __init__(self, boundary=None):
         self.grad = None
         self.boundary = boundary
