@@ -9,11 +9,11 @@ parameters, data, particles, particles_index = toro_1.simulation()
 
 # create boundary and riemann objects
 boundary_condition = boundary.Reflect3D(0.,1.,0.,.1,0.,.1)
-reconstruction = reconstruction.PiecewiseConstant3D(boundary_condition)
-#reconstruction = reconstruction.PiecewiseLinear(boundary_condition)
-#riemann_solver = riemann.Exact3D(reconstruction)
+#reconstruction = reconstruction.PiecewiseConstant3D(boundary_condition)
+reconstruction = reconstruction.PiecewiseLinear3D(boundary_condition)
+riemann_solver = riemann.Exact3D(reconstruction)
 #riemann_solver = riemann.Hllc3D(reconstruction)
-riemann_solver = riemann.Hll3D(reconstruction)
+#riemann_solver = riemann.Hll3D(reconstruction)
 
 # setup the moving mesh simulation
 #simulation = simulation.MovingMesh3D()
