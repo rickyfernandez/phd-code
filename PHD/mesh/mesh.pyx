@@ -343,7 +343,7 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
     cdef int ind_f     # face vertex index
     cdef int fi        # face index
 
-    cdef int j, k, p
+    cdef int i, j, k, p
     cdef double xp, yp, zp, xn, yn, zn
     cdef double vol, area, tri_area, h
 
@@ -365,7 +365,7 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
         zp = particles[2,id_p]
 
         # loop over neighbors
-        for j in range(num_neighbors[id_p]):
+        for i in range(num_neighbors[id_p]):
 
             # index of neighbor
             id_n = neighbor_graph[ind_n]
