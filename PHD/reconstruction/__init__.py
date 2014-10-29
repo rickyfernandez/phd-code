@@ -1,2 +1,3 @@
 from piecewise_constant_2d import PiecewiseConstant2D
+from piecewise_constant_3d import PiecewiseConstant3D
 from piecewise_linear_2d import PiecewiseLinear2D
