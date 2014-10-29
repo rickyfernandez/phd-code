@@ -8,13 +8,13 @@ def simulation():
             "max_steps" : 1000,
             "max_time" : 0.15,
             "output_name" : "Sod",
-            "output_cycle" : 1000,
-            "regularization" : True
+            "output_cycle" : 1000
+            #"regularization" : True
             }
 
     gamma = parameters["gamma"]
 
-    L = 1.0
+    L = 2.0
     n = 100
 
     dx = L/n
@@ -44,17 +44,19 @@ def simulation():
                 part += 1
 
     # find all particles inside the unit box 
-    indices = (((0. <= x) & (x <= 1.)) & ((0. <= y) & (y <= .1)) & ((0. <= z) & (z <= .1)))
+    indices = (((0. <= x) & (x <= 2.)) & ((0. <= y) & (y <= .1)) & ((0. <= z) & (z <= .1)))
     x_in = x[indices]; y_in = y[indices]; z_in = z[indices]
 
     data = np.zeros((5, x_in.size))
-    left_cells = np.where(x_in <= 0.5)[0]
+    left_cells = np.where(x_in <= 1.0)[0]
     data[0, left_cells] = 1.0               # density
-    data[4, left_cells] = 1.0/(gamma-1.0)   # total energy
+    data[1, left_cells] = -2.0              # momentum
+    data[4, left_cells] = 0.5*data[1,left_cells]**2 + 0.4/(gamma-1.0)
 
-    right_cells = np.where(0.5 <= x_in)[0]
-    data[0, right_cells] = 0.125            # density
-    data[4, right_cells] = 0.1/(gamma-1.0)  # total energy
+    right_cells = np.where(1.0 <= x_in)[0]
+    data[0, right_cells] = 1.0              # density
+    data[1, right_cells] = 2.0              # momentum
+    data[4, right_cells] = 0.5*data[1,right_cells]**2 + 0.4/(gamma-1.0)
 
     # store real particles
     x_particles = np.copy(x_in); y_particles = np.copy(y_in); z_particles = np.copy(z_in)

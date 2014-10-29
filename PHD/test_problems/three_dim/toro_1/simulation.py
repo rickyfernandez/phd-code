@@ -8,8 +8,8 @@ def simulation():
             "max_steps" : 1000,
             "max_time" : 0.15,
             "output_name" : "Sod",
-            "output_cycle" : 1000,
-            "regularization" : True
+            "output_cycle" : 1000
+            #"regularization" : True
             }
 
     gamma = parameters["gamma"]
