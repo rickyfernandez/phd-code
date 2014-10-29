@@ -1,10 +1,12 @@
-from hll import Hll
+from hll_2d import Hll2D
 import riemann
 
-class Hllc(Hll):
-
+class Hllc2D(Hll2D):
     """
-    Riemann base class. All riemann solvers should inherit this class
+    2d hllc riemann solver
     """
     def solver(self, left_face, right_face, fluxes, normal, faces_info, gamma, num_faces):
-        riemann.hllc(left_face, right_face, fluxes, normal, faces_info["velocities"], gamma, num_faces)
+        """
+        solve the riemann problem using the 2d hllc solver
+        """
+        riemann.hllc_2d(left_face, right_face, fluxes, normal, faces_info["velocities"], gamma, num_faces)

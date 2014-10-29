@@ -2,12 +2,12 @@ from riemann_base import RiemannBase
 import numpy as np
 import riemann
 
-class Hll2D(RiemannBase):
+class Exact3D(RiemannBase):
     """
-    2d hll riemann solver
+    3d exact riemann solver
     """
     def __init__(self, reconstruction=None):
-        self.dim = 2
+        self.dim = 3
         self.reconstruction = reconstruction
 
 
@@ -17,30 +17,39 @@ class Hll2D(RiemannBase):
         """
         # grab values that correspond to real particles
         dens = fields.get_field("density")
-        velx = fields.get_field("velocity-x")
-        vely = fields.get_field("velocity-y")
         pres = fields.get_field("pressure")
 
         # sound speed
         c = np.sqrt(gamma*pres/dens)
 
         # calculate approx radius of each voronoi cell
-        R = np.sqrt(vol/np.pi)
+        R = (3.*vol/(4.*np.pi))**(1./3.)
 
-        dt_x = R/(abs(velx) + c)
-        dt_y = R/(abs(vely) + c)
-
-        return min(dt_x.min(), dt_y.min())
+        return np.min(R/c)
 
 
     def reconstruct_face_states(self, particles, particles_index, graphs, primitive, cells_info, faces_info, gamma, dt):
         """
         reconstruct primitive particle values to face values
         """
-        # construct left and right states and each face
+        # construct left and right constant states at each face
         self.left_right_states(primitive, faces_info)
 
-        # calculate gradients for each primitive variable
+        # pointer to left and right states
+        left_face  = faces_info["left faces"]
+        right_face = faces_info["right faces"]
+
+        # velocity of all faces
+        wx = faces_info["velocities"][0,:]
+        wy = faces_info["velocities"][1,:]
+        wz = faces_info["velocities"][2,:]
+
+        # boost to frame of face
+        left_face[1,:] -= wx; right_face[1,:] -= wx
+        left_face[2,:] -= wy; right_face[2,:] -= wy
+        left_face[3,:] -= wz; right_face[3,:] -= wz
+
+        # calculate gradients for each primitve variable
         self.reconstruction.gradient(primitive, particles, particles_index, cells_info, graphs)
 
         # reconstruct states at faces - hack for right now
@@ -51,6 +60,6 @@ class Hll2D(RiemannBase):
 
     def solver(self, left_face, right_face, fluxes, normal, faces_info, gamma, num_faces):
         """
-        solve the riemann problem using the 2d hll solver
+        solve the riemann problem using the 3d exact solver
         """
-        riemann.hll_2d(left_face, right_face, fluxes, normal, faces_info["velocities"], gamma, num_faces)
+        riemann.exact_3d(left_face, right_face, fluxes, normal, faces_info["velocities"], gamma, num_faces)

@@ -3,335 +3,8 @@ import numpy as np
 cimport numpy as np
 cimport cython
 
-#cdef hllc_state(double[:] u_str, double[:] q, double gamma, double s_wave, double contact_wave):
-#
-#    cdef double factor = q[0]*(s_wave - q[1])/(s_wave - contact_wave)
-#
-#    # star state - eq. 10.39
-#    u_str[0] = factor
-#    u_str[1] = factor*contact_wave
-#    u_str[2] = factor*q[2];
-#    u_str[3] = factor*(0.5*(q[1]*q[1] + q[2]*q[2]) + q[3]/(q[0]*(gamma - 1.0)) +\
-#            (contact_wave - q[1])*(contact_wave + q[3]/(q[0]*(s_wave - q[1]))))
-#
-#cdef construct_flux(double[:] flux_state, double[:] q, double gamma):
-#
-#    flux_state[0] = q[0]*q[1]
-#    flux_state[1] = q[0]*q[1]*q[1] + q[3]
-#    flux_state[2] = q[0]*q[1]*q[2]
-#    flux_state[3] = q[1]*(0.5*q[0]*(q[1]*q[1] + q[2]*q[2]) + q[3]*gamma/(gamma - 1.0))
-#
-#def hll(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:] w_face, double gamma, int num_faces):
-#
-#    cdef double w
-#    cdef int i, j
-#    cdef double s_l, s_r, s_contact
-#    cdef double d_l, p_l, u_l
-#    cdef double d_r, p_r, u_r
-#
-#    cdef double[:] flux_state = np.zeros(4, dtype=np.float64)
-#    cdef double[:] flux_l     = np.zeros(4, dtype=np.float64)
-#    cdef double[:] flux_r     = np.zeros(4, dtype=np.float64)
-#
-#    cdef double[:] u_state_l = np.zeros(4, dtype=np.float64)
-#    cdef double[:] q_l       = np.zeros(4, dtype=np.float64)
-#
-#    cdef double[:] u_state_r = np.zeros(4, dtype=np.float64)
-#    cdef double[:] q_r       = np.zeros(4, dtype=np.float64)
-#
-#    cdef double[:] waves = np.zeros(3, dtype=np.float64)
-#
-#    for i in range(num_faces):
-#
-#        d_l = face_l[0,i]
-#        u_l = face_l[1,i]
-#        p_l = face_l[3,i]
-#
-#        d_r = face_r[0,i]
-#        u_r = face_r[1,i]
-#        p_r = face_r[3,i]
-#
-#        get_waves(d_l, u_l, p_l, d_r, u_r, p_r, gamma, waves)
-#        s_l = waves[0]; s_contact = waves[1]; s_r = waves[2]
-#
-#        for j in range(4):
-#
-#            q_l[j]  = face_l[j,i]
-#            q_r[j] = face_r[j,i]
-#
-#        # convert from primitive variables to conserative variables
-#        prim_to_cons(u_state_l, q_l, gamma)
-#        prim_to_cons(u_state_r, q_r, gamma)
-#
-#        w = w_face[i]
-#
-#        # calculate interface flux - eq. 10.71
-#        if(w <= s_l):
-#            # l state
-#            construct_flux(flux_state, q_l, gamma)
-#
-#            for j in range(4):
-#                flux_state[j] -= w*u_state_l[j]
-#
-#        elif((s_l < w) and (w <= s_r)):
-#
-#            construct_flux(flux_l, q_l, gamma)
-#            construct_flux(flux_r, q_r, gamma)
-#
-#            for j in range(4):
-#                flux_state[j]  = 0.0
-#                flux_state[j] += (s_r*flux_l[j] - s_l*flux_r[j] + s_l*s_r*(u_state_r[j] - u_state_l[j]))/(s_r - s_l)
-#                flux_state[j] -= w*(s_r*u_state_r[j] - s_l*u_state_l[j] + flux_l[j] - flux_r[j])/(s_r - s_l)
-#
-#        else:
-#
-#            # it's a right state
-#            construct_flux(flux_state, q_r, gamma)
-#
-#            for j in range(4):
-#                flux_state[j] -= w*u_state_r[j]
-#
-#        for j in range(4):
-#            flux[j,i] = flux_state[j]
-#
-#def hllc(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:] w_face, double gamma, int num_faces):
-#
-#    cdef double w
-#    cdef int i, j
-#    cdef double s_l, s_r, s_contact
-#    cdef double d_l, p_l, u_l
-#    cdef double d_r, p_r, u_r
-#
-#    cdef double[:] flux_state = np.zeros(4, dtype=np.float64)
-#    cdef double[:] u_state_l = np.zeros(4, dtype=np.float64)
-#    cdef double[:] q_l = np.zeros(4, dtype=np.float64)
-#    cdef double[:] u_star_l = np.zeros(4, dtype=np.float64)
-#    cdef double[:] u_state_r = np.zeros(4, dtype=np.float64)
-#    cdef double[:] q_r = np.zeros(4, dtype=np.float64)
-#    cdef double[:] u_star_r = np.zeros(4, dtype=np.float64)
-#    cdef double[:] waves  = np.zeros(3, dtype=np.float64)
-#
-#    for i in range(num_faces):
-#
-#        d_l = face_l[0,i]
-#        u_l = face_l[1,i]
-#        p_l = face_l[3,i]
-#
-#        d_r = face_r[0,i]
-#        u_r = face_r[1,i]
-#        p_r = face_r[3,i]
-#
-#        get_waves(d_l, u_l, p_l, d_r, u_r, p_r, gamma, waves)
-#        s_l= waves[0]; s_contact = waves[1]; s_r = waves[2]
-#
-#        for j in range(4):
-#
-#            q_l[j] = face_l[j,i]
-#            q_r[j] = face_r[j,i]
-#
-#        # convert from primitive variables to conserative variables
-#        prim_to_cons(u_state_l, q_l, gamma)
-#        prim_to_cons(u_state_r, q_r, gamma)
-#
-#        w = w_face[i]
-#
-#        # calculate interface flux - eq. 10.71
-#        if(w <= s_l):
-#            # left state
-#            construct_flux(flux_state, q_l, gamma)
-#
-#            for j in range(4):
-#                flux_state[j] -= w*u_state_l[j]
-#
-#        elif((s_l < w) and (w <= s_r)):
-#
-#            if(w <= s_contact):
-#
-#                hllc_state(u_star_l, q_l, gamma, s_l, s_contact)
-#                construct_flux(flux_state, q_l, gamma)
-#
-#                for j in range(4):
-#                    flux_state[j] += s_l*(u_star_l[j] - u_state_l[j]) - w*u_star_l[j]
-#
-#            else:
-#
-#                hllc_state(u_star_r, q_r, gamma, s_r, s_contact)
-#                construct_flux(flux_state, q_r, gamma)
-#
-#                for j in range(4):
-#                    flux_state[j] += s_r*(u_star_r[j] - u_state_r[j]) - w*u_star_r[j]
-#
-#        else:
-#
-#            # it's a right state
-#            construct_flux(flux_state, q_r, gamma)
-#
-#            for j in range(4):
-#                flux_state[j] -= w*u_state_r[j]
-#
-#        for j in range(4):
-#            flux[j,i] = flux_state[j]
-#
-#def exact(double[:,::1] face_left, double[:,::1] face_right, double[:,::1] face_state, double gamma, int num_faces):
-#
-#    cdef double d_l, u_l, v_l, p_l
-#    cdef double d_r, u_r, v_r, p_r
-#    cdef double d, u, v, p
-#
-#    cdef double p_star, u_star
-#    cdef double f_r, f_l
-#    cdef double s_hl, s_tl, s_l, s_r, c
-#    cdef double c_l, c_r, c_star_l, c_star_r
-#
-#    for i in range(num_faces):
-#
-#        d_l = face_left[0,i]
-#        u_l = face_left[1,i]
-#        v_l = face_left[2,i]
-#        p_l = face_left[3,i]
-#
-#        d_r = face_right[0,i]
-#        u_r = face_right[1,i]
-#        v_r = face_right[2,i]
-#        p_r = face_right[3,i]
-#
-#        c_l = sqrt(gamma*p_l/d_l)
-#        c_r = sqrt(gamma*p_r/d_r)
-#
-#        # newton rhapson 
-#        p_star = get_pstar(d_l, u_l, p_l, d_r, u_r, p_r, gamma)
-#
-#        # calculate the contact wave speed
-#        f_r = p_func(d_r, u_r, p_r, gamma, p_star)
-#        f_l = p_func(d_l, u_l, p_l, gamma, p_star)
-#        u_star = 0.5*(u_l + u_r + f_r - f_l)
-#
-#        if(0.0 <= u_star):
-#
-#            # transverse velocity only jumps across the contact
-#            v = v_l
-#
-#            # left of the contact discontinuity
-#            if(p_star <= p_l):
-#
-#                # left rarefraction, below is the sound speed of the head
-#                s_hl = u_l - c_l
-#
-#                if(0.0 <= s_hl):
-#
-#                    # sample point is left data state
-#                    d = d_l
-#                    u = u_l
-#                    p = p_l
-#
-#                else:
-#
-#                    # sound speed of the star state and sound speed
-#                    # of the tail of the rarefraction
-#                    c_star_l = c_l*pow(p_star/p_l, (gamma - 1.0)/(2.0*gamma))
-#                    s_tl = u_star - c_star_l
-#
-#                    if(0.0 >= s_tl):
-#
-#                        # sample point is star left state
-#                        d = d_l*pow(p_star/p_l, 1.0/gamma)
-#                        u = u_star
-#                        p = p_star
-#
-#                    else:
-#
-#                        # sampled point is inside left fan
-#                        c = (2.0/(gamma + 1.0))*(c_l + 0.5*(gamma - 1.0)*u_l)
-#
-#                        d = d_l*pow(c/c_l, 2.0/(gamma - 1.0))
-#                        u = c
-#                        p = p_l*pow(c/c_l, 2.0*gamma/(gamma - 1.0))
-#            else:
-#
-#                # left shock
-#                s_l = u_l - c_l*sqrt((gamma + 1.0)*p_star/(2.0*gamma*p_l) + (gamma - 1.0)/(2.0*gamma))
-#
-#                if(0.0 <= s_l):
-#
-#                    # sampled point is a left data state
-#                    d = d_l
-#                    u = u_l
-#                    p = p_l
-#
-#                else:
-#
-#                    # sampled point is star left state
-#                    d = d_l*(p_star/p_l + (gamma - 1.0)/(gamma + 1.0))/(p_star*(gamma - 1.0)/((gamma + 1.0)*p_l) + 1.0)
-#                    u = u_star
-#                    p = p_star
-#
-#
-#        else:
-#
-#            # transverse velocity only jumps across the contact
-#            v = v_r
-#
-#            # sampling point lies to the right of the contact
-#            if(p_star >= p_r):
-#
-#                # right shock
-#                s_r = u_r + c_r*sqrt((gamma + 1.0)*p_star/(2.0*gamma*p_r) + (gamma-1.0)/(2.0*gamma))
-#
-#                if(0.0 >= s_r):
-#
-#                    # sampled point is right data states
-#                    d = d_r
-#                    u = u_r
-#                    p = p_r
-#
-#                else:
-#
-#                    # sample point is star right state
-#                    d = d_r*(p_star/p_r + (gamma - 1.0)/(gamma + 1.0))/(p_star*(gamma - 1.0)/((gamma + 1.0)*p_r) + 1.0)
-#                    u = u_star
-#                    p = p_star
-#
-#            else:
-#
-#                # right rarefaction
-#                s_hr = u_r + c_r
-#
-#                if(0.0 >= s_hr):
-#
-#                    # sample point is right data state
-#                    d = d_r
-#                    u = u_r
-#                    p = p_r
-#
-#                else:
-#
-#                    # sound speed of the star state and sound speed
-#                    # of the tail of the rarefraction
-#                    c_star_r = c_r*pow(p_star/p_r, (gamma-1.0)/(2.0*gamma))
-#                    s_tr = u_star + c_star_r
-#
-#                    if(0.0 <= s_tr):
-#
-#                        # sample point is star left state
-#                        d = d_r*pow(p_star/p_r, 1.0/gamma)
-#                        u = u_star
-#                        p = p_star
-#
-#                    else:
-#
-#                        # sampled point is inside right fan
-#                        c = (2.0/(gamma + 1.0))*(c_r - 0.5*(gamma - 1.0)*u_r)
-#
-#                        d = d_r*pow(c/c_r, 2.0/(gamma - 1.0))
-#                        u = (2.0/(gamma + 1.0))*(-c_r + 0.5*(gamma-1.0)*u_r)
-#                        p = p_r*pow(c/c_r, 2.0*gamma/(gamma - 1.0))
-#
-#        face_state[0,i] = d
-#        face_state[1,i] = u
-#        face_state[2,i] = v
-#        face_state[3,i] = p
 
-def exact(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] fluxes, double[:,::1] normal, double[:,::1] w_face, double gamma, int num_faces):
+def exact_2d(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] fluxes, double[:,::1] normal, double[:,::1] w_face, double gamma, int num_faces):
 
     cdef double d_l, u_l, v_l, p_l
     cdef double d_r, u_r, v_r, p_r
@@ -526,7 +199,8 @@ def exact(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] fluxes, doub
         fluxes[1,i] += wx*fluxes[0,i]
         fluxes[2,i] += wy*fluxes[0,i]
 
-def hllc(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:,::1] normal, double[:,::1] w, double gamma, int num_faces):
+
+def hllc_2d(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:,::1] normal, double[:,::1] w, double gamma, int num_faces):
 
     cdef double wn
     cdef int i, j
@@ -621,7 +295,7 @@ def hllc(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[
         for j in range(4):
             flux[j,i] = flux_state[j]
 
-def hll(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:,::1] normal, double[:,::1] w, double gamma, int num_faces):
+def hll_2d(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:,::1] normal, double[:,::1] w, double gamma, int num_faces):
 
     cdef double wn
     cdef int i, j
@@ -978,3 +652,439 @@ cdef get_pstar(double d_l, double u_l, double p_l, double d_r, double u_r, doubl
     # exit failure due to divergence
     print "did not converge"
     return p
+
+#------------------------------------ 3d -----------------------------------------------
+
+cdef prim_to_cons_3d(double[:] u_s, double[:] q_s, double gamma):
+
+    u_s[0] = q_s[0]
+    u_s[1] = q_s[0]*q_s[1]
+    u_s[2] = q_s[0]*q_s[2]
+    u_s[3] = q_s[0]*q_s[3]
+    u_s[4] = 0.5*q_s[0]*(q_s[1]*q_s[1] + q_s[2]*q_s[2] + q_s[3]*q_s[3]) + q_s[4]/(gamma-1.0)
+
+
+cdef hllc_state_3d(double[:] u_str, double[:] q, double[:] n, double un, double gamma, double s_wave, double contact_wave):
+
+    cdef double factor = q[0]*(s_wave - un)/(s_wave - contact_wave)
+
+    # star state - eq. 10.39
+    u_str[0] = factor
+    u_str[1] = factor*(q[1] + (contact_wave - un)*n[0]) # value in right frame 
+    u_str[2] = factor*(q[2] + (contact_wave - un)*n[1]) # value in right frame 
+    u_str[3] = factor*(q[3] + (contact_wave - un)*n[2]) # value in right frame 
+    u_str[4] = factor*(0.5*(q[1]*q[1] + q[2]*q[2] + q[3]*q[3]) + q[4]/(q[0]*(gamma - 1.0)) +\
+            (contact_wave - un)*(contact_wave + q[4]/(q[0]*(s_wave - un))))
+
+
+cdef construct_flux_3d(double[:] flux_state, double[:] q, double[:] n, double un, double gamma):
+
+    flux_state[0] = q[0]*un
+    flux_state[1] = q[0]*q[1]*un + q[4]*n[0]
+    flux_state[2] = q[0]*q[2]*un + q[4]*n[1]
+    flux_state[3] = q[0]*q[3]*un + q[4]*n[2]
+    flux_state[4] = (0.5*q[0]*(q[1]*q[1] + q[2]*q[2] + q[3]*q[3]) + q[4]*gamma/(gamma - 1.0))*un
+
+
+def hllc_3d(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:,::1] normal, double[:,::1] w, double gamma, int num_faces):
+
+    cdef double wn
+    cdef int i, j
+    cdef double s_l, s_r, s_contact
+    cdef double d_l, u_l, v_l, w_l, p_l
+    cdef double d_r, u_r, v_r, w_r, p_r
+    cdef double un_l, un_r
+
+    cdef double[:] flux_state = np.zeros(5, dtype=np.float64)
+    cdef double[:] u_state_l  = np.zeros(5, dtype=np.float64)
+    cdef double[:] q_l        = np.zeros(5, dtype=np.float64)
+    cdef double[:] u_star_l   = np.zeros(5, dtype=np.float64)
+    cdef double[:] u_state_r  = np.zeros(5, dtype=np.float64)
+    cdef double[:] q_r        = np.zeros(5, dtype=np.float64)
+    cdef double[:] u_star_r   = np.zeros(5, dtype=np.float64)
+    cdef double[:] waves      = np.zeros(3, dtype=np.float64)
+    cdef double[:] n          = np.zeros(3, dtype=np.float64)
+
+    for i in range(num_faces):
+
+        d_l = face_l[0,i]
+        u_l = face_l[1,i]
+        v_l = face_l[2,i]
+        w_l = face_l[3,i]
+        p_l = face_l[4,i]
+
+        d_r = face_r[0,i]
+        u_r = face_r[1,i]
+        v_r = face_r[2,i]
+        w_r = face_r[3,i]
+        p_r = face_r[4,i]
+
+        n[0] = normal[0,i]
+        n[1] = normal[1,i]
+        n[2] = normal[2,i]
+
+        # project velocity onto face normal
+        un_l = u_l*n[0] + v_l*n[1] + w_l*n[2]
+        un_r = u_r*n[0] + v_r*n[1] + w_r*n[2]
+
+        get_waves(d_l, un_l, p_l, d_r, un_r, p_r, gamma, waves)
+        s_l= waves[0]; s_contact = waves[1]; s_r = waves[2]
+
+        for j in range(5):
+
+            q_l[j] = face_l[j,i]
+            q_r[j] = face_r[j,i]
+
+        # convert from primitive variables to conserative variables
+        prim_to_cons_3d(u_state_l, q_l, gamma)
+        prim_to_cons_3d(u_state_r, q_r, gamma)
+
+        # velocity of face projected onto face normal
+        wn = w[0,i]*n[0] + w[1,i]*n[1] + w[2,i]*n[2]
+
+        # calculate interface flux - eq. 10.71
+        if(wn <= s_l):
+
+            # left state
+            construct_flux_3d(flux_state, q_l, n, un_l, gamma)
+
+            for j in range(5):
+                flux_state[j] -= wn*u_state_l[j]
+
+        elif((s_l < wn) and (wn <= s_r)):
+
+            # intermediate state
+            if(wn <= s_contact):
+
+                # left star state
+                hllc_state_3d(u_star_l, q_l, n, un_l, gamma, s_l, s_contact)
+                construct_flux_3d(flux_state, q_l, n, un_l, gamma)
+
+                for j in range(5):
+                    flux_state[j] += s_l*(u_star_l[j] - u_state_l[j]) - wn*u_star_l[j]
+
+            else:
+
+                # right star state
+                hllc_state_3d(u_star_r, q_r, n, un_r, gamma, s_r, s_contact)
+                construct_flux_3d(flux_state, q_r, n, un_r, gamma)
+
+                for j in range(5):
+                    flux_state[j] += s_r*(u_star_r[j] - u_state_r[j]) - wn*u_star_r[j]
+
+        else:
+
+            # it's a right state
+            construct_flux_3d(flux_state, q_r, n, un_r, gamma)
+
+            for j in range(5):
+                flux_state[j] -= wn*u_state_r[j]
+
+        # store the fluxes
+        for j in range(5):
+            flux[j,i] = flux_state[j]
+
+
+
+def hll_3d(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] flux, double[:,::1] normal, double[:,::1] w, double gamma, int num_faces):
+
+    cdef double wn
+    cdef int i, j
+    cdef double s_l, s_r, s_contact
+    cdef double d_l, u_l, v_l, w_l, p_l
+    cdef double d_r, u_r, v_r, w_r, p_r
+    cdef double un_l, un_r
+
+    cdef double[:] flux_state = np.zeros(5, dtype=np.float64)
+    cdef double[:] flux_l     = np.zeros(5, dtype=np.float64)
+    cdef double[:] flux_r     = np.zeros(5, dtype=np.float64)
+
+    cdef double[:] u_state_l = np.zeros(5, dtype=np.float64)
+    cdef double[:] q_l       = np.zeros(5, dtype=np.float64)
+
+    cdef double[:] u_state_r = np.zeros(5, dtype=np.float64)
+    cdef double[:] q_r       = np.zeros(5, dtype=np.float64)
+
+    cdef double[:] waves = np.zeros(3, dtype=np.float64)
+
+    cdef double[:] n = np.zeros(3, dtype=np.float64)
+
+    for i in range(num_faces):
+
+        d_l = face_l[0,i]
+        u_l = face_l[1,i]
+        v_l = face_l[2,i]
+        w_l = face_l[3,i]
+        p_l = face_l[4,i]
+
+        d_r = face_r[0,i]
+        u_r = face_r[1,i]
+        v_r = face_r[2,i]
+        w_r = face_r[3,i]
+        p_r = face_r[4,i]
+
+        n[0] = normal[0,i]
+        n[1] = normal[1,i]
+        n[2] = normal[2,i]
+
+        # project velocity onto face normal
+        un_l = u_l*n[0] + v_l*n[1] + w_l*n[2]
+        un_r = u_r*n[0] + v_r*n[1] + w_r*n[2]
+
+        get_waves(d_l, un_l, p_l, d_r, un_r, p_r, gamma, waves)
+        s_l = waves[0]; s_contact = waves[1]; s_r = waves[2]
+
+        for j in range(5):
+
+            q_l[j] = face_l[j,i]
+            q_r[j] = face_r[j,i]
+
+        # convert from primitive variables to conserative variables
+        prim_to_cons_3d(u_state_l, q_l, gamma)
+        prim_to_cons_3d(u_state_r, q_r, gamma)
+
+        wn = w[0,i]*n[0] + w[1,i]*n[1] + w[2,i]*n[2]
+
+        # calculate interface flux - eq. 10.71
+        if(wn <= s_l):
+
+            # left state
+            construct_flux_3d(flux_state, q_l, n, un_l, gamma)
+
+            for j in range(5):
+                flux_state[j] -= wn*u_state_l[j]
+
+        # star state 
+        elif((s_l < wn) and (wn <= s_r)):
+
+            construct_flux_3d(flux_l, q_l, n, un_l, gamma)
+            construct_flux_3d(flux_r, q_r, n, un_r, gamma)
+
+            for j in range(5):
+                flux_state[j]  = 0.0
+                flux_state[j] += (s_r*flux_l[j] - s_l*flux_r[j] + s_l*s_r*(u_state_r[j] - u_state_l[j]))/(s_r - s_l)
+                flux_state[j] -= wn*(s_r*u_state_r[j] - s_l*u_state_l[j] + flux_l[j] - flux_r[j])/(s_r - s_l)
+
+        else:
+
+            # it's a right state
+            construct_flux_3d(flux_state, q_r, n, un_r, gamma)
+
+            for j in range(5):
+                flux_state[j] -= wn*u_state_r[j]
+
+        for j in range(5):
+            flux[j,i] = flux_state[j]
+
+
+def exact_3d(double[:,::1] face_l, double[:,::1] face_r, double[:,::1] fluxes, double[:,::1] normal, double[:,::1] w_face, double gamma, int num_faces):
+
+    cdef double d_l, u_l, v_l, w_l, p_l
+    cdef double d_r, u_r, v_r, w_r, p_r
+    cdef double d, u, v, w, p
+
+    cdef double un_l, un_r
+    cdef double wx, wy, wz
+
+    cdef double u_tmp
+
+    cdef double p_star, u_star
+    cdef double f_r, f_l
+    cdef double s_hl, s_tl, s_l, s_r, c
+    cdef double c_l, c_r, c_star_l, c_star_r
+
+    cdef double[:] n = np.zeros(3, dtype=np.float64)
+
+    for i in range(num_faces):
+
+        d_l = face_l[0,i]
+        u_l = face_l[1,i]
+        v_l = face_l[2,i]
+        w_l = face_l[3,i]
+        p_l = face_l[4,i]
+
+        d_r = face_r[0,i]
+        u_r = face_r[1,i]
+        v_r = face_r[2,i]
+        w_r = face_r[3,i]
+        p_r = face_r[4,i]
+
+        c_l = sqrt(gamma*p_l/d_l)
+        c_r = sqrt(gamma*p_r/d_r)
+
+        # the norm of the face
+        n[0] = normal[0,i]
+        n[1] = normal[1,i]
+        n[2] = normal[2,i]
+
+        # project velocity onto face normal
+        un_l = u_l*n[0] + v_l*n[1] + w_l*n[2]
+        un_r = u_r*n[0] + v_r*n[1] + w_r*n[2]
+
+        # newton rhapson 
+        p_star = get_pstar(d_l, un_l, p_l, d_r, un_r, p_r, gamma)
+
+        # calculate the contact wave speed
+        f_l = p_func(d_l, un_l, p_l, gamma, p_star)
+        f_r = p_func(d_r, un_r, p_r, gamma, p_star)
+        u_star = 0.5*(un_l + un_r + f_r - f_l)
+
+        if(0.0 <= u_star):
+
+            # transverse velocity only jumps across the contact
+            #v = v_l
+
+            # left of the contact discontinuity
+            if(p_star <= p_l):
+
+                # left rarefraction, below is the sound speed of the head
+                s_hl = un_l - c_l
+
+                if(0.0 <= s_hl):
+
+                    # sample point is left data state
+                    d = d_l
+                    u = u_l
+                    v = v_l
+                    w = w_l
+                    p = p_l
+
+                else:
+
+                    # sound speed of the star state and sound speed
+                    # of the tail of the rarefraction
+                    c_star_l = c_l*pow(p_star/p_l, (gamma - 1.0)/(2.0*gamma))
+                    s_tl = u_star - c_star_l
+
+                    if(0.0 >= s_tl):
+
+                        # sample point is star left state
+                        d = d_l*pow(p_star/p_l, 1.0/gamma)
+                        u = u_l + (u_star - un_l)*n[0]
+                        v = v_l + (u_star - un_l)*n[1]
+                        w = w_l + (u_star - un_l)*n[2]
+                        p = p_star
+
+                    else:
+
+                        # sampled point is inside left fan
+                        c = (2.0/(gamma + 1.0))*(c_l + 0.5*(gamma - 1.0)*un_l)
+
+                        d = d_l*pow(c/c_l, 2.0/(gamma - 1.0))
+                        u = u_l + (c - un_l)*n[0]
+                        v = v_l + (c - un_l)*n[1]
+                        w = w_l + (c - un_l)*n[2]
+                        p = p_l*pow(c/c_l, 2.0*gamma/(gamma - 1.0))
+            else:
+
+                # left shock
+                s_l = un_l - c_l*sqrt((gamma + 1.0)*p_star/(2.0*gamma*p_l) + (gamma - 1.0)/(2.0*gamma))
+
+                if(0.0 <= s_l):
+
+                    # sampled point is a left data state
+                    d = d_l
+                    u = u_l
+                    v = v_l
+                    w = w_l
+                    p = p_l
+
+                else:
+
+                    # sampled point is star left state
+                    d = d_l*(p_star/p_l + (gamma - 1.0)/(gamma + 1.0))/(p_star*(gamma - 1.0)/((gamma + 1.0)*p_l) + 1.0)
+                    u = u_l + (u_star - un_l)*n[0]
+                    v = v_l + (u_star - un_l)*n[1]
+                    w = w_l + (u_star - un_l)*n[2]
+                    p = p_star
+
+
+        else:
+
+            # transverse velocity only jumps across the contact
+            #v = v_r
+
+            # sampling point lies to the right of the contact
+            if(p_star >= p_r):
+
+                # right shock
+                s_r = un_r + c_r*sqrt((gamma + 1.0)*p_star/(2.0*gamma*p_r) + (gamma-1.0)/(2.0*gamma))
+
+                if(0.0 >= s_r):
+
+                    # sampled point is right data states
+                    d = d_r
+                    u = u_r
+                    v = v_r
+                    w = w_r
+                    p = p_r
+
+                else:
+
+                    # sample point is star right state
+                    d = d_r*(p_star/p_r + (gamma - 1.0)/(gamma + 1.0))/(p_star*(gamma - 1.0)/((gamma + 1.0)*p_r) + 1.0)
+                    u = u_r + (u_star - un_r)*n[0]
+                    v = v_r + (u_star - un_r)*n[1]
+                    w = w_r + (u_star - un_r)*n[2]
+                    p = p_star
+
+            else:
+
+                # right rarefaction
+                s_hr = un_r + c_r
+
+                if(0.0 >= s_hr):
+
+                    # sample point is right data state
+                    d = d_r
+                    u = u_r
+                    v = v_r
+                    w = w_r
+                    p = p_r
+
+                else:
+
+                    # sound speed of the star state and sound speed
+                    # of the tail of the rarefraction
+                    c_star_r = c_r*pow(p_star/p_r, (gamma-1.0)/(2.0*gamma))
+                    s_tr = u_star + c_star_r
+
+                    if(0.0 <= s_tr):
+
+                        # sample point is star left state
+                        d = d_r*pow(p_star/p_r, 1.0/gamma)
+                        u = u_r + (u_star - un_r)*n[0]
+                        v = v_r + (u_star - un_r)*n[1]
+                        w = w_r + (u_star - un_r)*n[2]
+                        p = p_star
+
+                    else:
+
+                        # sampled point is inside right fan
+                        c = (2.0/(gamma + 1.0))*(c_r - 0.5*(gamma - 1.0)*un_r)
+                        u_tmp = (2.0/(gamma + 1.0))*(-c_r + 0.5*(gamma-1.0)*un_r)
+
+                        d = d_r*pow(c/c_r, 2.0/(gamma - 1.0))
+                        u = u_l + (u_tmp - un_r)*n[0]
+                        v = v_l + (u_tmp - un_r)*n[1]
+                        w = w_l + (u_tmp - un_r)*n[2]
+                        p = p_r*pow(c/c_r, 2.0*gamma/(gamma - 1.0))
+
+
+        # create the flux vector
+        wx = w_face[0,i]
+        wy = w_face[1,i]
+        wz = w_face[2,i]
+        un = u*n[0] + v*n[1] + w*n[2]
+
+        fluxes[0,i] = d*un
+        fluxes[1,i] = d*u*un + p*n[0]
+        fluxes[2,i] = d*v*un + p*n[1]
+        fluxes[3,i] = d*w*un + p*n[2]
+        fluxes[4,i] = (0.5*d*(u**2 + v**2 + w**2) + gamma*p/(gamma-1.0))*un
+
+        # add the deboost term
+        fluxes[4,i] += 0.5*(wx**2 + wy**2 + wz**2)*fluxes[0,i] + wx*fluxes[1,i] + wy*fluxes[2,i] + wz*fluxes[3,i]
+        fluxes[1,i] += wx*fluxes[0,i]
+        fluxes[2,i] += wy*fluxes[0,i]
+        fluxes[3,i] += wz*fluxes[0,i]
