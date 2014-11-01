@@ -1,144 +1,141 @@
 import numpy as np
-from find_boundary_particles import find_boundary_particles
-#
-#
-#
-#  # CODE DOES NOT WORK RIGHT NOW!!!!
-#
-#
+from boundary_base import BoundaryBase
 
-def periodic(particles, particles_index, old_data, neighbor_graph, boundary):
+
+class Periodic2d(BoundaryBase):
     """
-    update the particles with periodic boundaries 
+    2d refect boundary class
     """
-    #---------------------------------------------------------------------------
-    # find new current particles in the domain, ghost + old interior
+    def __init__(self, xl, xr, yl, yr):
 
-    x = particles[:,0]; y = particles[:,1]
+        self.dim = 2
+        self.boundaries = [
+                [xl, xr],   # x dim
+                [yl, yr]    # y dim
+                ]
 
-    # grab domain values
-    left   = boundary["left"];   right = boundary["right"]
-    bottom = boundary["bottom"]; top   = boundary["top"]
+    def update_boundaries(self, particles, particles_index, neighbor_graph, neighbor_graph_size):
+        """
+        create ghost particles from real particles using periodic boundary conditins.
+        """
+        real_indices = particles_index["real"]
 
-    # find all new interior particles
-    i = np.where((left < x) & (x < right))[0]
-    j = np.where((bottom < y) & (y < top))[0]
-    k = np.intersect1d(i, j)
+        # real indices of previous time step 
+        pos = particles[:,real_indices]
 
-    # copy all the interior particles
-    x_new_particles = np.copy(x[k])
-    y_new_particles = np.copy(y[k])
+        # boundary positions
+        xl, xy = self.boundary[0]
+        yl, yy = self.boundary[1]
 
-    # find ghost particles that have become real particles
-    first, last = particles_index["interior"]
-    new_real_i  = np.setdiff1d(k, np.arange(first, last+1))
+        # find real particles that have not left the domain
+        i = np.where(((xl < pos[0,:]) & (pos[0,:] < xr)) & ((yl < pos[1,:]) & (pos[1,:] < yr)))[0]
+        new_indices = real_indices[i]
 
-    #---------------------------------------------------------------------------
-    # find interior particles that have become ghost particles 
+        # find real particles that have left the boundary
+        out_indices = np.setdiff1d(real_indices, new_indices)
 
-    first, last = particles_index["interior"]
-    indicies    = np.arange(first, last+1)
-    
-    x = particles[first:last+1,0]; y = particles[first:last+1,1]
+        # put back the particles that have left the boundary
+        for k, bound in enumerate(self.boundaries):
 
-    # new ghost particles
-    new_ghost_i = np.empty(0, dtype=np.int32)
+            do_min = True
 
-    # particles that left the right boundary are now ghost particles
-    i = np.where(x > right)[0]
-    if i.size: new_ghost_i = np.append(new_ghost_i, indicies[i])
+            ql, qr = bound
+            box_size = qr - ql
 
-    # particles that left the left boundary are now ghost particles
-    i = np.where(x < left)[0]
-    if i.size: new_ghost_i = np.append(new_ghost_i, indicies[i])
+            for qm in bound:
 
-    # particles that left the top boundary are now ghost particles
-    i = np.where(y > top)[0]
-    if i.size: new_ghost_i = np.append(new_ghost_i, indicies[i])
+                if do_min == True:
 
-    # particles that left the bottom boundary are now ghost particles
-    i = np.where(y < bottom)[0]
-    if i.size: new_ghost_i = np.append(new_ghost_i, indicies[i])
+                    # lower boundary 
+                    i = np.where(pos[k,out_indices] < qm)[0]
 
-    #---------------------------------------------------------------------------
-    # find border particles and generate corresponding ghost particles
+                    # put particles back in the domain 
+                    particles[k,out_indices[i]] += box_size
 
-    first, last    = particles_index["ghost"]
-    ghost_indicies = np.arange(first, last+1)
+                    do_min = False
 
-    # remove ghost particles that have become real particles
-    ghost_indicies = np.setdiff1d(ghost_indicies, new_real_i)
+                else:
 
-    # add interior particles that are new ghost particles
-    ghost_indicies = np.append(ghost_indicies, new_ghost_i)
+                    # upper boundary
+                    i = np.where(qm < pos[k,out_indices])[0]
 
-    xg = particles[ghost_indicies,0]; yg = particles[ghost_indicies,1]
-    x = particles[:,0];               y = particles[:,1]
-
-    x_ghost = np.empty(0)
-    y_ghost = np.empty(0)
-
-    # grab all neighbors of ghost particles, this includes border cells and 
-    # neighbors of border cells, then remove ghost particles leaving two layers
-
-    # left boundary
-    i = np.where(right < xg)[0]
-    border = find_boundary_particles(neighbor_graph, ghost_indicies[i], ghost_indicies)
-
-    # reflect particles to the left boundary
-    x_ghost = np.append(x_ghost, (left + right) - (x[border] - 2*(x[border]-right)))
-    y_ghost = np.append(y_ghost, y[border])
-
-    # add the old indicies
-    k = np.append(k, border)
+                    # put particles back in the domain 
+                    particles[k,out_indices[i]] -= box_size
 
 
-    # right boundary 
-    i = np.where(xg < left)[0]
-    border = find_boundary_particles(neighbor_graph, ghost_indicies[i], ghost_indicies)
+        # now create new ghost particles
+        ghost_indices = particles_index["ghost"]
 
-    # reflect particles to the right boundary
-    x_ghost = np.append(x_ghost, (left + right) - (x[border] + 2*(left-x[border])))
-    y_ghost = np.append(y_ghost, y[border])
+        # position of old ghost 
+        old_ghost = particles[:,ghost_indices]
 
-    # add the old indicies
-    k = np.append(k, border)
+        # arrays for position of new ghost particles
+        new_ghost = np.empty((self.dim,0), dtype="float64")
+
+        # hold all the indices of real particles used to create ghost particles
+        ghost_mapping_indices = np.empty(0, dtype="int32")
+
+        # grab all neighbors of ghost particles, this includes border cells and 
+        # neighbors of border cells, then remove ghost particles leaving two layers
+        for k, bound in enumerate(self.boundaries):
+
+            do_min = True
+
+            ql, qr = bound
+            box_size = qr - ql
+
+            for qm in bound:
+
+                if do_min == True:
+                    # lower boundary 
+                    i = np.where(old_ghost[k,:] < qm)[0]
+                    do_min = False
+                else:
+                    # upper boundary
+                    i = np.where(qm < old_ghost[k,:])[0]
+                    box_size *= -1
+
+                # find bordering real particles
+                border = self.find_boundary_particles(neighbor_graph, neighbor_graph_size, ghost_indices[i], ghost_indices)
+
+                # allocate space for new ghost particles
+                tmp = np.empty((self.dim, len(border)), dtype="float64")
+
+                # move particles across boundary
+                tmp[:,:]  = particles[:,border]
+                tmp[k,:] += box_size
+
+                # add the new ghost particles
+                new_ghost = np.concatenate((new_ghost, tmp), axis=1)
+
+                # add real particles indices correspoinding to ghost particles 
+                ghost_mapping_indices = np.append(ghost_mapping_indices, border)
 
 
-    # bottom boundary 
-    i = np.where(yg > top)[0]
-    border = find_boundary_particles(neighbor_graph, ghost_indicies[i], ghost_indicies)
+        # arrays for position of new ghost particles
+        new_real = np.empty((self.dim,0), dtype="float64")
 
-    # reflect particles to the bottom boundary
-    x_ghost = np.append(x_ghost, x[border])
-    y_ghost = np.append(y_ghost, (bottom + top) - (y[border] + 2*(top-y[border])))
+        # hold all the indices of real particles used to create ghost particles
+        ghost_mapping_indices = np.empty(0, dtype="int32")
 
-    # add the old indicies
-    k = np.append(k, border)
+        # grab all neighbors of ghost particles, this includes border cells and 
+        # neighbors of border cells, then remove ghost particles leaving two layers
 
+        # create the new list of particles
+        real_indices = particles_index["real"]
 
-    # top boundary 
-    i = np.where(yg < bottom)[0]
-    border = find_boundary_particles(neighbor_graph, ghost_indicies[i], ghost_indicies)
+        # first the real particles
+        new_particles = np.copy(particles[:,real_indices])
 
-    # reflect particles to the left boundary
-    x_ghost = np.append(x_ghost, x[border])
-    y_ghost = np.append(y_ghost, (bottom + top) - (y[border] - 2*(y[border]-bottom)))
+        # now the new ghost particles
+        new_particles = np.concatenate((new_particles, new_ghost), axis=1)
 
-    # add the old indicies
-    k = np.append(k, border)
+        # update particle information, generate new ghost map
+        ghost_map = {}
+        for i,j in enumerate(np.arange(real_indices.size, new_particles.shape[1])):
+            ghost_map[j] = ghost_mapping_indices[i]
 
-    #---------------------------------------------------------------------------
-    # create the new list of particles
+        particles_index["ghost_map"] = ghost_map
+        particles_index["ghost"] = np.arange(real_indices.size, new_particles.shape[1])
 
-    # first the interior particles
-    particles_index["interior"] = (0, x_new_particles.size - 1)
-    first, last = particles_index["interior"]
-
-    x_new_particles = np.append(x_new_particles, x_ghost)
-    y_new_particles = np.append(y_new_particles, y_ghost)
-
-    particles_index["ghost"] = (last+1, x_new_particles.size - 1)
-    particles_index["total"] = (0,      x_new_particles.size - 1)
-
-    return  np.array(zip(x_new_particles, y_new_particles)), old_data[k]
+        return new_particles
