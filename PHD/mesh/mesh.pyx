@@ -387,6 +387,10 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
             # last vertex of face
             j = face_graph[num_face_verts[ind_n] - 1 + ind_f]
 
+            tri[0,2] = voronoi_verts[j,0]
+            tri[1,2] = voronoi_verts[j,1]
+            tri[2,2] = voronoi_verts[j,2]
+
             # there are n vertices that make up the face but we need
             # only to loop through n-2 vertices
 
@@ -405,10 +409,6 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
                 tri[0,1] = voronoi_verts[p,0]
                 tri[1,1] = voronoi_verts[p,1]
                 tri[2,1] = voronoi_verts[p,2]
-
-                tri[0,2] = voronoi_verts[j,0]
-                tri[1,2] = voronoi_verts[j,1]
-                tri[2,2] = voronoi_verts[j,2]
 
                 # calcualte area of the triangle
                 tri_area = triangle_area(tri)
@@ -466,12 +466,18 @@ def cell_face_info_3d(double[:,::1] particles, int[:] neighbor_graph, int[:] num
                 n[2] = zr/mag
 
                 if area < 1.0E-15:
+                    print
                     print "error"
+                    print "probelm with cell:", id_p
+                    print "neighbor:", id_n
+                    print "coordinates:", xp, yp, zp
                     print "face area:", area
-                    print "norm:", sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])
-                    print "x norm:", n[0]
-                    print "y norm:", n[1]
-                    print "z norm:", n[2], "\n"
+                    print "number of vertices:", num_face_verts[ind_n]
+                    print
+                    #print "norm:", sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2])
+                    #print "x norm:", n[0]
+                    #print "y norm:", n[1]
+                    #print "z norm:", n[2], "\n"
 
                 # store the area of the face
                 face_areas[fi] = area

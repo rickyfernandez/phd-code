@@ -45,7 +45,7 @@ class VoronoiMesh3D(VoronoiMeshBase):
         create 3d voronoi tesselation from particle positions
         """
         # create the voronoi tessellation
-        vor = Voronoi(particles.T, qhull_options="Qbb")
+        vor = Voronoi(particles.T)
 
         num_particles = particles.shape[1]
 
