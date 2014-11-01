@@ -8,8 +8,8 @@ def simulation():
             "max_steps" : 1000,
             "max_time" : 0.15,
             "output_name" : "Sod",
-            "output_cycle" : 1000
-            #"regularization" : True
+            "output_cycle" : 1000,
+            "regularization" : True
             }
 
     gamma = parameters["gamma"]
@@ -42,6 +42,18 @@ def simulation():
                 y[part] = q[j]
                 z[part] = q[k]
                 part += 1
+
+    # perturb particles to break symmetry 
+    indices = ((0.5-dx) <= x) & (x <= (0.5+dx))
+    num_points = np.sum(indices)
+    x[indices] += 1.0E-3*dx*(2.0*np.random.random(num_points)-1.0)
+    y[indices] += 1.0E-3*dq*(2.0*np.random.random(num_points)-1.0)
+    z[indices] += 1.0E-3*dq*(2.0*np.random.random(num_points)-1.0)
+
+    num_points = np.sum(~indices)
+    y[~indices] += 1.0E-3*dq*(2.0*np.random.random(num_points)-1.0)
+    z[~indices] += 1.0E-3*dq*(2.0*np.random.random(num_points)-1.0)
+    print "interface has", num_points, "interface points\n"
 
     # find all particles inside the unit box 
     indices = (((0. <= x) & (x <= 1.)) & ((0. <= y) & (y <= .1)) & ((0. <= z) & (z <= .1)))
@@ -83,13 +95,25 @@ if __name__ == "__main__":
     plt.figure(figsize=(8,8))
 
     plt.subplot(3,1,1)
-    plt.scatter(particles[0,real], data[0,real], facecolors="none", edgecolors="b")
-    plt.ylim(0,1.1)
+    plt.scatter(particles[0,real], particles[2,real], facecolors="none", edgecolors="b")
     plt.xlim(0,1)
+    plt.ylim(0,.1)
+    plt.xlabel("x")
+    plt.ylabel("z")
 
     plt.subplot(3,1,2)
-    plt.scatter(particles[1,real], data[0,real], facecolors="none", edgecolors="b")
-    plt.ylim(0,1.1)
+    plt.scatter(particles[0,real], particles[1,real], facecolors="none", edgecolors="b")
     plt.xlim(0,1)
-    plt.show()
+    plt.ylim(0,.1)
+    plt.xlabel("x")
+    plt.ylabel("y")
 
+    plt.subplot(3,1,3)
+    plt.scatter(particles[1,real], particles[2,real], facecolors="none", edgecolors="b")
+    plt.xlim(0,.1)
+    plt.ylim(0,.1)
+    plt.xlabel("y")
+    plt.ylabel("z")
+
+    plt.tight_layout()
+    plt.show()
