@@ -21,7 +21,7 @@ cdef struct Oct:
     np.int64_t center[3]   # center of coordinates of oct
 
     Oct*  parent           # parent of oct
-    Oct** children         # children nodes, 8 of them
+    Oct* children          # children nodes, 4 of them
 
 
 cdef class Octree:
@@ -35,13 +35,13 @@ cdef class Octree:
 
         self.sorted_particle_keys = np.ascontiguousarray(sorted_particle_keys, dtype=np.int64)
 
-        self.root = NULL
         self.max_leaf_particles = 4
 
         # build root
         self.root = <Oct*>stdlib.malloc(sizeof(Oct))
         if self.root == <Oct*> NULL:
             raise MemoryError
+        self.root.children = NULL
 
         self.root.sfc_key = 0
         self.root.number_sfc_keys = total_number_of_sfc_keys
@@ -65,8 +65,8 @@ cdef class Octree:
     cdef void fill_particles_in_oct(self, Oct* o):
 
         # create oct children
-        o.children = <Oct**> stdlib.malloc(sizeof(void*)*4)
-        if o.children == <Oct**> NULL:
+        o.children = <Oct*>stdlib.malloc(sizeof(Oct)*4)
+        if o.children == <Oct*> NULL:
             raise MemoryError
 
         # pass parent data to children 
@@ -80,6 +80,7 @@ cdef class Octree:
             o.children[i].sfc_start_key   = o.sfc_start_key + i*o.number_sfc_keys/4
             o.children[i].number_particles = 0
             o.children[i].box_length = o.box_length/2.0
+            o.children[i].children = NULL
 
         cdef  np.uint64_t key
         cdef int child_oct_index
@@ -135,15 +136,15 @@ cdef class Octree:
 ##        self.iterate(self.root, data_list)
 ##
 ##
-##    cdef free_octs(self, Oct* o):
-##        cdef int i
-##        for i in range(4):
-##            if o.children[i].leaf == 0:
-##                self.free_octs(o.children[i])
-##            stdlib.free(o)
-##
-##
-##    def __dealloc__(self):
-##        if self.root == NULL:
-##            return
-##        self.free_octs(self.root)
+    cdef free_octs(self, Oct* o):
+        cdef int i
+        for i in range(4):
+            if o.children[i].leaf == 0:
+                self.free_octs(o.children[i])
+            stdlib.free(o.children[i])
+
+
+    def __dealloc__(self):
+        if self.root.children != NULL
+            self.free_octs(self.root)
+        free(self.root)
