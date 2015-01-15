@@ -4,13 +4,32 @@ cimport numpy as np
 cimport libc.stdlib as stdlib
 cimport cython
 
+key_index_2d = [0, 1, 3, 2]
+
+cdef np.uint64_t hilbert_key_2d(np.uint32_t x, np.uint32_t y, int order):
+
+    cdef np.uint64_t key = 0
+    cdef int i, xbit, ybit
+    for i in range(order-1, -1, -1):
+
+        xbit = 1 if x & (1 << i) else 0
+        ybit = 1 if y & (1 << i) else 0
+
+        if   xbit == 0 and ybit == 0: x, y = y, x
+        elif xbit == 1 and ybit == 0: x, y = ~y, ~x
+
+        key = (key << 2) + key_index_2d[(xbit << 1) + ybit]
+
+    return key
+
+
 cdef struct Oct:
 
-    np.uint64_t sfc_key     # space filling curve key for oct at given level 
+    np.uint64_t sfc_key     # space filling curve key for oct
     np.uint32_t level       # level of octree
 
     np.uint64_t sfc_start_key         # first key in space filling curve cut
-    np.uint64_t number_sfc_keys       # total number of space filling keys in this oct
+    np.uint64_t number_sfc_keys       # total number of possible space filling keys in this oct
 
     np.uint64_t particle_index_start  # index of first particle in space filling curve cut
     np.uint64_t number_particles      # number of particles in cut
@@ -27,13 +46,15 @@ cdef struct Oct:
 cdef class Octree:
 
     cdef readonly np.ndarray sorted_particle_keys
+    cdef readonly int order
 
     cdef np.int32_t max_leaf_particles
     cdef Oct* root
 
-    def __init__(self, sorted_particle_keys, domain_center, domain_size, total_number_of_sfc_keys):
+    def __init__(self, sorted_particle_keys, order):
 
         self.sorted_particle_keys = np.ascontiguousarray(sorted_particle_keys, dtype=np.int64)
+        self.order = order
 
         self.max_leaf_particles = 4
 
@@ -44,15 +65,15 @@ cdef class Octree:
         self.root.children = NULL
 
         self.root.sfc_key = 0
-        self.root.number_sfc_keys = total_number_of_sfc_keys
+        self.root.number_sfc_keys = 2**(2*order)
         self.root.particle_index_start = 0
         self.root.number_particles = sorted_particle_keys.shape[0]
         self.root.leaf = 1
-        self.root.box_length = domain_size
+        self.root.box_length = 2**(order)
 
         cdef int i
         for i in range(3):
-            self.root.center[i] = domain_center[i]
+            self.root.center[i] = 0.5*2**(order)
 
         # build octree
         self.build_tree()
@@ -87,8 +108,8 @@ cdef class Octree:
         for i in range(2):
             for j in range(2):
 
-                key = hilbert(o.center[0] + (2*i-1)*o.box_length/2,
-                        o.center[i] + (2*j-1)*o.box_length/2, self.order)
+                key = hilbert_key_2d( <np.uint32_t> (o.center[0] + (2*i-1)*o.box_length/2),
+                        <np.uint32_t> (o.center[i] + (2*j-1)*o.box_length/2, self.order), self.order)
 
                 # which oct does this key belong to
                 child_oct_index = (key - o.sfc_start_key)/(o.number_sfc_keys/4)
@@ -121,21 +142,21 @@ cdef class Octree:
         pass
 
 
-##    cdef iterate(self, Oct* o, list data_list):
-##
-##        data_list.append([o.center, o.box_length])
-##
-##        cdef int i
-##        for i in range(4):
-##            if o.children[i] == NULL:
-##                self.iterate(o.children[i], data_list)
-##
-##
-##    def dump_data(self):
-##        list data_list = []
-##        self.iterate(self.root, data_list)
-##
-##
+    cdef iterate(self, Oct* o, list data_list):
+
+        data_list.append([o.center, o.box_length, o.particle_index_start, o.number_particles])
+
+        cdef int i
+        if o.children != NULL:
+            for i in range(4):
+                self.iterate(o.children[i], data_list)
+
+
+    def dump_data(self):
+        cdef list data_list = []
+        self.iterate(self.root, data_list)
+
+
     cdef free_octs(self, Oct* o):
         cdef int i
         for i in range(4):
