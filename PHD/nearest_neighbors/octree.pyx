@@ -125,7 +125,6 @@ cdef class Octree:
 
             # which oct does this particle belong to
             child_oct_index = (self.sorted_particle_keys[i] - o.sfc_start_key)/(o.number_sfc_keys/4)
-            if child_oct_index < 0 or child_oct_index > 3:
 
             # if child node is empty then this is the first particle in the cut
             if o.children[child_oct_index].number_particles == 0:
