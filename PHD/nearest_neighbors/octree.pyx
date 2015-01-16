@@ -162,15 +162,14 @@ cdef class Octree:
         return data_list
 
 
-#    cdef free_octs(self, Oct* o):
-#        cdef int i
-#        for i in range(4):
-#            if o.children[i].leaf == 0:
-#                self.free_octs(&o.children[i])
-#            stdlib.free(o.children)
-#
-#
-#    def __dealloc__(self):
-#        if self.root.children != NULL:
-#            self.free_octs(self.root)
-#        stdlib.free(self.root)
+    cdef void free_octs(self, Oct* o):
+        cdef int i
+        if o.children != NULL:
+            for i in range(4):
+                self.free_octs(&o.children[i])
+            stdlib.free(o.children)
+
+
+    def __dealloc__(self):
+        self.free_octs(self.root)
+        stdlib.free(self.root)
