@@ -3,6 +3,7 @@
 *.png
 *.pyc
 *.c
+*.cpp
 *.html
 *.hdf5
 *.so

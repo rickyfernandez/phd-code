@@ -20,7 +20,8 @@ sorted_keys = np.array(keys[sorted_indices], dtype=np.int64)
 
 
 # create octree
-tree = octree.Octree(sorted_keys, 4, order)
+tree = octree.Octree(sorted_keys, 4, order, 1, 1)
+tree.build_tree()
 
 # create plot
 current_axis = plt.gca()
@@ -32,7 +33,7 @@ for node in tree.dump_data():
 
 key_index = random.choice(range(sorted_keys.shape[0]))
 key = sorted_keys[key_index]
-node = tree.find_oct_by_key(key)
+node = tree.find_oct(key)
 print node
 x = node[0]/2.0**order
 y = node[1]/2.0**order
