@@ -55,6 +55,7 @@ cdef class Octree:
     cdef readonly int order                           # number of bits per dimension
     cdef readonly int process                         # rank of process
     cdef readonly int number_process                  # number of process 
+    cdef readonly int number_nodes                    # number of created nodes
 
     cdef Oct* root                                    # pointer to the root of the octree
     cdef np.uint32_t xmin, xmax, ymin, ymax           # boundaries of the octree
@@ -81,6 +82,8 @@ cdef class Octree:
         if self.root == <Oct*> NULL:
             raise MemoryError
 
+        self.number_nodes = 1
+
         # create root node which holds all hilbert possible keys in a
         # grid of 2^order resolution per dimension
         self.root.children = NULL
@@ -99,15 +102,17 @@ cdef class Octree:
 
 
     def build_tree(self):
-        self.fill_particles_in_oct(self.root, self.max_leaf_particles)
+        self._fill_particles_in_oct(self.root, self.max_leaf_particles)
 
 
-    cdef void create_oct_children(self, Oct* o):
+    cdef void _create_oct_children(self, Oct* o):
 
         # create oct children
         o.children = <Oct*>stdlib.malloc(sizeof(Oct)*4)
         if o.children == <Oct*> NULL:
             raise MemoryError
+
+        self.number_nodes += 4
 
         # pass parent data to children 
         cdef int i, j
@@ -157,9 +162,11 @@ cdef class Octree:
         o.leaf = 0
 
 
-    cdef void fill_particles_in_oct(self, Oct* o, np.uint64_t max_leaf_particles):
+    cdef void _fill_particles_in_oct(self, Oct* o, np.uint64_t max_leaf_particles):
 
-        self.create_oct_children(o)
+        cdef int i
+
+        self._create_oct_children(o)
 
         # loop over parent particles and assign them to proper child
         for i in range(o.particle_index_start, o.particle_index_start + o.number_particles):
@@ -178,17 +185,22 @@ cdef class Octree:
         # if child has more particles then the maximum allowed, then subdivide 
         for i in range(4):
             if o.children[i].number_particles > max_leaf_particles:
-                self.fill_particles_in_oct(&o.children[i], max_leaf_particles)
+                self._fill_particles_in_oct(&o.children[i], max_leaf_particles)
 
 
-    cdef void count_leaves(self, Oct* o, int* num_leaves):
+    cdef void _count_leaves(self, Oct* o, int* num_leaves):
 
         cdef int i
         if o.children == NULL:
             num_leaves[0] += 1
         else:
             for i in range(4):
-                self.count_leaves(&o.children[i], num_leaves)
+                self._count_leaves(&o.children[i], num_leaves)
+
+    def count_leaves(self):
+        cdef int num_leaves = 0
+        self._count_leaves(self.root, &num_leaves)
+        return num_leaves
 
 
     cdef void _collect_leaf_keys_levels(self, Oct* o, np.uint64_t *keys, np.uint32_t *levels,
@@ -216,7 +228,7 @@ cdef class Octree:
         cdef int counter = 0
 
         # count the number of leaves in the tree 
-        self.count_leaves(self.root, &num_leaves)
+        self._count_leaves(self.root, &num_leaves)
         #return num_leaves
 
         cdef np.uint64_t[:]  keys   = np.empty(num_leaves, dtype=np.uint64)
@@ -229,14 +241,15 @@ cdef class Octree:
 
         self._collect_leaf_keys_levels(self.root, &keys[0], &levels[0], &x[0], &y[0], &box_width[0], &counter)
 
+        # for debugging i'm returning x, y coords and box width
         return np.asarray(keys), np.asarray(levels), np.asarray(x), np.asarray(y), np.asarray(box_width)
 
 
 
 
-#    cdef void build_partial_tree(self):
+#    cdef void _build_partial_tree(self):
 #        cdef np.uint64_t max_leaf = <np.uint64_t> (0.1*self.local_number_particles/self.number_process)
-#        self.fill_particles_in_oct(self.root, max_leaf)
+#        self._fill_particles_in_oct(self.root, max_leaf)
 
 
 #
@@ -245,7 +258,7 @@ cdef class Octree:
 #
 #        Oct *o
 #        for i in xrange(keys.shap[0]):
-#            o = self.find_oct_by_key_level(key, level)
+#            o = self._find_oct_by_key_level(key, level)
 #            if o.level == level:
 #                o = create_process_octs(key, level)
 #            o.process = p
@@ -255,20 +268,20 @@ cdef class Octree:
 
 #    cdef *Oct create_process_octs(self, Oct*, key, level):
 #
-#        create_oct_children(o)
+#        _create_oct_children(o)
 #
 #        # which oct does this key belong to
 #        child_oct_index = (keys - o.sfc_start_key)/(o.number_sfc_keys/4)
 #
 #        if o.children[child_oct_index].level != level:
-#            return self.fill_particles_in_oct(&o.children[child_oct_index], level)
+#            return self._fill_particles_in_oct(&o.children[child_oct_index], level)
 #        else:
 #            return &o.children[child_oct_index]
 
 
 
 
-    cdef Oct* find_oct_by_key(self, np.uint64_t key):
+    cdef Oct* _find_oct_by_key(self, np.uint64_t key):
 
         cdef Oct* candidate = self.root
         cdef int child_oct_index
@@ -280,7 +293,7 @@ cdef class Octree:
         return candidate
 
 
-    cdef Oct* find_oct_by_key_level(self, np.uint64_t key, np.uint32_t level):
+    cdef Oct* _find_oct_by_key_level(self, np.uint64_t key, np.uint32_t level):
 
         cdef Oct* candidate = self.root
         cdef int child_oct_index
@@ -292,7 +305,7 @@ cdef class Octree:
         return candidate
 
 
-    cdef void subneighbor_find(self, list oct_list, Oct* candidate, int i, int j):
+    cdef void _subneighbor_find(self, list oct_list, Oct* candidate, int i, int j):
 
         if i == j == 1: return
 
@@ -328,7 +341,7 @@ cdef class Octree:
                 child_cand = &candidate.children[candidate.children_index[child_index]]
 
                 if child_cand.children != NULL:
-                    self.subneighbor_find(oct_list, child_cand, i, j)
+                    self._subneighbor_find(oct_list, child_cand, i, j)
                 else:
                     oct_list.append([child_cand.center[0], child_cand.center[1], child_cand.box_length,\
                             child_cand.level, child_cand.particle_index_start, child_cand.number_particles])
@@ -347,7 +360,7 @@ cdef class Octree:
         cdef set[np.uint64_t].iterator it
 
         # find the oct leaf that the search particle lives in
-        o = self.find_oct_by_key(key)
+        o = self._find_oct_by_key(key)
 
         # find neighbor octs by shifting leaf oct key by half box length
         for i in range(3):
@@ -364,7 +377,7 @@ cdef class Octree:
                     neighbor_oct_key = hilbert_key_2d(x, y, self.order)
 
                     # find neighbor oct that is at max the same level of query oct
-                    neighbor = self.find_oct_by_key_level(neighbor_oct_key, o.level)
+                    neighbor = self._find_oct_by_key_level(neighbor_oct_key, o.level)
 
                     # make sure we don't add duplicate neighbors
                     if oct_key_set.find(neighbor.sfc_key) == oct_key_set.end():
@@ -375,7 +388,7 @@ cdef class Octree:
 
                         # check if their are sub octs, if so collet them too
                         if neighbor.children != NULL:
-                            self.subneighbor_find(oct_list, neighbor, i, j)
+                            self._subneighbor_find(oct_list, neighbor, i, j)
                         else:
                             oct_list.append([neighbor.center[0], neighbor.center[1], neighbor.box_length,\
                                     neighbor.level, neighbor.particle_index_start, neighbor.number_particles])
@@ -386,13 +399,13 @@ cdef class Octree:
     # temporary function to do outputs in python
     def find_oct(self, np.uint64_t key):
 
-        cdef Oct* o = self.find_oct_by_key(key)
+        cdef Oct* o = self._find_oct_by_key(key)
         return [o.center[0], o.center[1], o.box_length,
             o.level, o.particle_index_start, o.number_particles]
 
 
     # temporary function to do outputs in python
-    cdef iterate(self, Oct* o, list data_list):
+    cdef _iterate(self, Oct* o, list data_list):
 
         data_list.append([o.center[0], o.center[1], o.box_length,
             o.level, o.particle_index_start, o.number_particles])
@@ -400,25 +413,27 @@ cdef class Octree:
         cdef int i
         if o.children != NULL:
             for i in range(4):
-                self.iterate(&o.children[i], data_list)
+                self._iterate(&o.children[i], data_list)
 
 
+    # temporary function to do outputs in python
     def dump_data(self):
         cdef list data_list = []
-        self.iterate(self.root, data_list)
+        self._iterate(self.root, data_list)
         return data_list
 
 
-    cdef void free_octs(self, Oct* o):
+    # temporary function to do outputs in python
+    cdef void _free_octs(self, Oct* o):
         cdef int i
         if o.children != NULL:
             for i in range(4):
-                self.free_octs(&o.children[i])
+                self._free_octs(&o.children[i])
             stdlib.free(o.children)
 
 
     def __dealloc__(self):
-        self.free_octs(self.root)
+        self._free_octs(self.root)
         stdlib.free(self.root)
 
 # --- this needs to be worked on later --- it improves neighbor search
