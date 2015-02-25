@@ -5,60 +5,49 @@ cimport libc.stdlib as stdlib
 cimport cython
 
 from libcpp.set cimport set
-
-# turn this to a c array
-key_index_2d = [0, 1, 3, 2]
-
-cpdef np.uint64_t hilbert_key_2d(np.uint32_t x, np.uint32_t y, int order):
-
-    cdef np.uint64_t key = 0
-    cdef int i, xbit, ybit
-    for i in range(order-1, -1, -1):
-
-        xbit = 1 if x & (1 << i) else 0
-        ybit = 1 if y & (1 << i) else 0
-
-        if   xbit == 0 and ybit == 0: x, y = y, x
-        elif xbit == 1 and ybit == 0: x, y = ~y, ~x
-
-        key = (key << 2) + key_index_2d[(xbit << 1) + ybit]
-
-    return key
+from PHD.hilbert.hilbert import hilbert_key_2d
 
 
-cdef struct Oct:
+cdef struct LeafToSend:
 
-    np.uint64_t sfc_key      # space filling curve key for oct
-    np.uint32_t level        # level of octree
+    np.int64_t particle_index_start
+    np.uint64_t number_particles
+    int process
+
+
+cdef struct Node:
+
+    np.uint64_t sfc_key      # space filling curve key for node
+    np.uint32_t level        # level of tree
 
     np.uint64_t sfc_start_key         # first key in space filling curve cut
-    np.uint64_t number_sfc_keys       # total number of possible space filling keys in this oct
+    np.uint64_t number_sfc_keys       # total number of possible space filling keys in this node
 
-    np.int64_t particle_index_start   # index of first particle in space filling curve cut
+    np.int64_t  particle_index_start  # index of first particle in space filling curve cut
     np.uint64_t number_particles      # number of particles in cut
 
-    int leaf                 # is this oct a leaf
+    int leaf                 # is this node a leaf
 
-    np.float64_t box_length  # side length of oct
-    np.float64_t center[2]   # center of coordinates of oct
+    np.float64_t box_length  # side length of node
+    np.float64_t center[2]   # center of coordinates of node
 
-    Oct* parent              # parent of oct
-    Oct* children            # children nodes, 4 of them
-    int  children_index[4]   # index to point to the right child
+    Node* parent             # parent of node
+    Node* children           # children nodes, 4 of them
+    int   children_index[4]   # index to point to the right child
 
 
-cdef class Octree:
+cdef class QuadTree:
 
 
     cdef readonly np.ndarray sorted_particle_keys     # hilbert keys of the particles in key order
-    cdef readonly np.uint64_t max_leaf_particles      # criteria to subdivide a oct 
+    cdef readonly np.uint64_t max_leaf_particles      # criteria to subdivide a node 
     cdef readonly int order                           # number of bits per dimension
     cdef readonly int process                         # rank of process
     cdef readonly int number_process                  # number of process 
     cdef readonly int number_nodes                    # number of created nodes
 
-    cdef Oct* root                                    # pointer to the root of the octree
-    cdef np.uint32_t xmin, xmax, ymin, ymax           # boundaries of the octree
+    cdef Node* root                                   # pointer to the root of the tree
+    cdef np.uint32_t xmin, xmax, ymin, ymax           # boundaries of the tree
     cdef np.uint64_t local_number_particles           # local number of particles in process
 
 
@@ -77,9 +66,9 @@ cdef class Octree:
         self.local_number_particles = sorted_particle_keys.shape[0]
         self.max_leaf_particles = max_leaf_particles
 
-        # build root of octree
-        self.root = <Oct*>stdlib.malloc(sizeof(Oct))
-        if self.root == <Oct*> NULL:
+        # build root of tree
+        self.root = <Node*>stdlib.malloc(sizeof(Node))
+        if self.root == <Node*> NULL:
             raise MemoryError
 
         self.number_nodes = 1
@@ -102,14 +91,14 @@ cdef class Octree:
 
 
     def build_tree(self):
-        self._fill_particles_in_oct(self.root, self.max_leaf_particles)
+        self._fill_particles_in_node(self.root, self.max_leaf_particles)
 
 
-    cdef void _create_oct_children(self, Oct* o):
+    cdef void _create_node_children(self, Node* node):
 
-        # create oct children
-        o.children = <Oct*>stdlib.malloc(sizeof(Oct)*4)
-        if o.children == <Oct*> NULL:
+        # create children nodes
+        node.children = <Node*>stdlib.malloc(sizeof(Node)*4)
+        if node.children == <Node*> NULL:
             raise MemoryError
 
         self.number_nodes += 4
@@ -118,198 +107,204 @@ cdef class Octree:
         cdef int i, j
         for i in range(4):
 
-            if o.number_sfc_keys < 4:
+            if node.number_sfc_keys < 4:
                 raise RuntimeError("Not enough hilbert keys to be split")
 
-            o.children[i].parent = o
-            o.children[i].leaf = 1
-            o.children[i].level = o.level + 1
+            node.children[i].parent = node
+            node.children[i].leaf = 1
+            node.children[i].level = node.level + 1
 
             # each child has a cut of hilbert keys from parent
-            o.children[i].number_sfc_keys = o.number_sfc_keys/4
-            o.children[i].sfc_start_key   = o.sfc_start_key + i*o.number_sfc_keys/4
+            node.children[i].number_sfc_keys = node.number_sfc_keys/4
+            node.children[i].sfc_start_key   = node.sfc_start_key + i*node.number_sfc_keys/4
 
-            o.children[i].particle_index_start = -1
-            o.children[i].number_particles = 0
+            node.children[i].particle_index_start = -1
+            node.children[i].number_particles = 0
 
-            o.children[i].box_length = o.box_length/2.0
-            o.children[i].children = NULL
+            node.children[i].box_length = node.box_length/2.0
+            node.children[i].children = NULL
 
 
         # create children center coordinates by shifting parent coordinates by 
         # half box length in each dimension
-        cdef  np.uint64_t key
-        cdef int child_oct_index
+        cdef np.uint64_t key
+        cdef int child_node_index
         for i in range(2):
             for j in range(2):
 
                 # compute hilbert key for each child
-                key = hilbert_key_2d( <np.uint32_t> (o.center[0] + (2*i-1)*o.box_length/4.0),
-                        <np.uint32_t> (o.center[1] + (2*j-1)*o.box_length/4.0), self.order)
+                key = hilbert_key_2d( <np.uint32_t> (node.center[0] + (2*i-1)*node.box_length/4.0),
+                        <np.uint32_t> (node.center[1] + (2*j-1)*node.box_length/4.0), self.order)
 
-                # find which oct this key belongs to it and store the key
+                # find which node this key belongs to it and store the key
                 # center coordinates
-                child_oct_index = (key - o.sfc_start_key)/(o.number_sfc_keys/4)
-                o.children[child_oct_index].sfc_key = key
-                o.children[child_oct_index].center[0] = o.center[0] + (2*i-1)*o.box_length/4.0
-                o.children[child_oct_index].center[1] = o.center[1] + (2*j-1)*o.box_length/4.0
+                child_node_index = (key - node.sfc_start_key)/(node.number_sfc_keys/4)
+                node.children[child_node_index].sfc_key = key
+                node.children[child_node_index].center[0] = node.center[0] + (2*i-1)*node.box_length/4.0
+                node.children[child_node_index].center[1] = node.center[1] + (2*j-1)*node.box_length/4.0
 
                 # the children are in hilbert order, this mapping allows to grab children
                 # in bottom-left, upper-left, bottom-right, upper-right order
-                o.children_index[(i<<1) + j] = child_oct_index
+                node.children_index[(i<<1) + j] = child_node_index
 
         # parent is no longer a leaf
-        o.leaf = 0
+        node.leaf = 0
 
 
-    cdef void _fill_particles_in_oct(self, Oct* o, np.uint64_t max_leaf_particles):
+    cdef void _fill_particles_in_node(self, Node* node, np.uint64_t max_leaf_particles):
 
-        cdef int i
+        cdef int i, child_node_index
 
-        self._create_oct_children(o)
+        self._create_node_children(node)
 
         # loop over parent particles and assign them to proper child
-        for i in range(o.particle_index_start, o.particle_index_start + o.number_particles):
+        for i in range(node.particle_index_start, node.particle_index_start + node.number_particles):
 
-            # which oct does this particle belong to
-            child_oct_index = (self.sorted_particle_keys[i] - o.sfc_start_key)/(o.number_sfc_keys/4)
+            # which node does this particle belong to
+            child_node_index = (self.sorted_particle_keys[i] - node.sfc_start_key)/(node.number_sfc_keys/4)
 
             # if child node is empty then this is the first particle in the cut
-            if o.children[child_oct_index].number_particles == 0:
-                o.children[child_oct_index].particle_index_start = i
+            if node.children[child_node_index].number_particles == 0:
+                node.children[child_node_index].particle_index_start = i
 
             # update the number of particles for child
-            o.children[child_oct_index].number_particles += 1
+            node.children[child_node_index].number_particles += 1
 
 
         # if child has more particles then the maximum allowed, then subdivide 
         for i in range(4):
-            if o.children[i].number_particles > max_leaf_particles:
-                self._fill_particles_in_oct(&o.children[i], max_leaf_particles)
+            if node.children[i].number_particles > max_leaf_particles:
+                self._fill_particles_in_node(&node.children[i], max_leaf_particles)
 
 
-    cdef void _count_leaves(self, Oct* o, int* num_leaves):
+    cdef void _count_leaves_with_particles(self, Node* node, int* num):
 
         cdef int i
-        if o.children == NULL:
-            num_leaves[0] += 1
+        if node.children == NULL:
+            if node.number_particles != 0:
+                num[0] += 1
         else:
             for i in range(4):
-                self._count_leaves(&o.children[i], num_leaves)
-
-    def count_leaves(self):
-        cdef int num_leaves = 0
-        self._count_leaves(self.root, &num_leaves)
-        return num_leaves
+                self._count_leaves_with_particles(&node.children[i], num)
 
 
-    cdef void _collect_leaf_keys_levels(self, Oct* o, np.uint64_t *keys, np.uint32_t *levels,
+    def count_leaves_with_particles(self):
+        cdef int num = 0
+        self._count_leaves_with_particles(self.root, &num)
+        return num
+
+
+    cdef void _collect_keys_levels_for_export(self, Node* node, np.uint64_t *keys, np.uint32_t *levels,
             np.float64_t *x, np.float64_t *y, np.float64_t *box_lengths, int* counter):
 
         cdef int i
-        if o.children == NULL:
-            keys[counter[0]]   = o.sfc_key
-            levels[counter[0]] = o.level
-            box_lengths[counter[0]] = o.box_length
+        if node.children == NULL:
+            if node.number_particles != 0:
 
-            x[counter[0]] = o.center[0]
-            y[counter[0]] = o.center[1]
+                keys[counter[0]]   = node.sfc_key
+                levels[counter[0]] = node.level
+                box_lengths[counter[0]] = node.box_length
 
-            counter[0] += 1
+                x[counter[0]] = node.center[0]
+                y[counter[0]] = node.center[1]
+
+                counter[0] += 1
 
         else:
             for i in range(4):
-                self._collect_leaf_keys_levels(&o.children[i], keys, levels, x, y, box_lengths, counter)
+                self._collect_keys_levels_for_export(&node.children[i], keys, levels, x, y,\
+                        box_lengths, counter)
 
 
-    def collect_leaf_keys_levels(self):
+    def collect_leaves_with_particles_for_export(self):
 
-        cdef int num_leaves = 0
+        cdef int num = 0
         cdef int counter = 0
 
-        # count the number of leaves in the tree 
-        self._count_leaves(self.root, &num_leaves)
+        # count the number of leaves with particles in the tree 
+        self._count_leaves_with_particles(self.root, &num)
         #return num_leaves
 
-        cdef np.uint64_t[:]  keys   = np.empty(num_leaves, dtype=np.uint64)
-        cdef np.uint32_t[:]  levels = np.empty(num_leaves, dtype=np.uint32)
+        cdef np.uint64_t[:]  keys   = np.empty(num, dtype=np.uint64)
+        cdef np.uint32_t[:]  levels = np.empty(num, dtype=np.uint32)
 
-        cdef np.float64_t[:] x = np.empty(num_leaves, dtype=np.float64)
-        cdef np.float64_t[:] y = np.empty(num_leaves, dtype=np.float64)
+        cdef np.float64_t[:] x = np.empty(num, dtype=np.float64)
+        cdef np.float64_t[:] y = np.empty(num, dtype=np.float64)
 
-        cdef np.float64_t[:] box_width = np.empty(num_leaves, dtype=np.float64)
+        cdef np.float64_t[:] box_width = np.empty(num, dtype=np.float64)
 
-        self._collect_leaf_keys_levels(self.root, &keys[0], &levels[0], &x[0], &y[0], &box_width[0], &counter)
+        self._collect_keys_levels_for_export(self.root, &keys[0], &levels[0], &x[0], &y[0],\
+                &box_width[0], &counter)
 
         # for debugging i'm returning x, y coords and box width
         return np.asarray(keys), np.asarray(levels), np.asarray(x), np.asarray(y), np.asarray(box_width)
 
 
+#    def coolect_boundary_particles(self):
 
 
 #    cdef void _build_partial_tree(self):
 #        cdef np.uint64_t max_leaf = <np.uint64_t> (0.1*self.local_number_particles/self.number_process)
-#        self._fill_particles_in_oct(self.root, max_leaf)
+#        self._fill_particles_in_node(self.root, max_leaf)
 
 
-#
-#
+
 #    def fill_process_leaves(self, np.uint64_t[:] keys, np.uint32[:] level, int p):
 #
-#        Oct *o
+#        Node *node
 #        for i in xrange(keys.shap[0]):
-#            o = self._find_oct_by_key_level(key, level)
-#            if o.level == level:
-#                o = create_process_octs(key, level)
-#            o.process = p
+#            node = self._find_node_by_key_level(key, level)
+#            if node.level == level:
+#                node = create_process_node(key, level)
+#            node.process = p
 
 
 
 
-#    cdef *Oct create_process_octs(self, Oct*, key, level):
+#    cdef *Node create_process_nodes(self, Node* node, key, level):
 #
-#        _create_oct_children(o)
+#        _create_node_children(o)
 #
-#        # which oct does this key belong to
-#        child_oct_index = (keys - o.sfc_start_key)/(o.number_sfc_keys/4)
+#        # which node does this key belong to
+#        child_node_index = (keys - node.sfc_start_key)/(node.number_sfc_keys/4)
 #
-#        if o.children[child_oct_index].level != level:
-#            return self._fill_particles_in_oct(&o.children[child_oct_index], level)
+#        if o.children[child_node_index].level != level:
+#            return self._fill_particles_in_node(&o.children[child_node_index], level)
 #        else:
-#            return &o.children[child_oct_index]
+#            return &o.children[child_node_index]
 
 
 
 
-    cdef Oct* _find_oct_by_key(self, np.uint64_t key):
+    cdef Node* _find_node_by_key(self, np.uint64_t key):
 
-        cdef Oct* candidate = self.root
-        cdef int child_oct_index
+        cdef Node* candidate = self.root
+        cdef int child_node_index
 
         while candidate.leaf != 1:
-            child_oct_index = (key - candidate.sfc_start_key)/(candidate.number_sfc_keys/4)
-            candidate = &candidate.children[child_oct_index]
+            child_node_index = (key - candidate.sfc_start_key)/(candidate.number_sfc_keys/4)
+            candidate = &candidate.children[child_node_index]
 
         return candidate
 
 
-    cdef Oct* _find_oct_by_key_level(self, np.uint64_t key, np.uint32_t level):
+    cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level):
 
-        cdef Oct* candidate = self.root
-        cdef int child_oct_index
+        cdef Node* candidate = self.root
+        cdef int child_node_index
 
         while candidate.level < level and candidate.leaf != 1:
-            child_oct_index = (key - candidate.sfc_start_key)/(candidate.number_sfc_keys/4)
-            candidate = &candidate.children[child_oct_index]
+            child_node_index = (key - candidate.sfc_start_key)/(candidate.number_sfc_keys/4)
+            candidate = &candidate.children[child_node_index]
 
         return candidate
 
 
-    cdef void _subneighbor_find(self, list oct_list, Oct* candidate, int i, int j):
+    cdef void _subneighbor_find(self, list node_list, Node* candidate, int i, int j):
 
         if i == j == 1: return
 
-        cdef Oct* child_cand
+        cdef Node* child_cand
         cdef np.int64_t num_loop[2], index[2], off[2][2], ii, ij
 
         index[0] = i
@@ -341,79 +336,79 @@ cdef class Octree:
                 child_cand = &candidate.children[candidate.children_index[child_index]]
 
                 if child_cand.children != NULL:
-                    self._subneighbor_find(oct_list, child_cand, i, j)
+                    self._subneighbor_find(node_list, child_cand, i, j)
                 else:
-                    oct_list.append([child_cand.center[0], child_cand.center[1], child_cand.box_length,\
+                    node_list.append([child_cand.center[0], child_cand.center[1], child_cand.box_length,\
                             child_cand.level, child_cand.particle_index_start, child_cand.number_particles])
 
 
-    def oct_neighbor_search(self, np.uint64_t key):
+    def node_neighbor_search(self, np.uint64_t key):
 
-        cdef Oct *o, *neighbor
-        cdef np.uint64_t oct_key, neighbor_oct_key
+        cdef Node *node, *neighbor
+        cdef np.uint64_t node_key, neighbor_node_key
         cdef np.int64_t x, y
-        cdef list oct_list = []
+        cdef list node_list = []
         cdef int i, j
 
         #cdef set node_set = set()
-        cdef set[np.uint64_t] oct_key_set
+        cdef set[np.uint64_t] node_key_set
         cdef set[np.uint64_t].iterator it
 
-        # find the oct leaf that the search particle lives in
-        o = self._find_oct_by_key(key)
+        # find the node leaf that the search particle lives in
+        node = self._find_node_by_key(key)
 
-        # find neighbor octs by shifting leaf oct key by half box length
+        # find neighbor node by shifting leaf node key by half box length
         for i in range(3):
             for j in range(3):
 
-                x = <np.int64_t> (o.center[0] + (i-1)*o.box_length)
-                y = <np.int64_t> (o.center[1] + (j-1)*o.box_length)
+                x = <np.int64_t> (node.center[0] + (i-1)*node.box_length)
+                y = <np.int64_t> (node.center[1] + (j-1)*node.box_length)
 
                 if i == j == 1:
                     continue
 
                 if (self.xmin <= x and x <= self.xmax) and (self.ymin <= y and y <= self.ymax):
 
-                    neighbor_oct_key = hilbert_key_2d(x, y, self.order)
+                    neighbor_node_key = hilbert_key_2d(x, y, self.order)
 
-                    # find neighbor oct that is at max the same level of query oct
-                    neighbor = self._find_oct_by_key_level(neighbor_oct_key, o.level)
+                    # find neighbor node that is at max the same level of query node
+                    neighbor = self._find_node_by_key_level(neighbor_node_key, node.level)
 
                     # make sure we don't add duplicate neighbors
-                    if oct_key_set.find(neighbor.sfc_key) == oct_key_set.end():
+                    if node_key_set.find(neighbor.sfc_key) == node_key_set.end():
                     #if neighbor.sfc_key not in node_set:
 
                         #node_set.add(neighbor.sfc_key)
-                        oct_key_set.insert(neighbor.sfc_key)
+                        node_key_set.insert(neighbor.sfc_key)
 
-                        # check if their are sub octs, if so collet them too
+                        # check if their are sub nodes, if so collet them too
                         if neighbor.children != NULL:
-                            self._subneighbor_find(oct_list, neighbor, i, j)
+                            self._subneighbor_find(node_list, neighbor, i, j)
                         else:
-                            oct_list.append([neighbor.center[0], neighbor.center[1], neighbor.box_length,\
+                            node_list.append([neighbor.center[0], neighbor.center[1], neighbor.box_length,\
                                     neighbor.level, neighbor.particle_index_start, neighbor.number_particles])
 
-        return oct_list
+        return node_list
 
 
     # temporary function to do outputs in python
-    def find_oct(self, np.uint64_t key):
+    def find_node(self, key):
 
-        cdef Oct* o = self._find_oct_by_key(key)
-        return [o.center[0], o.center[1], o.box_length,
-            o.level, o.particle_index_start, o.number_particles]
+        cdef Node* node = self._find_node_by_key(key)
+        return [node.center[0], node.center[1], node.box_length,
+            node.level, node.particle_index_start, node.number_particles]
 
 
     # temporary function to do outputs in python
-    cdef _iterate(self, Oct* o, list data_list):
+    cdef _iterate(self, Node* node, list data_list):
 
-        data_list.append([o.center[0], o.center[1], o.box_length,
-            o.level, o.particle_index_start, o.number_particles])
+        data_list.append([node.center[0], node.center[1], node.box_length,
+            node.level, node.particle_index_start, node.number_particles])
 
         cdef int i
-        if o.children != NULL:
+        if node.children != NULL:
             for i in range(4):
-                self._iterate(&o.children[i], data_list)
+                self._iterate(&node.children[i], data_list)
 
 
     # temporary function to do outputs in python
@@ -424,16 +419,16 @@ cdef class Octree:
 
 
     # temporary function to do outputs in python
-    cdef void _free_octs(self, Oct* o):
+    cdef void _free_nodes(self, Node* node):
         cdef int i
-        if o.children != NULL:
+        if node.children != NULL:
             for i in range(4):
-                self._free_octs(&o.children[i])
-            stdlib.free(o.children)
+                self._free_nodes(&node.children[i])
+            stdlib.free(node.children)
 
 
     def __dealloc__(self):
-        self._free_octs(self.root)
+        self._free_nodes(self.root)
         stdlib.free(self.root)
 
 # --- this needs to be worked on later --- it improves neighbor search
