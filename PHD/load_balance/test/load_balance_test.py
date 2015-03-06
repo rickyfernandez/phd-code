@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from load_balance.load_balance import LoadBalance
-from tree.hilbert import hilbert_key_2d
+from hilbert.hilbert import hilbert_key_2d
 
 
 class TestLoadBalance(unittest.TestCase):
