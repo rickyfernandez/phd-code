@@ -36,6 +36,8 @@ processors.
 import mpi4py.MPI as MPI
 import numpy as np
 
+from particles.particle_container import ParticleContainer
+
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
@@ -47,52 +49,56 @@ if size != 4:
 
 # create the initial distribution
 if rank == 0:
+
     num_particles = 12
-    x = np.array( [0.0, 1.0, 2.0, 3.0, 4.0,
-                   0.0, 1.0, 2.0, 3.0, 4.0,
-                   0.0, 1.0] , dtype=np.float64)
 
-    y = np.array( [0.0, 0.0, 0.0, 0.0, 0.0,
-                   1.0, 1.0, 1.0, 1.0, 1.0,
-                   2.0, 2.0] , dtype=np.float64)
+    pc = ParticleContainer(num_particles)
+    pc['position-x'][:] = np.array( [0.0, 1.0, 2.0, 3.0, 4.0,
+                                     0.0, 1.0, 2.0, 3.0, 4.0,
+                                     0.0, 1.0] , dtype=np.float64)
 
-    send_particles = np.array([0,0,6,0], dtype=np.int32)
+    pc['position-y'][:] = np.array( [0.0, 0.0, 0.0, 0.0, 0.0,
+                                     1.0, 1.0, 1.0, 1.0, 1.0,
+                                     2.0, 2.0] , dtype=np.float64)
 
     numExport = 6
     exportLocalids = np.array( [2, 3, 4, 7, 8, 9], dtype=np.int32 )
     exportProcs = np.array( [2, 2, 2, 2, 2, 2], dtype=np.int32 )
 
 if rank == 1:
+
     num_particles = 6
-    x = np.array( [2.0, 3.0, 4.0,
-                   0.0, 1.0, 2.0] , dtype=np.float64)
 
-    y = np.array( [2.0, 2.0, 2.0,
-                   3.0, 3.0, 3.0] , dtype=np.float64)
+    pc = ParticleContainer(num_particles)
+    pc['position-x'][:] = np.array( [2.0, 3.0, 4.0,
+                                     0.0, 1.0, 2.0] , dtype=np.float64)
 
-    send_particles = np.array([1,0,0,2], dtype=np.int32)
+    pc['position-y'][:] = np.array( [2.0, 2.0, 2.0,
+                                     3.0, 3.0, 3.0] , dtype=np.float64)
 
     numExport = 3
     exportLocalids = np.array( [0, 1, 2], dtype=np.int32 )
     exportProcs = np.array( [0, 3, 3], dtype=np.int32 )
 
 if rank == 2:
-    num_particles = 3
-    x = np.array( [4.0, 3.0, 0.0] , dtype=np.float64)
-    y = np.array( [3.0, 3.0, 4.0] , dtype=np.float64)
 
-    send_particles = np.array([0,1,0,2], dtype=np.int32)
+    num_particles = 3
+
+    pc = ParticleContainer(num_particles)
+    pc['position-x'][:] = np.array( [4.0, 3.0, 0.0] , dtype=np.float64)
+    pc['position-y'][:] = np.array( [3.0, 3.0, 4.0] , dtype=np.float64)
 
     numExport = 3
     exportLocalids = np.array( [0, 1, 2], dtype=np.int32 )
     exportProcs = np.array( [3, 3, 1], dtype=np.int32 )
 
 if rank == 3:
-    num_particles = 4
-    x = np.array( [1.0, 2.0, 3.0, 4.0], dtype=np.float64)
-    y = np.array( [4.0, 4.0, 4.0, 4.0], dtype=np.float64)
 
-    send_particles = np.array([0,2,0,0], dtype=np.int32)
+    num_particles = 4
+
+    pc = ParticleContainer(num_particles)
+    pc['position-x'][:] = np.array( [1.0, 2.0, 3.0, 4.0], dtype=np.float64)
+    pc['position-y'][:] = np.array( [4.0, 4.0, 4.0, 4.0], dtype=np.float64)
 
     numExport = 2
     exportLocalids = np.array( [0,1], dtype=np.int32 )
@@ -107,13 +113,22 @@ size = comm.Get_size()
 ind = exportProcs.argsort()
 exportProcs = exportProcs[ind]
 exportLocalids = exportLocalids[ind]
-x_send = x[exportLocalids]
+
+# count the number of particles to send to each process
+send_particles = np.bincount(exportProcs, minlength=size).astype(np.int32)
+
+# extract data to send and remove the particles
+x_send = pc['position-x'][exportLocalids]
+pc.remove_particles(exportLocalids)
 
 # how many particles are being sent from each process
 recv_particles = np.empty(size, dtype=np.int32)
 comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
 
-x_import = np.zeros(np.sum(recv_particles), dtype=np.float64)
+# resize arrays to give room for incoming particles
+current_size = pc.num_particles
+new_size = current_size + np.sum(recv_particles)
+pc.resize(new_size)
 
 offset_se = np.zeros(size, dtype=np.int32)
 offset_re = np.zeros(size, dtype=np.int32)
@@ -132,8 +147,8 @@ for ngrp in xrange(1,1 << ptask):
         if send_particles[recvTask] > 0 or recv_particles[recvTask] > 0:
 
             sendbuf=[x_send,   (send_particles[recvTask], offset_se[recvTask])]
-            recvbuf=[x_import, (recv_particles[recvTask], offset_re[recvTask])]
+            recvbuf=[pc['position-x'][current_size:], (recv_particles[recvTask], offset_re[recvTask])]
 
             comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)
 
-print "rank %d: %s" % (rank, x_import)
+print "rank %d: %s" % (rank, pc['position-x'][current_size:])
