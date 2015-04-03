@@ -61,6 +61,10 @@ if rank == 0:
                                      1.0, 1.0, 1.0, 1.0, 1.0,
                                      2.0, 2.0] , dtype=np.float64)
 
+    # tags are not ment for global id but for this test it will
+    pc['tag'][:] = np.array([0, 1, 2, 3, 4, 5,
+                             6, 7, 8, 9, 10, 11], dtype=np.int32)
+
     numExport = 6
     exportLocalids = np.array( [2, 3, 4, 7, 8, 9], dtype=np.int32 )
     exportProcs = np.array( [2, 2, 2, 2, 2, 2], dtype=np.int32 )
@@ -76,6 +80,9 @@ if rank == 1:
     pc['position-y'][:] = np.array( [2.0, 2.0, 2.0,
                                      3.0, 3.0, 3.0] , dtype=np.float64)
 
+    pc['tag'][:] = np.array([12, 13, 14, 15,
+                             16, 17], dtype=np.int32)
+
     numExport = 3
     exportLocalids = np.array( [0, 1, 2], dtype=np.int32 )
     exportProcs = np.array( [0, 3, 3], dtype=np.int32 )
@@ -87,6 +94,8 @@ if rank == 2:
     pc = ParticleContainer(num_particles)
     pc['position-x'][:] = np.array( [4.0, 3.0, 0.0] , dtype=np.float64)
     pc['position-y'][:] = np.array( [3.0, 3.0, 4.0] , dtype=np.float64)
+
+    pc['tag'][:] = np.array([18, 19, 20], dtype=np.int32)
 
     numExport = 3
     exportLocalids = np.array( [0, 1, 2], dtype=np.int32 )
@@ -100,6 +109,8 @@ if rank == 3:
     pc['position-x'][:] = np.array( [1.0, 2.0, 3.0, 4.0], dtype=np.float64)
     pc['position-y'][:] = np.array( [4.0, 4.0, 4.0, 4.0], dtype=np.float64)
 
+    pc['tag'][:] = np.array([21, 22, 23, 24], dtype=np.int32)
+
     numExport = 2
     exportLocalids = np.array( [0,1], dtype=np.int32 )
     exportProcs = np.array( [1, 1], dtype=np.int32 )
@@ -108,6 +119,22 @@ if rank == 3:
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
+
+# Gather the global data on root
+X = np.zeros(shape=25, dtype=np.float64)
+Y = np.zeros(shape=25, dtype=np.float64)
+GID = np.zeros(shape=25, dtype=np.int32)
+
+displacements = np.array([12, 6, 3, 4], dtype=np.int32)
+
+comm.Gatherv(sendbuf=[pc['position-x'], mpi.DOUBLE], recvbuf=[X, (displacements, None)], root=0)
+comm.Gatherv(sendbuf=[pc['position-y'], mpi.DOUBLE], recvbuf=[Y, (displacements, None)], root=0)
+comm.Gatherv(sendbuf=[pc['tag'], mpi.INT],  recvbuf=[GID, (displacements, None)], root=0)
+
+# brodcast global X, Y and GID to everyone
+comm.Bcast(buf=X, root=0)
+comm.Bcast(buf=Y, root=0)
+comm.Bcast(buf=GID, root=0)
 
 # put particles in cpu order
 ind = exportProcs.argsort()
@@ -118,7 +145,11 @@ exportLocalids = exportLocalids[ind]
 send_particles = np.bincount(exportProcs, minlength=size).astype(np.int32)
 
 # extract data to send and remove the particles
-x_send = pc['position-x'][exportLocalids]
+send_data = {}
+for prop in pc.properties.keys():
+    send_data[prop] = pc[prop][exportLocalids]
+
+# remove exported particles
 pc.remove_particles(exportLocalids)
 
 # how many particles are being sent from each process
@@ -145,10 +176,20 @@ for ngrp in xrange(1,1 << ptask):
     recvTask = rank ^ ngrp
     if recvTask < size:
         if send_particles[recvTask] > 0 or recv_particles[recvTask] > 0:
+            for prop in pc.properties.keys():
 
-            sendbuf=[x_send,   (send_particles[recvTask], offset_se[recvTask])]
-            recvbuf=[pc['position-x'][current_size:], (recv_particles[recvTask], offset_re[recvTask])]
+                sendbuf=[send_data[prop],   (send_particles[recvTask], offset_se[recvTask])]
+                recvbuf=[pc[prop][current_size:], (recv_particles[recvTask], offset_re[recvTask])]
 
-            comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)
+                comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)
 
-print "rank %d: %s" % (rank, pc['position-x'][current_size:])
+print "rank %d: x=%s y=%s" % (rank, pc['position-x'][current_size:], pc['position-y'][current_size:])
+
+#numParticles = 6
+#if rank == 0:
+#    numParticles = 7
+#
+#for i in xrange(numParticles):
+#    assert(abs(X[pc['tag'][i]] - pc['position-x'][i]) < 1e-15)
+#    assert(abs(Y[pc['tag'][i]] - pc['position-y'][i]) < 1e-15)
+#    assert(GID[pc['tag'][i]] == pc['tag'][i])
