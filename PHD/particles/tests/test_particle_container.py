@@ -18,7 +18,8 @@ class TestParticleContainer(unittest.TestCase):
 
         self.assertEqual(pc.num_particles, 10)
 
-        expected = ['position-x', 'position-y', 'mass', 'momentum-x', 'momentum-y', 'energy']
+        expected = ['position-x', 'position-y', 'mass', 'momentum-x',
+                'momentum-y', 'energy', 'tag', 'key']
         self.assertItemsEqual(pc.properties.keys(), expected)
 
         expected = ['mass', 'momentum-x', 'momentum-y', 'energy']

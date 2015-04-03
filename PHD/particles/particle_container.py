@@ -1,10 +1,10 @@
 import numpy as np
-
-from utils.carray import DoubleArray, IntArray
+from utils.carray import DoubleArray, IntArray, LongLongArray
 
 _base_fields = ['mass', 'momentum-x', 'momentum-y', 'energy']
 _base_coords = ['position-x', 'position-y']
-_base_properties = _base_coords + _base_fields
+_base_tags   = ['keys', 'tags']
+_base_properties = _base_coords + _base_fields + _base_tags
 
 class ParticleContainer(object):
 
@@ -26,6 +26,10 @@ class ParticleContainer(object):
         for field in _base_fields:
             self.register_property(field)
 
+        # register particle tag and hilbert keys
+        self.register_property("tag", "int", field=False)
+        self.register_property("key", "longlong", field=False)
+
     def register_property(self, name, dtype="double", field=True):
         """Register new property array for particles
 
@@ -42,6 +46,8 @@ class ParticleContainer(object):
             self.properties[name] = DoubleArray(self.num_particles)
         elif dtype == "int":
             self.properties[name] = IntArray(self.num_particles)
+        elif dtype == "longlong":
+            self.properties[name] = LongLongArray(self.num_particles)
         else:
             raise ValueError("Unrecognized dtype: %s" % dtype)
 
@@ -84,19 +90,16 @@ class ParticleContainer(object):
     def remove_tagged_particles(self):
         pass
 
-#    def resize(self, new_size):
-#        """Resizes all fields to hold new_size number of particles
-#
-#        Parameters
-#        ----------
-#        new_size - new number of particles"""
-#        if new_size <= 0:
-#            return
-#
-#        if new_size < self.num_particles:
-#            raise ValueError("New number of particles is less than current")
-#
-#        for field in fields:
-#            field.resize(new_size)
-#
-#        self.num_particles = new_size
+    def resize(self, new_size):
+        """Resizes all fields to hold new_size number of particles
+
+        Parameters
+        ----------
+        new_size - new number of particles"""
+        if new_size <= 0:
+            return
+
+        for prop in self.properties.values():
+            prop.resize(new_size)
+
+        self.num_particles = new_size
