@@ -19,6 +19,10 @@ class TestLoadBalance(unittest.TestCase):
 
     @attr(slow=False, parallel=True)
     def test_exchange(self):
+        run(filename='./exchange_particles.py', nprocs=4, path=path)
+
+    @attr(slow=False, parallel=True)
+    def test_load_balance_exchange(self):
         run(filename='./load.py', nprocs=4, path=path)
 
 if __name__ == "__main__":

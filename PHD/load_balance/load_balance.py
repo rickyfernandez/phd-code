@@ -64,18 +64,11 @@ class LoadBalance(object):
         # count the number of particles that need to be exported
         num_export = self.global_tree.count_particles_export(self.keys, self.leaf_proc, self.rank)
 
-        #print "proc: %s num export: %s" % (rank, num_export)
-
         self.export_ids = np.empty(num_export, dtype=np.int32)
         self.export_proc = np.empty(num_export, dtype=np.int32)
 
         # collect particles to be exported with their process location
         self.global_tree.collect_particles_export(self.keys, self.export_ids, self.export_proc, self.leaf_proc, self.rank)
-
-#        #print "proc: %s export ids: %s export proc: %s" % (rank, export_ids, export_proc)
-#
-#        print "proc: %s keys to export: %s orig keys: %s proc id: %s" %\
-#                (self.rank, self.keys[export_ids], self.keys, export_proc)
 
     def calculate_global_bounding_box(self):
         """Find global box enclosing all particles
@@ -161,18 +154,14 @@ class LoadBalance(object):
         self.comm.Allreduce(sendbuf=work, recvbuf=self.global_work, op=MPI.SUM)
 
     def find_split_in_work(self):
-        """Parttion the global leaves amongst the process such that each process
+        """Partition the global leaves amongst the process such that each process
         has roughly an equal work load.
         """
-
         cumsum_bins = np.cumsum(self.global_work)
         part_per_proc = np.float64(cumsum_bins[-1])/self.size
         leaves_start  = np.zeros(self.size, dtype=np.int32)
         leaves_end    = np.zeros(self.size, dtype=np.int32)
         self.leaf_proc = np.empty(self.global_work.size, dtype=np.int32)
-
-#        if rank == 0:
-#            print "part per proc: %s" % part_per_proc
 
         j = 0
         for i in range(1, self.size):
@@ -185,40 +174,33 @@ class LoadBalance(object):
         leaves_end[-1] = self.global_work.size-1
         self.leaf_proc[j:] = self.size-1
 
-#        if rank == 0:
-#            print "rank: %d leaf procs %s" % (rank, self.leaf_proc)
-#
-#        if rank == 0:
-#            print "work: %s procs: %s leaves start: %s leaves end: %s" %\
-#                    (self.global_work, self.leaf_proc, leaves_start, leaves_end)
-
     def exchange_particles(self):
 
         # arrange particles in process order
-        ind = self.export_proc.arg_sort()
+        ind = self.export_proc.argsort()
         self.export_proc = self.export_proc[ind]
         self.export_ids  = self.export_ids[ind]
 
         # count the number of particles to send to each process
-        send_particles = np.bincount(self.exportProcs,
-                minlength=size).astype(np.int32)
+        send_particles = np.bincount(self.export_proc,
+                minlength=self.size).astype(np.int32)
 
         # extract data to send and remove the particles
         send_data = {}
         for prop in self.particles.properties.keys():
-            send_data[prop] = self.particles[prop][self.exportLocalids]
+            send_data[prop] = self.particles[prop][self.export_ids]
 
         # remove exported particles
-        self.particles.remove_particles(self.exportLocalids)
+        self.particles.remove_particles(self.export_ids)
 
         # how many particles are being sent from each process
         recv_particles = np.empty(self.size, dtype=np.int32)
-        comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
+        self.comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
 
         # resize arrays to give room for incoming particles
         current_size = self.particles.num_particles
         new_size = current_size + np.sum(recv_particles)
-        particles.resize(new_size)
+        self.particles.resize(new_size)
 
         offset_se = np.zeros(self.size, dtype=np.int32)
         offset_re = np.zeros(self.size, dtype=np.int32)
@@ -231,9 +213,9 @@ class LoadBalance(object):
             ptask += 1
 
         for ngrp in xrange(1,1 << ptask):
-            sendTask = rank
-            recvTask = rank ^ ngrp
-            if recvTask < size:
+            sendTask = self.rank
+            recvTask = self.rank ^ ngrp
+            if recvTask < self.size:
                 if send_particles[recvTask] > 0 or recv_particles[recvTask] > 0:
                     for prop in self.particles.properties.keys():
 
@@ -241,4 +223,4 @@ class LoadBalance(object):
                         recvbuf=[self.particles[prop][current_size:], (recv_particles[recvTask],
                             offset_re[recvTask])]
 
-                        comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)
+                        self.comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)
