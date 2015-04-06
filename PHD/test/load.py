@@ -96,16 +96,10 @@ comm.Bcast(buf=GID,root=0)
 
 # perform the load decomposition
 order = 3
-load_b = LoadBalance(pc, comm, order=order)
+box_length = 4*1.001
+corner = np.ones(2, dtype=np.float64)*(0.5*4 - 0.5*box_length)
+load_b = LoadBalance(pc, corner, box_length, comm, order)
 load_b.decomposition()
-
-# the particles are placed in a [0,4]x[0,4] box
-for i in range(2):
-    assert(load_b.global_xmin[i] == 0.0)
-    assert(load_b.global_xmax[i] == 4.0)
-
-# the box width is 4 times a fudge factor
-assert(np.abs(4*1.001 - load_b.length) < 1.0E-10)
 
 # make sure every key has been accounted for
 assert(load_b.keys.size == num_particles)

@@ -7,12 +7,14 @@ from hilbert.hilbert import hilbert_key_2d
 # maybe turn this into a function?
 class LoadBalance(object):
 
-    def __init__(self, particles, comm, order=21):
+    def __init__(self, particles, corner=None, box_length=1.0, comm=None, order=21):
         """Constructor for load balance
 
         Parameters
         ----------
         particles - particle container
+        corner - left corner of the box simulation
+        box_length - size of the box simulation
         comm - MPI.COMM_WORLD for communication
         order - the number of bits per dimension for constructing
                 hilbert keys
@@ -24,23 +26,22 @@ class LoadBalance(object):
         self.order = order
         self.number_particles = particles.num_particles
         self.particles = particles
+        self.box_length = box_length
 
-        self.global_num_particles = None
-
-        self.length = None
-        self.corner = None
+        if corner is None:
+            self.corner = np.zeros(2, dtype=np.float64)
+        else:
+            self.corner = corner
 
         self.keys = None
         self.sorted_keys = None
-
-        self.global_xmin = np.empty(2, dtype=np.float64)
-        self.global_xmax = np.empty(2, dtype=np.float64)
+        self.global_num_particles = None
 
     def calculate_hilbert_keys(self):
         """map particle positions to hilbert space
         """
         # normalize coordinates to hilbert space
-        fac = (1 << self.order)/ self.length
+        fac = (1 << self.order)/ self.box_length
         x = self.particles['position-x']
         y = self.particles['position-y']
 
@@ -55,7 +56,6 @@ class LoadBalance(object):
     def decomposition(self):
         """Perform a domain decomposition
         """
-        self.calculate_global_bounding_box()
         self.calculate_hilbert_keys()
         self.build_global_tree()
         self.calculate_global_work()
@@ -69,26 +69,6 @@ class LoadBalance(object):
 
         # collect particles to be exported with their process location
         self.global_tree.collect_particles_export(self.keys, self.export_ids, self.export_proc, self.leaf_proc, self.rank)
-
-    def calculate_global_bounding_box(self):
-        """Find global box enclosing all particles
-        """
-        xmin = np.empty(2, dtype=np.float64)
-        xmax = np.empty(2, dtype=np.float64)
-
-        # find local bounding box
-        for i, axis in enumerate(['position-x', 'position-y']):
-            xmin[i] = np.min(self.particles[axis])
-            xmax[i] = np.max(self.particles[axis])
-
-        # find global bounding box
-        self.comm.Allreduce(sendbuf=xmin, recvbuf=self.global_xmin, op=MPI.MIN)
-        self.comm.Allreduce(sendbuf=xmax, recvbuf=self.global_xmax, op=MPI.MAX)
-
-        # define the global domain by left most corner and length
-        self.length = np.max(self.global_xmax - self.global_xmin)
-        self.length *= 1.001
-        self.corner = 0.5*(self.global_xmin + self.global_xmax) - 0.5*self.length
 
     def build_global_tree(self):
         """Build a global tree on all process. This algorithm follows what springel

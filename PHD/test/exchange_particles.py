@@ -138,7 +138,7 @@ comm.Bcast(buf=Y, root=0)
 comm.Bcast(buf=GID, root=0)
 
 # use the load balance to exchange the particles
-lb = LoadBalance(pc, comm)
+lb = LoadBalance(pc, comm=comm)
 lb.export_proc = exportProcs
 lb.export_ids  = exportLocalids
 lb.exchange_particles()
