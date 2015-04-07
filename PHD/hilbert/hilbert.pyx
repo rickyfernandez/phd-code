@@ -3,15 +3,12 @@ import numpy as np
 cimport numpy as np
 cimport cython
 
-# turn this to a c array
 cdef int *key_index_2d = [0, 1, 3, 2]
-#key_index_2d[:] = [0, 1, 3, 2]
-
 cdef int *key_index_3d = [0, 1, 7, 6, 3, 2, 4, 5]
 
-cpdef np.uint64_t hilbert_key_2d(np.uint32_t x, np.uint32_t y, int order):
+cpdef np.int64_t hilbert_key_2d(np.int32_t x, np.int32_t y, int order):
 
-    cdef np.uint64_t key = 0
+    cdef np.int64_t key = 0
     cdef int i, xbit, ybit
     for i in xrange(order-1, -1, -1):
 
@@ -26,10 +23,10 @@ cpdef np.uint64_t hilbert_key_2d(np.uint32_t x, np.uint32_t y, int order):
     return key
 
 
-cpdef np.uint64_t hilbert_key_3d(np.uint32_t x, np.uint32_t y, np.uint32_t z, int order):
+cpdef np.int64_t hilbert_key_3d(np.int32_t x, np.int32_t y, np.int32_t z, int order):
 
-    cdef np.uint64_t key = 0
-    cdef int i, xbit, ybit
+    cdef np.int64_t key = 0
+    cdef int i, xbit, ybit, zbit
     for i in xrange(order-1, -1, -1):
 
         xbit = 1 if x & (1 << i) else 0
