@@ -7,7 +7,7 @@ from hilbert.hilbert import hilbert_key_2d
 # maybe turn this into a function?
 class LoadBalance(object):
 
-    def __init__(self, particles, corner=None, box_length=1.0, comm=None, order=21):
+    def __init__(self, particles, corner=None, box_length=1.0, comm=None, factor=0.1, order=21):
         """Constructor for load balance
 
         Parameters
@@ -22,6 +22,8 @@ class LoadBalance(object):
         self.comm = comm
         self.rank = self.comm.Get_rank()
         self.size = self.comm.Get_size()
+
+        self.factor = factor
 
         self.order = order
         self.number_particles = particles.num_particles
@@ -85,10 +87,10 @@ class LoadBalance(object):
 
         # construct local tree
         local_tree = QuadTree(self.global_num_particles, self.sorted_keys,
-                total_num_process=self.size, order=self.order)
+                total_num_process=self.size, factor=self.factor, order=self.order)
         local_tree.build_tree()
 
-        # collect leaf keys and number of particles in leaf and send to all process
+        # collect leaf start keys and number of particles in leaf and send to all process
         leaf_keys, num_part_leaf = local_tree.collect_leaves_for_export()
 
         # prepare to bring all leaves form all local trees
@@ -114,7 +116,7 @@ class LoadBalance(object):
         # rebuild tree using global leaves
         self.global_tree = QuadTree(self.global_num_particles, self.sorted_keys,
                 global_leaf_keys, global_num_part_leaves,
-                total_num_process=self.size, order=self.order)
+                total_num_process=self.size, factor=self.factor, order=self.order)
         self.global_tree.build_tree()
 
     def calculate_global_work(self):
@@ -155,7 +157,9 @@ class LoadBalance(object):
         self.leaf_proc[j:] = self.size-1
 
     def exchange_particles(self):
-
+        """Perform the exchange of particles. Can only be performed after
+        the domain decomposition has been performed.
+        """
         # arrange particles in process order
         ind = self.export_proc.argsort()
         self.export_proc = self.export_proc[ind]
@@ -182,6 +186,7 @@ class LoadBalance(object):
         new_size = current_size + np.sum(recv_particles)
         self.particles.resize(new_size)
 
+        # displacements for the send and reveive buffers
         offset_se = np.zeros(self.size, dtype=np.int32)
         offset_re = np.zeros(self.size, dtype=np.int32)
         for i in range(1,self.size):
