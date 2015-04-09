@@ -383,7 +383,12 @@ cdef class QuadTree:
                             if leaf_proc[neighbor.array_index] != rank:
                                 if neighbor.sfc_key not in boundary_keys:
                                     boundary_keys.add(neighbor.sfc_key)
-                                    particles.append([neighbor.center[0], neighbor.center[1], neighbor.box_length])
+                                    particles.append([neighbor.center[0], neighbor.center[1]])
+
+                # domain bondary node
+                else:
+                    if (i == 1 and j != 1) or (i != 1 and j == 1):
+                        particles.append([x, y])
 
         return node_list
 
@@ -429,7 +434,7 @@ cdef class QuadTree:
                     if leaf_proc[child_cand.array_index] != rank:
                         if child_cand.sfc_key not in boundary_keys:
                             boundary_keys.add(child_cand.sfc_key)
-                            particles.append([child_cand.center[0], child_cand.center[1], child_cand.box_length])
+                            particles.append([child_cand.center[0], child_cand.center[1]])
 
     # temporary function to do outputs in python
     cdef _iterate(self, Node* node, list data_list):
