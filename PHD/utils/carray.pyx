@@ -62,6 +62,15 @@ cdef class BaseArray:
         self.length = 0
         arr.dimensions[0] = self.length
 
+    cpdef shrink(self, int size):
+        """Reset the length of the array to length size."""
+        cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
+
+        if size > self.length:
+            raise ValueError, 'shrink size is larger then array size'
+        self.length = size
+        arr.dimensions[0] = self.length
+
     def __len__(self):
         return self.length
 

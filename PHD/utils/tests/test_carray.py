@@ -88,6 +88,15 @@ class TestDoubleArray(unittest.TestCase):
         self.assertEqual(da.alloc, 5)
         self.assertEqual(len(da.get_npy_array()), 0)
 
+    def test_reset(self):
+        """Tests the reset function."""
+        da = DoubleArray(5)
+        da.shrink(2)
+
+        self.assertEqual(da.length, 2)
+        self.assertEqual(da.alloc, 5)
+        self.assertEqual(len(da.get_npy_array()), 2)
+
     def test_extend(self):
         """Tests teh extend function."""
         da1 = DoubleArray(5)
