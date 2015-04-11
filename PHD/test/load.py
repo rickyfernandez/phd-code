@@ -98,7 +98,7 @@ comm.Bcast(buf=GID,root=0)
 order = 3
 box_length = 4*1.001
 corner = np.ones(2, dtype=np.float64)*(0.5*4 - 0.5*box_length)
-load_b = LoadBalance(pc, corner, box_length, comm, order)
+load_b = LoadBalance(pc, corner, box_length, comm, 1.0, order)
 load_b.decomposition()
 
 # make sure every key has been accounted for
@@ -112,13 +112,14 @@ for i in range(num_particles):
 
 # make sure that all particles are accounted in building the
 # global tree
-assert(load_b.global_num_particles == 25)
+assert(load_b.global_num_real_particles == 25)
 
 # the work is just the number of particles in each leaf
 # so the sum of each leaf should be the total number of particles
 assert(np.sum(load_b.global_work) == 25)
 
-for i in xrange(pc.num_particles):
+load_b.exchange_particles()
+for i in xrange(pc.num_real_particles):
     assert(abs(X[pc['tag'][i]] - pc['position-x'][i]) < 1e-15)
     assert(abs(Y[pc['tag'][i]] - pc['position-y'][i]) < 1e-15)
     assert(GID[pc['tag'][i]] == pc['tag'][i])

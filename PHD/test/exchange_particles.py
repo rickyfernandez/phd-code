@@ -138,7 +138,7 @@ comm.Bcast(buf=Y, root=0)
 comm.Bcast(buf=GID, root=0)
 
 # use the load balance to exchange the particles
-lb = LoadBalance(pc, comm=comm)
+lb = LoadBalance(pc, factor=1.0, comm=comm)
 lb.export_proc = exportProcs
 lb.export_ids  = exportLocalids
 lb.exchange_particles()
@@ -148,9 +148,9 @@ numParticles = 6
 if rank == 0:
     numParticles = 7
 
-assert(pc.num_particles == numParticles)
+assert(pc.num_real_particles == numParticles)
 
-for i in xrange(pc.num_particles):
+for i in xrange(pc.num_real_particles):
     assert(abs(X[pc['tag'][i]] - pc['position-x'][i]) < 1e-15)
     assert(abs(Y[pc['tag'][i]] - pc['position-y'][i]) < 1e-15)
     assert(GID[pc['tag'][i]] == pc['tag'][i])

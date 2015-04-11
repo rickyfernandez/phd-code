@@ -16,7 +16,7 @@ class TestParticleContainer(unittest.TestCase):
         """Test the constructor."""
         pc = ParticleContainer(10)
 
-        self.assertEqual(pc.num_particles, 10)
+        self.assertEqual(pc.num_real_particles, 10)
 
         expected = ['position-x', 'position-y', 'mass', 'momentum-x',
                 'momentum-y', 'energy', 'tag', 'key']
@@ -28,8 +28,8 @@ class TestParticleContainer(unittest.TestCase):
         for field_name in pc.field_names:
             self.assertEqual(pc[field_name].size, 10)
 
-    def test_remove_particles(self):
-        """"Test the remove_particles function"""
+    def test_discard_ghost_and_export_particles(self):
+        """"Test the discard ghost and export particles function"""
         x = [5.0, 2.0, 1.0, 4.0]
         y = [2.0, 6.0, 3.0, 1.0]
         m = [1.0, 2.0, 3.0, 4.0]
@@ -54,9 +54,9 @@ class TestParticleContainer(unittest.TestCase):
         ener[:] = e
 
         remove = np.array([0, 1], dtype=np.int)
-        pc.remove_particles(remove)
+        pc.discard_ghost_and_export_particles(remove)
 
-        self.assertEqual(pc.num_particles, 2)
+        self.assertEqual(pc.num_real_particles, 2)
         self.assertEqual(check_array(pc['position-x'], [1.0, 4.0]), True)
         self.assertEqual(check_array(pc['position-y'], [3.0, 1.0]), True)
         self.assertEqual(check_array(pc['mass'], [3.0, 4.0]), True)
@@ -66,13 +66,13 @@ class TestParticleContainer(unittest.TestCase):
 
         # now try invalid operations to make sure errors are raised
         remove = np.arange(10, dtype=np.int)
-        self.assertRaises(ValueError, pc.remove_particles, remove)
+        self.assertRaises(ValueError, pc.discard_ghost_and_export_particles, remove)
 
         remove = np.array([2], dtype=np.int)
-        pc.remove_particles(remove)
+        pc.discard_ghost_and_export_particles(remove)
 
         # make sure no change has occured
-        self.assertEqual(pc.num_particles, 2)
+        self.assertEqual(pc.num_real_particles, 2)
         self.assertEqual(check_array(pc['position-x'], [1.0, 4.0]), True)
         self.assertEqual(check_array(pc['position-y'], [3.0, 1.0]), True)
         self.assertEqual(check_array(pc['mass'], [3.0, 4.0]), True)
