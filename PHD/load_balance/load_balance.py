@@ -26,7 +26,6 @@ class LoadBalance(object):
         self.factor = factor
 
         self.order = order
-        #self.number_particles = particles.num_particles
         self.number_real_particles = particles.num_real_particles
         self.particles = particles
         self.box_length = box_length
@@ -52,7 +51,6 @@ class LoadBalance(object):
         # create hilbert key for each particle
         self.keys = np.array([hilbert_key_2d(
             np.int64((x[i]-self.corner[0])*fac),
-            #np.int64((y[i]-self.corner[1])*fac), self.order) for i in range(self.number_particles)],
             np.int64((y[i]-self.corner[1])*fac), self.order) for i in range(self.number_real_particles)],
             dtype = np.int64)
 
@@ -87,18 +85,13 @@ class LoadBalance(object):
         process and a second tree is created using the leaves (i.e. the hilbert cuts).
         """
         # collect number of particles from all process
-        #sendbuf = np.array([self.number_particles], dtype=np.int32)
-        #proc_num_particles = np.empty(self.size, dtype=np.int32)
         sendbuf = np.array([self.number_real_particles], dtype=np.int32)
         proc_num_real_particles = np.empty(self.size, dtype=np.int32)
 
-        #self.comm.Allgather(sendbuf=sendbuf, recvbuf=proc_num_particles)
         self.comm.Allgather(sendbuf=sendbuf, recvbuf=proc_num_real_particles)
-        #self.global_num_particles = np.sum(proc_num_particles)
         self.global_num_real_particles = np.sum(proc_num_real_particles)
 
         # construct local tree
-        #local_tree = QuadTree(self.global_num_particles, self.sorted_keys,
         local_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
                 total_num_process=self.size, factor=self.factor, order=self.order)
         local_tree.build_tree()
@@ -127,7 +120,6 @@ class LoadBalance(object):
         global_num_part_leaves = np.ascontiguousarray(global_num_part_leaves[ind])
 
         # rebuild tree using global leaves
-        #self.global_tree = QuadTree(self.global_num_particles, self.sorted_keys,
         self.global_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
                 global_leaf_keys, global_num_part_leaves,
                 total_num_process=self.size, factor=self.factor, order=self.order)
@@ -189,7 +181,6 @@ class LoadBalance(object):
             send_data[prop] = self.particles[prop][self.export_ids]
 
         # remove exported and ghost particles
-        #self.particles.remove_particles(self.export_ids)
         self.particles.discard_ghost_and_export_particles(self.export_ids)
 
         # how many particles are being sent from each process
@@ -197,9 +188,6 @@ class LoadBalance(object):
         self.comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
 
         # resize arrays to give room for incoming particles
-        #current_size = self.particles.num_particles
-        #new_size = current_size + np.sum(recv_particles)
-        #self.particles.resize(new_size)
         current_real_size = self.particles.num_real_particles
         new_real_size = current_real_size + np.sum(recv_particles)
         self.particles.resize(new_real_size)
