@@ -118,7 +118,6 @@ assert(load_b.global_num_real_particles == 25)
 # so the sum of each leaf should be the total number of particles
 assert(np.sum(load_b.global_work) == 25)
 
-load_b.exchange_particles()
 for i in xrange(pc.num_real_particles):
     assert(abs(X[pc['tag'][i]] - pc['position-x'][i]) < 1e-15)
     assert(abs(Y[pc['tag'][i]] - pc['position-y'][i]) < 1e-15)

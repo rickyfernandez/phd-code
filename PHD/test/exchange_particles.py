@@ -139,9 +139,35 @@ comm.Bcast(buf=GID, root=0)
 
 # use the load balance to exchange the particles
 lb = LoadBalance(pc, factor=1.0, comm=comm)
-lb.export_proc = exportProcs
-lb.export_ids  = exportLocalids
-lb.exchange_particles()
+
+# arrange particles in process order
+ind = exportProcs.argsort()
+exportProcs = exportProcs[ind]
+exportLocalids = exportLocalids[ind]
+
+# count the number of particles to send to each process
+send_particles = np.bincount(exportProcs, minlength=size).astype(np.int32)
+
+# extract particles to send 
+send_data = {}
+for prop in pc.properties.keys():
+    send_data[prop] = pc[prop][exportLocalids]
+
+# remove exported and ghost particles: only real particles are in the container now
+pc.discard_ghost_and_export_particles(exportLocalids)
+
+# how many particles are being sent from each process
+recv_particles = np.empty(size, dtype=np.int32)
+comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
+
+# resize arrays to give room for incoming particles and update
+# the new number of real particles in the container
+current_size = pc.num_real_particles
+new_size = current_size + np.sum(recv_particles)
+pc.resize(new_size)
+pc.num_real_particles = new_size
+
+lb.exchange_particles(pc, send_data, send_particles, recv_particles, current_size)
 
 # after the exchange each proc should have 6 particles except for proc 0
 numParticles = 6
