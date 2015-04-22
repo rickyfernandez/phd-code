@@ -1,6 +1,6 @@
 from scipy.spatial import Voronoi
 import numpy as np
-import mesh
+#import mesh
 
 class VoronoiMeshBase(object):
     """
@@ -41,29 +41,29 @@ class VoronoiMeshBase(object):
 
         return w
 
-    def cell_and_faces_info(self, particles, particles_index, graphs):
-        """
-        compute volume and center of mass of all real particles and compute areas, center of mass, normal
-        face pairs, and number of faces for faces
-        """
-        num_real_particles = particles_index["real"].size
-        cells_info = {
-                "volume":         np.zeros(num_real_particles, dtype="float64"),
-                "center of mass": np.zeros((self.dim, num_real_particles), dtype="float64")
-                }
-
-        num_faces = mesh.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
-        faces_info = {
-                "areas":           np.empty(num_faces, dtype="float64"),
-                "center of mass":  np.zeros((self.dim, num_faces), dtype="float64"),
-                "normal":          np.empty((self.dim, num_faces), dtype="float64"),
-                "pairs":           np.empty((2, num_faces), dtype="int32"),
-                "number of faces": num_faces
-                }
-
-        self.compute_cell_face_info(particles, graphs, cells_info, faces_info, num_real_particles)
-
-        return cells_info, faces_info
+#    def cell_and_faces_info(self, particles, particles_index, graphs):
+#        """
+#        compute volume and center of mass of all real particles and compute areas, center of mass, normal
+#        face pairs, and number of faces for faces
+#        """
+#        num_real_particles = particles_index["real"].size
+#        cells_info = {
+#                "volume":         np.zeros(num_real_particles, dtype="float64"),
+#                "center of mass": np.zeros((self.dim, num_real_particles), dtype="float64")
+#                }
+#
+#        num_faces = mesh.number_of_faces(graphs["neighbors"], graphs["number of neighbors"], num_real_particles)
+#        faces_info = {
+#                "areas":           np.empty(num_faces, dtype="float64"),
+#                "center of mass":  np.zeros((self.dim, num_faces), dtype="float64"),
+#                "normal":          np.empty((self.dim, num_faces), dtype="float64"),
+#                "pairs":           np.empty((2, num_faces), dtype="int32"),
+#                "number of faces": num_faces
+#                }
+#
+#        self.compute_cell_face_info(particles, graphs, cells_info, faces_info, num_real_particles)
+#
+#        return cells_info, faces_info
 
 
     def regularization(self, fields, particles, gamma, cells_info, particles_index):
