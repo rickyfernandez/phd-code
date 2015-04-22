@@ -75,12 +75,27 @@ cdef class QuadTree:
             self.max_in_leaf = <int> (factor*total_num_part/total_num_process)
 
     def assign_leaves_to_array(self):
+        """
+        Map each leaf to an array index.
+
+        Returns
+        -------
+        number_leaves : int
+            Number of leaves in the tree.
+        """
         self.number_leaves = 0
         self._assign_leaves_to_array(self.root)
 
         return self.number_leaves
 
     cdef void _assign_leaves_to_array(self, Node* node):
+        """
+        Recursively walk the tree mapping each leaf to an array index.
+
+        Paramters
+        --------
+        node : Node
+        """
         cdef int i
         if node.children == NULL:
             node.array_index = self.number_leaves
@@ -90,6 +105,15 @@ cdef class QuadTree:
                 self._assign_leaves_to_array(&node.children[i])
 
     def build_tree(self, max_in_leaf=None):
+        """
+        Create a tree by recursively subdividing hilbert cuts.
+
+        Parameters
+        ----------
+        max_in_leaf : int
+            max number of particles in a node, default is factor * total number
+            of particles / number of process
+        """
         cdef int max_leaf
         if max_in_leaf != None:
             max_leaf = max_in_leaf
@@ -126,6 +150,17 @@ cdef class QuadTree:
             self._fill_particles_nodes(self.root, max_leaf)
 
     def calculate_work(self, np.int64_t[:] keys, np.int32_t[:] work):
+        """
+        Calculate the work done by each leaf.
+
+        Parameters
+        ----------
+        keys : ndarray
+            Hilbert key for each real particle.
+        work : ndarray
+            Array of size number of leaves which stores the work done in
+            each leaf.
+        """
         cdef Node* node
         cdef int i
         for i in xrange(keys.shape[0]):
@@ -133,6 +168,18 @@ cdef class QuadTree:
             work[node.array_index] += 1
 
     def count_particles_export(self, np.int64_t[:] keys, np.int32_t[:] leaf_procs, int my_proc):
+        """
+        Loop through real particles and count the number that have to be exported.
+
+        Parameters
+        ----------
+        keys : ndarray
+            Hilbert key for each real particle.
+        leaf_procs : ndarray
+            Rank of process for each leaf.
+        my_proc : int
+            Rank of current process.
+        """
         cdef Node *node
         cdef int i, proc, count=0
         for i in xrange(keys.shape[0]):
@@ -146,6 +193,23 @@ cdef class QuadTree:
 
     def collect_particles_export(self, np.int64_t[:] keys, np.int32_t[:] part_ids, np.int32_t[:] proc_ids,
             np.int32_t[:] leaf_procs, int my_proc):
+        """
+        Collect export particle indices and the process that it will be sent too.
+
+        Parameters
+        ----------
+        keys : ndarray
+            Hilbert key for each real particle.
+        part_ids : ndarray
+            Particle indices that need to be exported.
+        proc_ids : ndarray
+            The process that each exported particle must be sent too.
+        leaf_procs : ndarray
+            Rank of process for each leaf.
+        my_proc : int
+            Rank of current process.
+
+        """
         cdef Node *node
         cdef int i, proc, count=0
         for i in xrange(keys.shape[0]):
@@ -159,6 +223,15 @@ cdef class QuadTree:
                 count += 1
 
     cdef void _create_node_children(self, Node* node):
+        """
+        Subdivide node into 4 children and transfer appropriate node
+        information to each child.
+
+        Parameters
+        ----------
+        node : Node
+            Node that will be subdivided.
+        """
         # create children nodes
         node.children = <Node*>stdlib.malloc(sizeof(Node)*4)
         if node.children == <Node*> NULL:
@@ -208,6 +281,17 @@ cdef class QuadTree:
                 node.children_index[(i<<1) + j] = child_node_index
 
     cdef void _fill_particles_nodes(self, Node* node, int max_in_leaf):
+        """
+        Subdivide node and bin each particle to the appropriate child. This function is recrusive
+        and will continue untill each child contains less than max_in_leaf particles.
+
+        Parameters
+        ----------
+        node : Node
+            Node that will be subdivided.
+        max_in_leaf : int
+            max number of particles in a node.
+        """
         cdef int i, child_node_index
 
         self._create_node_children(node)
@@ -234,6 +318,17 @@ cdef class QuadTree:
                 self._fill_particles_nodes(&node.children[i], max_in_leaf)
 
     cdef void _fill_segments_nodes(self, Node* node, np.uint64_t max_in_leaf):
+        """
+        Subdivide node and bin each hilbert segment to the appropriate child. This function is
+        recrusive and will continue untill each child contains less than max_in_leaf particles.
+
+        Parameters
+        ----------
+        node : Node
+            Node that will be subdivided.
+        max_in_leaf : int
+            max number of particles in a node.
+        """
         cdef int i, child_node_index
 
         self._create_node_children(node)
@@ -260,6 +355,13 @@ cdef class QuadTree:
                 self._fill_segments_nodes(&node.children[i], max_in_leaf)
 
     cdef void _count_leaves(self, Node* node):
+        """
+        Recursively count the number of leaves by walking the tree.
+
+        Parameters
+        ----------
+        node : Node
+        """
         cdef int i
         if node.children == NULL:
             self.number_leaves += 1
@@ -268,15 +370,45 @@ cdef class QuadTree:
                 self._count_leaves(&node.children[i])
 
     def count_leaves(self):
+        """
+        Count the leaves in the tree.
+
+        Returns
+        -------
+        number_leaves : int
+            Number of leaves in the tree
+        """
         self.number_leaves = 0
         self._count_leaves(self.root)
         return self.number_leaves
 
     def count_nodes(self):
+        """
+        Count the number of nodes that are in the tree.
+
+        Returns
+        -------
+        number_nodes : int
+            Number of nodes in the tree
+        """
         return self.number_nodes
 
     cdef void _collect_leaves_for_export(self, Node* node, np.int64_t *start_keys,
             np.int32_t *num_part_leaf, int* counter):
+        """
+        Recursively store the first key in the hilbert cut and the number of particles
+        for each leaf.
+
+        Parameters
+        ----------
+        node : Node
+        start_keys : pointer to int64 array
+            Array that holds the start key for each leaf
+        num_part_leaf : pointer to int32 array
+            Array that holds the number of particles for each leaf
+        counter : pointer to int
+            Array index for start_keys and num_part_leaf
+        """
         cdef int i
         if node.children == NULL:
 
@@ -288,7 +420,27 @@ cdef class QuadTree:
             for i in range(4):
                 self._collect_leaves_for_export(&node.children[i], start_keys, num_part_leaf, counter)
 
+    # temp: delete later
+    def find_particles_process(self, np.int64_t[:] keys, np.int32_t[:] leaf_proc,
+            np.int32_t[:] proc_id):
+
+        cdef Node* node
+        cdef int i
+        for i in xrange(proc_id.size):
+            node = self._find_leaf(keys[i])
+            proc_id[i] = leaf_proc[node.array_index]
+
     def collect_leaves_for_export(self):
+        """
+        For each leaf store the first key in the hilbert cut and the number of particles.
+
+        Returns
+        -------
+        start_keys : ndarray
+            Array that holds the start key for each leaf
+        num_part_leaf : ndarray
+            Array that holds the number of particles for each leaf
+        """
         cdef int counter = 0
 
         self.number_leaves = 0
@@ -302,6 +454,19 @@ cdef class QuadTree:
         return np.asarray(start_keys), np.asarray(num_part_leaf)
 
     cdef Node* _find_leaf(self, np.int64_t key):
+        """
+        Find leaf that contains given hilbert key.
+
+        Parameters
+        ----------
+        key : int64
+            Hilbert key used for search.
+
+        Returns
+        -------
+        node : Node
+            Leaf that contains hilbert key.
+        """
         cdef Node* node
         cdef int child_node_index
 
@@ -313,7 +478,22 @@ cdef class QuadTree:
         return node
 
     cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level):
+        """
+        Find node that contains given hilbert key. The node can be at most *level* down
+        the tree.
 
+        Parameters
+        ----------
+        key : int64
+            Hilbert key used for search.
+        int : int
+            The max depth the node can be in the tree
+
+        Returns
+        -------
+        node : Node
+            Node that contains hilbert key.
+        """
         cdef Node* candidate = self.root
         cdef int child_node_index
 
@@ -342,8 +522,10 @@ cdef class QuadTree:
                 self._create_boundary_particles(&node.children[i], leaf_proc, particles, boundary_keys, rank)
 
     cdef node_neighbor_search(self, Node* node, np.int32_t* leaf_proc, list particles, set boundary_keys, int rank):
-        """loop over neighbor leafs of leaf, for each leaf that does not belong in the domain
-        create a particle at the center of that leaf"""
+        """
+        Loop over neighbor leafs of leaf, for each leaf that does not belong in the domain
+        create a particle at the center of that leaf.
+        """
         cdef Node *neighbor
         cdef np.int64_t neighbor_node_key
         cdef np.int32_t x, y
@@ -395,6 +577,9 @@ cdef class QuadTree:
 
     cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, list particles,
             set boundary_keys, int rank, int i, int j):
+        """
+        Find subneighbor leafs.
+        """
 
         if i == j == 1: return
 
@@ -456,6 +641,9 @@ cdef class QuadTree:
         return data_list
 
     cdef void _free_nodes(self, Node* node):
+        """
+        Recursively release memory allocated for nodes
+        """
         cdef int i
         if node.children != NULL:
             for i in range(4):
@@ -463,6 +651,9 @@ cdef class QuadTree:
             stdlib.free(node.children)
 
     def __dealloc__(self):
+        """
+        Release the memory allocated for the tree
+        """
         if self.root != NULL:
             self._free_nodes(self.root)
             stdlib.free(self.root)
