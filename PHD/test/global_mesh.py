@@ -24,15 +24,15 @@ pc['position-x'][:] = my_particles[0,:]
 pc['position-y'][:] = my_particles[1,:]
 
 #plot initial distribuition
-plt.scatter(pc['position-x'], pc['position-y'])
-plt.savefig("plot_init_proc_%d.png" % rank)
-plt.clf()
+#plt.scatter(pc['position-x'], pc['position-y'])
+#plt.savefig("plot_init_proc_%d.png" % rank)
+#plt.clf()
 
 # perform load balance
 order = 21
 lb = LoadBalance(pc, comm=comm)
 lb.decomposition()
-lb.exchange_particles()
+
 num_particles = pc.num_real_particles
 
 #print 'rank: %d number of particles %d: number of leaves %d' % (rank, pc.num_real_particles, lb.global_work.size)
@@ -61,7 +61,7 @@ border = lb.create_ghost_particles()
 # plot particles
 plt.scatter(pc['position-x'][:num_particles], pc['position-y'][:num_particles])
 plt.scatter(pc['position-x'][num_particles:], pc['position-y'][num_particles:], color="red")
-plt.scatter(pc['position-x'][border], pc['position-y'][border], color="green")
+#plt.scatter(pc['position-x'][border], pc['position-y'][border], color="green")
 #plt.scatter(send_data['position-x'], send_data['position-y'], color="red")
 plt.xlim(-0.2,1.2)
 plt.ylim(-0.2,1.2)
