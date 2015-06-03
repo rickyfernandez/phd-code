@@ -31,7 +31,6 @@ def find_boundary_particles(neighbor_graph, neighbors_graph_size, ghost_indices,
 
     return np.array(list(border))
 
-# maybe turn this into a function?
 class LoadBalance(object):
 
     def __init__(self, particles, corner=None, box_length=1.0, comm=None, factor=0.1, order=21):
@@ -82,10 +81,11 @@ class LoadBalance(object):
 
         self.sorted_keys = np.sort(self.keys)
 
-    def create_ghost_particles(self):
+    # turn this into a boundary class
+    def create_ghost_particles(self, global_tree):
         """Create initial ghost particles that hug the boundary
         """
-        ghost_particles = self.global_tree.create_boundary_particles(self.rank, self.leaf_proc)
+        ghost_particles = global_tree.create_boundary_particles(self.rank, self.leaf_proc)
         ghost_particles = np.transpose(np.array(ghost_particles))
 
         # reorder in processors order: exterior are put before interior ghost particles
@@ -220,25 +220,42 @@ class LoadBalance(object):
 
         return init_border
 
-    def update_ghost_particles(self):
-        pass
+#    def update_ghost_particles(self):
+#
+#        # its after a timestep, particles have moved
+#
+#        # recalculate hilbert keys, tag them
+#
+#        # create processor id for particles
+#
+#        # put ghost particles at the end of the array
+#
+#        # reorder ghost particles by processor rank
+#
+#        # generate boundary particles
+#
+#        # generate a new mesh
+#
+#        # label border particles
 
     def decomposition(self):
         """Perform domain decomposition
         """
+
         self.calculate_hilbert_keys()
-        self.build_global_tree()
-        self.calculate_global_work()
+        global_tree = self.build_global_tree()
+
+        self.calculate_global_work(global_tree)
         self.find_split_in_work()
 
         # count the number of particles that need to be exported
-        num_export = self.global_tree.count_particles_export(self.keys, self.leaf_proc, self.rank)
+        num_export = global_tree.count_particles_export(self.keys, self.leaf_proc, self.rank)
 
         self.export_ids = np.empty(num_export, dtype=np.int32)
         self.export_proc = np.empty(num_export, dtype=np.int32)
 
         # collect particles to be exported with their process location
-        self.global_tree.collect_particles_export(self.keys, self.export_ids, self.export_proc,
+        global_tree.collect_particles_export(self.keys, self.export_ids, self.export_proc,
                 self.leaf_proc, self.rank)
 
         # arrange particles in process order
@@ -273,7 +290,7 @@ class LoadBalance(object):
         self.exchange_particles(self.particles, send_data, send_particles, recv_particles,
                 current_size)
 
-        # need to call create_ghost_particles
+        return global_tree
 
     def build_global_tree(self):
         """Build a global tree on all process. This algorithm follows springel (2005). First
@@ -317,22 +334,24 @@ class LoadBalance(object):
         global_num_part_leaves = np.ascontiguousarray(global_num_part_leaves[ind])
 
         # rebuild tree using global leaves
-        self.global_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
+        global_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
                 global_leaf_keys, global_num_part_leaves,
                 total_num_process=self.size, factor=self.factor, order=self.order)
-        self.global_tree.build_tree()
+        global_tree.build_tree()
 
-    def calculate_global_work(self):
+        return global_tree
+
+    def calculate_global_work(self, global_tree):
         """Calculate global work by calculating local work in each leaf. Then sum
         work across all process. Currently the work is just the the number of
         particles in each leaf.
         """
         # map each leaf to an array index  
-        num_leaves = self.global_tree.assign_leaves_to_array()
+        num_leaves = global_tree.assign_leaves_to_array()
         work = np.zeros(num_leaves, dtype=np.int32)
 
         # work is just the number of local particles in each leaf
-        self.global_tree.calculate_work(self.keys, work)
+        global_tree.calculate_work(self.keys, work)
         self.global_work = np.empty(num_leaves, dtype=np.int32)
 
         # collect work from all process
