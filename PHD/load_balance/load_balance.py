@@ -112,7 +112,8 @@ class LoadBalance(object):
 
             # build the mesh
             p = np.array([self.particles['position-x'], self.particles['position-y']])
-            graphs = mesh.tessellate(p)
+            #graphs = mesh.tessellate(p)
+            mesh.tessellate(p)
 
             ghost_indices = np.arange(current_size, new_size)
 
@@ -139,7 +140,7 @@ class LoadBalance(object):
                         i = np.where(qm < old_ghost[k,:])[0]
 
                     # find bordering real particles
-                    border = find_boundary_particles(graphs['neighbors'], graphs['number of neighbors'],
+                    border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
                             exterior_ghost_indices[i], ghost_indices)
 
                     if border.size != 0:
@@ -168,7 +169,7 @@ class LoadBalance(object):
             interior_proc_id = proc_id[~exterior_ghost]
 
             # delete this
-            init_border = find_boundary_particles(graphs['neighbors'], graphs['number of neighbors'],
+            init_border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
                     interior_ghost_indices, ghost_indices)
 
             # bin processors
@@ -184,7 +185,7 @@ class LoadBalance(object):
                     start = cumsum_proc[proc] - interior_proc_bin[proc]
                     end   = cumsum_proc[proc]
 
-                    border = find_boundary_particles(graphs['neighbors'], graphs['number of neighbors'],
+                    border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
                             interior_ghost_indices[start:end], ghost_indices)
 
                     ghost_list.append(border)
