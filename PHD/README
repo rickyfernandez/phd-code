@@ -25,3 +25,14 @@ python setup.py build_ext --inplace
 in each directory. In the future I will place all cython builds in one setup.py
 script.
 
+Things to do
+===========
+
+1. clean up create ghost particles
+2. classes that use the tree should be
+    1. load balance
+    2. gravity
+    3. neighbor search
+    4. boundary
+3. load balance should return the tree that is used for all classes
+4. the gravity tree should be rebuilt every time step

@@ -9,25 +9,31 @@ class VoronoiMesh2D(VoronoiMeshBase):
     """
     2d voronoi mesh class
     """
-    def __init__(self):
+    def __init__(self, *arg, **kw):
+        super(VoronoiMesh2D, self).__init__(*arg, **kw)
+
         self.dim = 2
+        self["neighbors"] = None
+        self["number of neighbors"] = None
+        self["faces"] = None
+        self["voronoi vertices"] = None
 
 
-    def cell_length(self, vol):
-        """
-        compute length scale of the cell
-        """
-        return np.sqrt(vol/np.pi)
-
-
+#    def cell_length(self, vol):
+#        """
+#        compute length scale of the cell
+#        """
+#        return np.sqrt(vol/np.pi)
+#
+#
 #    def compute_assign_face_velocities(self, particles, graphs, faces_info, w, num_real_particles):
 #        """
 #        compute the face velocity from neighboring particles and it's residual motion
 #        """
 #        mesh.assign_face_velocities_2d(particles, graphs["neighbors"], graphs["number of neighbors"],
 #                faces_info["center of mass"], faces_info["velocities"], w, num_real_particles)
-
-
+#
+#
 #    def compute_cell_face_info(self, particles, graphs, cells_info, faces_info, num_particles):
 #        """
 #        compute volume and center of mass of all real particles and compute areas, center of mass, normal
@@ -38,8 +44,8 @@ class VoronoiMesh2D(VoronoiMeshBase):
 #                cells_info["volume"], cells_info["center of mass"],
 #                faces_info["areas"], faces_info["normal"], faces_info["pairs"], faces_info["center of mass"],
 #                num_particles)
-
-
+#
+#
     def tessellate(self, particles):
         """
         create 2d voronoi tesselation from particle positions
@@ -72,11 +78,7 @@ class VoronoiMesh2D(VoronoiMeshBase):
         neighbor_graph = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
         face_graph = np.array(list(itertools.chain.from_iterable(face_graph)), dtype=np.int32)
 
-        graphs = {
-                "neighbors" : neighbor_graph,
-                "number of neighbors" : neighbor_graph_sizes,
-                "faces" : face_graph,
-                "voronoi vertices" : vor.vertices
-                }
-
-        return graphs
+        self["neighbors"] = neighbor_graph
+        self["number of neighbors"] = neighbor_graph_sizes
+        self["faces"] = face_graph
+        self["voronoi vertices"] = vor.vertices
