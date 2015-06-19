@@ -3,6 +3,7 @@ import numpy as np
 from mpi4py import MPI
 
 from .tree import QuadTree
+from particles.particles import ParticleTAGS
 from hilbert.hilbert import hilbert_key_2d
 from mesh.voronoi_mesh_2d import VoronoiMesh2D
 
@@ -33,16 +34,22 @@ def find_boundary_particles(neighbor_graph, neighbors_graph_size, ghost_indices,
 
 class LoadBalance(object):
 
-    def __init__(self, particles, corner=None, box_length=1.0, comm=None, factor=0.1, order=21):
+    #def __init__(self, particles, corner=None, box_length=1.0, comm=None, factor=0.1, order=21):
+    def __init__(self, pcontainer, domain, comm=None, factor=0.1, order=21):
         """Constructor for load balance
 
         Parameters
         ----------
-        particles - particle container
-        corner - left corner of the box simulation
-        box_length - size of the box simulation
-        comm - MPI.COMM_WORLD for communication
-        order - the number of bits per dimension for constructing
+        particles : ParticleContainer
+            Particle container of fluid values.
+        corner : ndarray
+            Left corner of the box simulation.
+        box_length : double
+            Size of the box simulation.
+        comm : MPI.COMM_WORLD
+            MPI communicator.
+        order : int
+            The number of bits per dimension for constructing
                 hilbert keys
         """
         self.comm = comm
@@ -53,13 +60,16 @@ class LoadBalance(object):
 
         self.order = order
         self.number_real_particles = particles.num_real_particles
-        self.particles = particles
-        self.box_length = box_length
+        self.pcontainer = pcontainer
 
-        if corner is None:
-            self.corner = np.zeros(2, dtype=np.float64)
-        else:
-            self.corner = corner
+        #self.box_length = box_length
+        self.box_length = domain.xtranslate
+        self.corner = np.array([domain.xmin, domain.ymin], dtype=np.float64)
+
+        #if corner is None:
+        #    self.corner = np.zeros(2, dtype=np.float64)
+        #else:
+        #    self.corner = corner
 
         self.keys = None
         self.sorted_keys = None
@@ -70,8 +80,8 @@ class LoadBalance(object):
         """
         # normalize coordinates to hilbert space
         fac = (1 << self.order)/ self.box_length
-        x = self.particles['position-x']
-        y = self.particles['position-y']
+        x = self.pcontainer['position-x']
+        y = self.pcontainer['position-y']
 
         # create hilbert key for each particle
         self.keys = np.array([hilbert_key_2d(
@@ -82,145 +92,145 @@ class LoadBalance(object):
         self.sorted_keys = np.sort(self.keys)
 
     # turn this into a boundary class
-    def create_ghost_particles(self, global_tree):
-        """Create initial ghost particles that hug the boundary
-        """
-        ghost_particles = global_tree.create_boundary_particles(self.rank, self.leaf_proc)
-        ghost_particles = np.transpose(np.array(ghost_particles))
-
-        # reorder in processors order: exterior are put before interior ghost particles
-        proc_id = ghost_particles[2,:].astype(np.int32)
-        ind = np.argsort(proc_id)
-        ghost_particles = ghost_particles[:2,ind]
-        proc_id = proc_id[ind]
-
-        # create new position array for temporary mesh
-        self.particles.discard_ghost_particles()
-        current_size = self.particles.num_real_particles
-        new_size = current_size + ghost_particles.shape[1]
-        self.particles.resize(new_size)
-
-        # add this to the particle container instead
-        self.particles['position-x'][current_size:] = ghost_particles[0,:]/2.0**self.order
-        self.particles['position-y'][current_size:] = ghost_particles[1,:]/2.0**self.order
-
-        boundaries = [[self.corner[0], self.corner[0]+self.box_length],
-                [self.corner[1], self.corner[1]+self.box_length]]
-
-        mesh = VoronoiMesh2D()
-        for i in range(5):
-
-            # build the mesh
-            p = np.array([self.particles['position-x'], self.particles['position-y']])
-            #graphs = mesh.tessellate(p)
-            mesh.tessellate(p)
-
-            ghost_indices = np.arange(current_size, new_size)
-
-            # select exterior ghost particles
-            exterior_ghost = proc_id == -1
-            num_exterior_ghost = np.sum(exterior_ghost)
-            exterior_ghost_indices = ghost_indices[exterior_ghost]
-
-            new_ghost = np.empty((2,0), dtype=np.float64)
-            old_ghost = p[:,current_size:current_size+num_exterior_ghost]
-            num_exterior_ghost = 0 # count new exterior
-
-            for k, bound in enumerate(boundaries):
-
-                do_min = True
-                for qm in bound:
-
-                    if do_min == True:
-                        # lower boundary 
-                        i = np.where(old_ghost[k,:] < qm)[0]
-                        do_min = False
-                    else:
-                        # upper boundary
-                        i = np.where(qm < old_ghost[k,:])[0]
-
-                    # find bordering real particles
-                    border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
-                            exterior_ghost_indices[i], ghost_indices)
-
-                    if border.size != 0:
-
-                        # allocate space for new ghost particles
-                        tmp = np.empty((2, len(border)), dtype=np.float64)
-
-                        # reflect particles across boundary
-                        tmp[:,:] = p[:,border]
-                        tmp[k,:] = 2*qm - p[k,border]
-
-                        # add the new ghost particles
-                        new_ghost = np.concatenate((new_ghost, tmp), axis=1)
-                        num_exterior_ghost += border.size
-
-            new_size = current_size + num_exterior_ghost
-            self.particles.resize(new_size)
-
-            # add in the new exterior ghost particles
-            self.particles['position-x'][current_size:current_size+num_exterior_ghost] = new_ghost[0,:]
-            self.particles['position-y'][current_size:current_size+num_exterior_ghost] = new_ghost[1,:]
-
-
-            # do the interior particles now
-            interior_ghost_indices = ghost_indices[~exterior_ghost]
-            interior_proc_id = proc_id[~exterior_ghost]
-
-            # delete this
-            init_border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
-                    interior_ghost_indices, ghost_indices)
-
-            # bin processors
-            interior_proc_bin = np.bincount(interior_proc_id, minlength=self.size)
-            send_particles = np.zeros(self.size, dtype=np.int32)
-
-            # collect the indices for particles to export for each process
-            ghost_list = []
-            cumsum_proc = interior_proc_bin.cumsum()
-            for proc in xrange(self.size):
-                if interior_proc_bin[proc] != 0:
-
-                    start = cumsum_proc[proc] - interior_proc_bin[proc]
-                    end   = cumsum_proc[proc]
-
-                    border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
-                            interior_ghost_indices[start:end], ghost_indices)
-
-                    ghost_list.append(border)
-                    send_particles[proc] = border.size
-
-            # flatten out the indices
-            new_ghost = np.array(list(itertools.chain.from_iterable(ghost_list)), dtype=np.int32)
-
-            # extract data to send and remove the particles
-            send_data = {}
-            for prop in self.particles.properties.keys():
-                send_data[prop] = np.ascontiguousarray(self.particles[prop][new_ghost])
-
-            # discard current ghost particles: this does not release memory used
-            self.particles.discard_ghost_particles()
-
-            # how many particles are being sent from each process
-            recv_particles = np.empty(self.size, dtype=np.int32)
-            self.comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
-
-            # resize arrays to give room for incoming particles
-            new_size = current_size + num_exterior_ghost + np.sum(recv_particles)
-            self.particles.resize(new_size)
-
-            #print "rank: %d iteration: %d num: %d" % (self.rank, i, np.sum(recv_particles))
-
-            self.exchange_particles(self.particles, send_data, send_particles, recv_particles,
-                    current_size + num_exterior_ghost)
-
-            # temp hack 
-            proc_id = np.concatenate((-1*np.ones(num_exterior_ghost), np.repeat(np.arange(self.size),
-                recv_particles))).astype(np.int32)
-
-        return init_border
-
+#    def create_ghost_particles(self, global_tree):
+#        """Create initial ghost particles that hug the boundary
+#        """
+#        ghost_particles = global_tree.create_boundary_particles(self.rank, self.leaf_proc)
+#        ghost_particles = np.transpose(np.array(ghost_particles))
+#
+#        # reorder in processors order: exterior are put before interior ghost particles
+#        proc_id = ghost_particles[2,:].astype(np.int32)
+#        ind = np.argsort(proc_id)
+#        ghost_particles = ghost_particles[:2,ind]
+#        proc_id = proc_id[ind]
+#
+#        # create new position array for temporary mesh
+#        self.particles.discard_ghost_particles()
+#        current_size = self.particles.num_real_particles
+#        new_size = current_size + ghost_particles.shape[1]
+#        self.particles.resize(new_size)
+#
+#        # add this to the particle container instead
+#        self.particles['position-x'][current_size:] = ghost_particles[0,:]/2.0**self.order
+#        self.particles['position-y'][current_size:] = ghost_particles[1,:]/2.0**self.order
+#
+#        boundaries = [[self.corner[0], self.corner[0]+self.box_length],
+#                [self.corner[1], self.corner[1]+self.box_length]]
+#
+#        mesh = VoronoiMesh2D()
+#        for i in range(5):
+#
+#            # build the mesh
+#            p = np.array([self.particles['position-x'], self.particles['position-y']])
+#            #graphs = mesh.tessellate(p)
+#            mesh.tessellate(p)
+#
+#            ghost_indices = np.arange(current_size, new_size)
+#
+#            # select exterior ghost particles
+#            exterior_ghost = proc_id == -1
+#            num_exterior_ghost = np.sum(exterior_ghost)
+#            exterior_ghost_indices = ghost_indices[exterior_ghost]
+#
+#            new_ghost = np.empty((2,0), dtype=np.float64)
+#            old_ghost = p[:,current_size:current_size+num_exterior_ghost]
+#            num_exterior_ghost = 0 # count new exterior
+#
+#            for k, bound in enumerate(boundaries):
+#
+#                do_min = True
+#                for qm in bound:
+#
+#                    if do_min == True:
+#                        # lower boundary 
+#                        i = np.where(old_ghost[k,:] < qm)[0]
+#                        do_min = False
+#                    else:
+#                        # upper boundary
+#                        i = np.where(qm < old_ghost[k,:])[0]
+#
+#                    # find bordering real particles
+#                    border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
+#                            exterior_ghost_indices[i], ghost_indices)
+#
+#                    if border.size != 0:
+#
+#                        # allocate space for new ghost particles
+#                        tmp = np.empty((2, len(border)), dtype=np.float64)
+#
+#                        # reflect particles across boundary
+#                        tmp[:,:] = p[:,border]
+#                        tmp[k,:] = 2*qm - p[k,border]
+#
+#                        # add the new ghost particles
+#                        new_ghost = np.concatenate((new_ghost, tmp), axis=1)
+#                        num_exterior_ghost += border.size
+#
+#            new_size = current_size + num_exterior_ghost
+#            self.particles.resize(new_size)
+#
+#            # add in the new exterior ghost particles
+#            self.particles['position-x'][current_size:current_size+num_exterior_ghost] = new_ghost[0,:]
+#            self.particles['position-y'][current_size:current_size+num_exterior_ghost] = new_ghost[1,:]
+#
+#
+#            # do the interior particles now
+#            interior_ghost_indices = ghost_indices[~exterior_ghost]
+#            interior_proc_id = proc_id[~exterior_ghost]
+#
+#            # delete this
+#            init_border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
+#                    interior_ghost_indices, ghost_indices)
+#
+#            # bin processors
+#            interior_proc_bin = np.bincount(interior_proc_id, minlength=self.size)
+#            send_particles = np.zeros(self.size, dtype=np.int32)
+#
+#            # collect the indices for particles to export for each process
+#            ghost_list = []
+#            cumsum_proc = interior_proc_bin.cumsum()
+#            for proc in xrange(self.size):
+#                if interior_proc_bin[proc] != 0:
+#
+#                    start = cumsum_proc[proc] - interior_proc_bin[proc]
+#                    end   = cumsum_proc[proc]
+#
+#                    border = find_boundary_particles(mesh['neighbors'], mesh['number of neighbors'],
+#                            interior_ghost_indices[start:end], ghost_indices)
+#
+#                    ghost_list.append(border)
+#                    send_particles[proc] = border.size
+#
+#            # flatten out the indices
+#            new_ghost = np.array(list(itertools.chain.from_iterable(ghost_list)), dtype=np.int32)
+#
+#            # extract data to send and remove the particles
+#            send_data = {}
+#            for prop in self.particles.properties.keys():
+#                send_data[prop] = np.ascontiguousarray(self.particles[prop][new_ghost])
+#
+#            # discard current ghost particles: this does not release memory used
+#            self.particles.discard_ghost_particles()
+#
+#            # how many particles are being sent from each process
+#            recv_particles = np.empty(self.size, dtype=np.int32)
+#            self.comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
+#
+#            # resize arrays to give room for incoming particles
+#            new_size = current_size + num_exterior_ghost + np.sum(recv_particles)
+#            self.particles.resize(new_size)
+#
+#            #print "rank: %d iteration: %d num: %d" % (self.rank, i, np.sum(recv_particles))
+#
+#            self.exchange_particles(self.particles, send_data, send_particles, recv_particles,
+#                    current_size + num_exterior_ghost)
+#
+#            # temp hack 
+#            proc_id = np.concatenate((-1*np.ones(num_exterior_ghost), np.repeat(np.arange(self.size),
+#                recv_particles))).astype(np.int32)
+#
+#        return init_border
+#
 #    def update_ghost_particles(self):
 #
 #        # its after a timestep, particles have moved
@@ -269,12 +279,15 @@ class LoadBalance(object):
                 minlength=self.size).astype(np.int32)
 
         # extract particles to send 
-        send_data = {}
-        for prop in self.particles.properties.keys():
-            send_data[prop] = self.particles[prop][self.export_ids]
+        #send_data = {}
+        #for prop in self.particles.properties.keys():
+        #    send_data[prop] = self.particles[prop][self.export_ids]
+        send_data = extract_particles(self.export_ids)
 
         # remove exported and ghost particles: only real particles are in the container now
-        self.particles.discard_ghost_and_export_particles(self.export_ids)
+        #self.particles.discard_ghost_and_export_particles(self.export_ids)
+        self.pcontainer.remove_particles(self.export_ids)
+        self.pcontainer.remove_tagged_particles(ParticleTAGS.Ghost)
 
         # how many particles are being sent from each process
         recv_particles = np.empty(self.size, dtype=np.int32)
@@ -282,10 +295,12 @@ class LoadBalance(object):
 
         # resize arrays to give room for incoming particles and update
         # the new number of real particles in the container
-        current_size = self.particles.num_real_particles
-        new_size = current_size + np.sum(recv_particles)
-        self.particles.resize(new_size)
-        self.particles.num_real_particles = new_size
+        #current_size = self.particles.num_real_particles
+        #new_size = current_size + np.sum(recv_particles)
+        #self.particles.resize(new_size)
+        #self.particles.num_real_particles = new_size
+        num_incoming_particles = np.sum(recv_particles)
+        self.pcontainer.extend(num_incoming_particles)
 
         # exchange load balance particles
         self.exchange_particles(self.particles, send_data, send_particles, recv_particles,
@@ -379,38 +394,38 @@ class LoadBalance(object):
         leaves_end[-1] = self.global_work.size-1
         self.leaf_proc[j:] = self.size-1
 
-    def exchange_particles(self, particles, send_data, send_particles, recv_particles, current_size):
-        """Exchange particles between processes. Note you have allocate the appropriate space for
-        incoming particles in the particle container.
-
-        parameters
-        ----------
-            particles - particle container
-            send_data - dictionary of particle properties to send
-            send_particles - array of number particles to send to each process
-            recg_particles - array of number particles to receive from each process
-            current_size - starting index position for incoming particles
-        """
-        # displacements for the send and reveive buffers
-        offset_se = np.zeros(self.size, dtype=np.int32)
-        offset_re = np.zeros(self.size, dtype=np.int32)
-        for i in xrange(1,self.size):
-            offset_se[i] = send_particles[i-1] + offset_se[i-1]
-            offset_re[i] = recv_particles[i-1] + offset_re[i-1]
-
-        ptask = 0
-        while self.size > (1<<ptask):
-            ptask += 1
-
-        for ngrp in xrange(1,1 << ptask):
-            sendTask = self.rank
-            recvTask = self.rank ^ ngrp
-            if recvTask < self.size:
-                if send_particles[recvTask] > 0 or recv_particles[recvTask] > 0:
-                    for prop in particles.properties.keys():
-
-                        sendbuf=[send_data[prop],   (send_particles[recvTask], offset_se[recvTask])]
-                        recvbuf=[particles[prop][current_size:], (recv_particles[recvTask],
-                            offset_re[recvTask])]
-
-                        self.comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)
+#    def exchange_particles(self, particles, send_data, send_particles, recv_particles, current_size):
+#        """Exchange particles between processes. Note you have allocate the appropriate space for
+#        incoming particles in the particle container.
+#
+#        parameters
+#        ----------
+#            particles - particle container
+#            send_data - dictionary of particle properties to send
+#            send_particles - array of number particles to send to each process
+#            recv_particles - array of number particles to receive from each process
+#            current_size - starting index position for incoming particles
+#        """
+#        # displacements for the send and reveive buffers
+#        offset_se = np.zeros(self.size, dtype=np.int32)
+#        offset_re = np.zeros(self.size, dtype=np.int32)
+#        for i in xrange(1,self.size):
+#            offset_se[i] = send_particles[i-1] + offset_se[i-1]
+#            offset_re[i] = recv_particles[i-1] + offset_re[i-1]
+#
+#        ptask = 0
+#        while self.size > (1<<ptask):
+#            ptask += 1
+#
+#        for ngrp in xrange(1,1 << ptask):
+#            sendTask = self.rank
+#            recvTask = self.rank ^ ngrp
+#            if recvTask < self.size:
+#                if send_particles[recvTask] > 0 or recv_particles[recvTask] > 0:
+#                    for prop in particles.properties.keys():
+#
+#                        sendbuf=[send_data[prop],   (send_particles[recvTask], offset_se[recvTask])]
+#                        recvbuf=[particles[prop][current_size:], (recv_particles[recvTask],
+#                            offset_re[recvTask])]
+#
+#                        self.comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)

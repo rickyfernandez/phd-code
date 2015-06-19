@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from utils.carray import DoubleArray, IntArray, LongLongArray
+from utils.carray import DoubleArray, IntArray, LongArray, LongLongArray
 
 class TestDoubleArray(unittest.TestCase):
     """Tests for the DoubleArray class."""
@@ -19,6 +19,11 @@ class TestDoubleArray(unittest.TestCase):
         self.assertEqual(da.length, 0)
         self.assertEqual(da.alloc, 16)
         self.assertEqual(len(da.get_npy_array()), 0)
+
+    def test_dtype(self):
+        """Test data type."""
+        da = DoubleArray(10)
+        self.assertEqual(da.get_npy_array().dtype, np.float64)
 
     def test_get_set_indexing(self):
         """Test get/set and [] operator."""
@@ -178,6 +183,11 @@ class TestIntArray(unittest.TestCase):
         self.assertEqual(ia.alloc, 16)
         self.assertEqual(len(ia.get_npy_array()), 0)
 
+    def test_dtype(self):
+        """Test data type."""
+        ia = IntArray(10)
+        self.assertEqual(ia.get_npy_array().dtype, np.int8)
+
     def test_get_set_indexing(self):
         """Test get/set and [] operator."""
         ia = IntArray(10)
@@ -261,26 +271,26 @@ class TestIntArray(unittest.TestCase):
         ia1.extend(ia2.get_npy_array())
 
         self.assertEqual(ia1.length, 10)
-        self.assertEqual(np.allclose(ia1.get_npy_array(), np.arange(10, dtype=np.int)), True)
+        self.assertEqual(np.allclose(ia1.get_npy_array(), np.arange(10, dtype=np.int8)), True)
 
     def test_remove(self):
         """Tests the remove function"""
         ia1 = IntArray(10)
         ia1_array = ia1.get_npy_array()
-        ia1_array[:] = np.arange(10, dtype=np.int)
+        ia1_array[:] = np.arange(10, dtype=np.int8)
 
         rem = [0, 4, 3]
         ia1.remove(np.array(rem, dtype=np.int))
         self.assertEqual(ia1.length, 7)
         self.assertEqual(np.allclose(
-            np.array([7, 1, 2, 8, 9, 5, 6], dtype=np.int),
+            np.array([7, 1, 2, 8, 9, 5, 6], dtype=np.int8),
             ia1.get_npy_array()),
             True)
 
         ia1.remove(np.array(rem, dtype=np.int))
         self.assertEqual(ia1.length, 4)
         self.assertEqual(np.allclose(
-            np.array([6.0, 1.0, 2.0, 5.0], dtype=np.int),
+            np.array([6.0, 1.0, 2.0, 5.0], dtype=np.int8),
             ia1.get_npy_array()),
             True)
 
@@ -288,7 +298,7 @@ class TestIntArray(unittest.TestCase):
         ia1.remove(np.array(rem, dtype=np.int))
         self.assertEqual(ia1.length, 1)
         self.assertEqual(np.allclose(
-            np.array([2.0], dtype=np.int),
+            np.array([2.0], dtype=np.int8),
             ia1.get_npy_array()),
             True)
 
@@ -300,159 +310,317 @@ class TestIntArray(unittest.TestCase):
         """Test the align_array function."""
         ia1 = IntArray(10)
         ia1_array = ia1.get_npy_array()
-        ia1_array[:] = np.arange(10, dtype=np.int)
+        ia1_array[:] = np.arange(10, dtype=np.int8)
 
         new_indices = np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int)
         ia1.align_array(new_indices)
 
         self.assertEqual(np.allclose(
-            np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int),
+            np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int8),
             ia1.get_npy_array()), True)
+
+class TestLongArray(unittest.TestCase):
+    """Tests for the DoubleArray class."""
+    def test_constructor(self):
+        """Test the constructor."""
+        la = LongArray(10)
+
+        self.assertEqual(la.length, 10)
+        self.assertEqual(la.alloc, 10)
+        self.assertEqual(len(la.get_npy_array()), 10)
+        self.assertEqual(la.get_npy_array().itemsize, 4)
+
+        la = LongArray()
+
+        self.assertEqual(la.length, 0)
+        self.assertEqual(la.alloc, 16)
+        self.assertEqual(len(la.get_npy_array()), 0)
+
+    def test_dtype(self):
+        """Test data type."""
+        la = LongArray(10)
+        self.assertEqual(la.get_npy_array().dtype, np.int32)
+
+    def test_get_set_indexing(self):
+        """Test get/set and [] operator."""
+        la = LongArray(10)
+        la.set(0, 10)
+        la.set(9, 1)
+
+        self.assertEqual(la.get(0), 10)
+        self.assertEqual(la.get(9), 1)
+
+        la[9] = 2
+        self.assertEqual(la[9], 2)
+
+    def test_append(self):
+        """Test the append function."""
+        la = LongArray(0)
+        la.append(1)
+        la.append(2)
+        la.append(3)
+
+        self.assertEqual(la.length, 3)
+        self.assertEqual(la[0], 1)
+        self.assertEqual(la[1], 2)
+        self.assertEqual(la[2], 3)
+
+    def test_resize(self):
+        """Tests the resize function."""
+        la = LongArray(0)
+
+        la.resize(20)
+        self.assertEqual(la.length, 20)
+        self.assertEqual(len(la.get_npy_array()), 20)
+        self.assertEqual(la.alloc >= la.length, True)
+
+    def test_get_npy_array(self):
+        """Tests the get_npy_array array."""
+        la = LongArray(3)
+        la[0] = 1
+        la[1] = 2
+        la[2] = 3
+
+        nparray = la.get_npy_array()
+        self.assertEqual(len(nparray), 3)
+
+        for i in range(3):
+            self.assertEqual(nparray[i], la[i])
+
+    def test_squeeze(self):
+        """Tests the squeeze function."""
+        la = LongArray(5)
+        la.append(4)
+
+        self.assertEqual(la.alloc > la.length, True)
+
+        la.squeeze()
+
+        self.assertEqual(la.length, 6)
+        self.assertEqual(la.alloc == la.length, True)
+        self.assertEqual(len(la.get_npy_array()), 6)
+
+    def test_reset(self):
+        """Tests the reset function."""
+        la = LongArray(5)
+        la.reset()
+
+        self.assertEqual(la.length, 0)
+        self.assertEqual(la.alloc, 5)
+        self.assertEqual(len(la.get_npy_array()), 0)
+
+    def test_extend(self):
+        """Tests teh extend function."""
+        la1 = LongArray(5)
+
+        for i in range(5):
+            la1[i] = i
+
+        la2 = LongArray(5)
+
+        for i in range(5):
+            la2[i] = 5 + i
+
+        la1.extend(la2.get_npy_array())
+
+        self.assertEqual(la1.length, 10)
+        self.assertEqual(np.allclose(la1.get_npy_array(), np.arange(10, dtype=np.int32)), True)
+
+    def test_remove(self):
+        """Tests the remove function"""
+        la1 = LongArray(10)
+        la1_array = la1.get_npy_array()
+        la1_array[:] = np.arange(10, dtype=np.int32)
+
+        rem = [0, 4, 3]
+        la1.remove(np.array(rem, dtype=np.int))
+        self.assertEqual(la1.length, 7)
+        self.assertEqual(np.allclose(
+            np.array([7, 1, 2, 8, 9, 5, 6], dtype=np.int32),
+            la1.get_npy_array()),
+            True)
+
+        la1.remove(np.array(rem, dtype=np.int))
+        self.assertEqual(la1.length, 4)
+        self.assertEqual(np.allclose(
+            np.array([6.0, 1.0, 2.0, 5.0], dtype=np.int32),
+            la1.get_npy_array()),
+            True)
+
+        rem = [0, 1, 3]
+        la1.remove(np.array(rem, dtype=np.int))
+        self.assertEqual(la1.length, 1)
+        self.assertEqual(np.allclose(
+            np.array([2.0], dtype=np.int32),
+            la1.get_npy_array()),
+            True)
+
+        la1.remove(np.array([0], dtype=np.int))
+        self.assertEqual(la1.length, 0)
+        self.assertEqual(len(la1.get_npy_array()), 0)
+
+    def test_aling_array(self):
+        """Test the align_array function."""
+        la1 = LongArray(10)
+        la1_array = la1.get_npy_array()
+        la1_array[:] = np.arange(10, dtype=np.int32)
+
+        new_indices = np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int)
+        la1.align_array(new_indices)
+
+        self.assertEqual(np.allclose(
+            np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int32),
+            la1.get_npy_array()), True)
 
 class TestLongLongArray(unittest.TestCase):
     """Tests for the LongLongArray class."""
     def test_constructor(self):
         """Test the constructor."""
-        ia = LongLongArray(10)
+        lla = LongLongArray(10)
 
-        self.assertEqual(ia.length, 10)
-        self.assertEqual(ia.alloc, 10)
-        self.assertEqual(len(ia.get_npy_array()), 10)
-        self.assertEqual(ia.get_npy_array().itemsize, 8)
+        self.assertEqual(lla.length, 10)
+        self.assertEqual(lla.alloc, 10)
+        self.assertEqual(len(lla.get_npy_array()), 10)
+        self.assertEqual(lla.get_npy_array().itemsize, 8)
 
-        ia = LongLongArray()
+        lla = LongArray()
 
-        self.assertEqual(ia.length, 0)
-        self.assertEqual(ia.alloc, 16)
-        self.assertEqual(len(ia.get_npy_array()), 0)
+        self.assertEqual(lla.length, 0)
+        self.assertEqual(lla.alloc, 16)
+        self.assertEqual(len(lla.get_npy_array()), 0)
+
+    def test_dtype(self):
+        """Test data type."""
+        lla = LongLongArray(10)
+        self.assertEqual(lla.get_npy_array().dtype, np.int64)
 
     def test_get_set_indexing(self):
         """Test get/set and [] operator."""
-        ia = IntArray(10)
-        ia.set(0, 10)
-        ia.set(9, 1)
+        lla = LongLongArray(10)
+        lla.set(0, 10)
+        lla.set(9, 1)
 
-        self.assertEqual(ia.get(0), 10)
-        self.assertEqual(ia.get(9), 1)
+        self.assertEqual(lla.get(0), 10)
+        self.assertEqual(lla.get(9), 1)
 
-        ia[9] = 2
-        self.assertEqual(ia[9], 2)
+        lla[9] = 2
+        self.assertEqual(lla[9], 2)
 
     def test_append(self):
         """Test the append function."""
-        ia = IntArray(0)
-        ia.append(1)
-        ia.append(2)
-        ia.append(3)
+        lla = LongLongArray(0)
+        lla.append(1)
+        lla.append(2)
+        lla.append(3)
 
-        self.assertEqual(ia.length, 3)
-        self.assertEqual(ia[0], 1)
-        self.assertEqual(ia[1], 2)
-        self.assertEqual(ia[2], 3)
+        self.assertEqual(lla.length, 3)
+        self.assertEqual(lla[0], 1)
+        self.assertEqual(lla[1], 2)
+        self.assertEqual(lla[2], 3)
 
     def test_resize(self):
         """Tests the resize function."""
-        ia = IntArray(0)
+        lla = LongLongArray(0)
 
-        ia.resize(20)
-        self.assertEqual(ia.length, 20)
-        self.assertEqual(len(ia.get_npy_array()), 20)
-        self.assertEqual(ia.alloc >= ia.length, True)
+        lla.resize(20)
+        self.assertEqual(lla.length, 20)
+        self.assertEqual(len(lla.get_npy_array()), 20)
+        self.assertEqual(lla.alloc >= lla.length, True)
 
     def test_get_npy_array(self):
         """Tests the get_npy_array array."""
-        ia = IntArray(3)
-        ia[0] = 1
-        ia[1] = 2
-        ia[2] = 3
+        lla = LongLongArray(3)
+        lla[0] = 1
+        lla[1] = 2
+        lla[2] = 3
 
-        nparray = ia.get_npy_array()
+        nparray = lla.get_npy_array()
         self.assertEqual(len(nparray), 3)
 
         for i in range(3):
-            self.assertEqual(nparray[i], ia[i])
+            self.assertEqual(nparray[i], lla[i])
 
     def test_squeeze(self):
         """Tests the squeeze function."""
-        ia = IntArray(5)
-        ia.append(4)
+        lla = LongLongArray(5)
+        lla.append(4)
 
-        self.assertEqual(ia.alloc > ia.length, True)
+        self.assertEqual(lla.alloc > lla.length, True)
 
-        ia.squeeze()
+        lla.squeeze()
 
-        self.assertEqual(ia.length, 6)
-        self.assertEqual(ia.alloc == ia.length, True)
-        self.assertEqual(len(ia.get_npy_array()), 6)
+        self.assertEqual(lla.length, 6)
+        self.assertEqual(lla.alloc == lla.length, True)
+        self.assertEqual(len(lla.get_npy_array()), 6)
 
     def test_reset(self):
         """Tests the reset function."""
-        ia = IntArray(5)
-        ia.reset()
+        lla = LongLongArray(5)
+        lla.reset()
 
-        self.assertEqual(ia.length, 0)
-        self.assertEqual(ia.alloc, 5)
-        self.assertEqual(len(ia.get_npy_array()), 0)
+        self.assertEqual(lla.length, 0)
+        self.assertEqual(lla.alloc, 5)
+        self.assertEqual(len(lla.get_npy_array()), 0)
 
     def test_extend(self):
         """Tests teh extend function."""
-        ia1 = IntArray(5)
+        lla1 = LongLongArray(5)
 
         for i in range(5):
-            ia1[i] = i
+            lla1[i] = i
 
-        ia2 = IntArray(5)
+        lla2 = LongLongArray(5)
 
         for i in range(5):
-            ia2[i] = 5 + i
+            lla2[i] = 5 + i
 
-        ia1.extend(ia2.get_npy_array())
+        lla1.extend(lla2.get_npy_array())
 
-        self.assertEqual(ia1.length, 10)
-        self.assertEqual(np.allclose(ia1.get_npy_array(), np.arange(10, dtype=np.int)), True)
+        self.assertEqual(lla1.length, 10)
+        self.assertEqual(np.allclose(lla1.get_npy_array(), np.arange(10, dtype=np.int64)), True)
 
     def test_remove(self):
         """Tests the remove function"""
-        ia1 = IntArray(10)
-        ia1_array = ia1.get_npy_array()
-        ia1_array[:] = np.arange(10, dtype=np.int)
+        lla1 = LongLongArray(10)
+        lla1_array = lla1.get_npy_array()
+        lla1_array[:] = np.arange(10, dtype=np.int64)
 
         rem = [0, 4, 3]
-        ia1.remove(np.array(rem, dtype=np.int))
-        self.assertEqual(ia1.length, 7)
+        lla1.remove(np.array(rem, dtype=np.int))
+        self.assertEqual(lla1.length, 7)
         self.assertEqual(np.allclose(
-            np.array([7, 1, 2, 8, 9, 5, 6], dtype=np.int),
-            ia1.get_npy_array()),
+            np.array([7, 1, 2, 8, 9, 5, 6], dtype=np.int64),
+            lla1.get_npy_array()),
             True)
 
-        ia1.remove(np.array(rem, dtype=np.int))
-        self.assertEqual(ia1.length, 4)
+        lla1.remove(np.array(rem, dtype=np.int))
+        self.assertEqual(lla1.length, 4)
         self.assertEqual(np.allclose(
-            np.array([6.0, 1.0, 2.0, 5.0], dtype=np.int),
-            ia1.get_npy_array()),
+            np.array([6.0, 1.0, 2.0, 5.0], dtype=np.int64),
+            lla1.get_npy_array()),
             True)
 
         rem = [0, 1, 3]
-        ia1.remove(np.array(rem, dtype=np.int))
-        self.assertEqual(ia1.length, 1)
+        lla1.remove(np.array(rem, dtype=np.int))
+        self.assertEqual(lla1.length, 1)
         self.assertEqual(np.allclose(
-            np.array([2.0], dtype=np.int),
-            ia1.get_npy_array()),
+            np.array([2.0], dtype=np.int64),
+            lla1.get_npy_array()),
             True)
 
-        ia1.remove(np.array([0], dtype=np.int))
-        self.assertEqual(ia1.length, 0)
-        self.assertEqual(len(ia1.get_npy_array()), 0)
+        lla1.remove(np.array([0], dtype=np.int))
+        self.assertEqual(lla1.length, 0)
+        self.assertEqual(len(lla1.get_npy_array()), 0)
 
     def test_aling_array(self):
         """Test the align_array function."""
-        ia1 = IntArray(10)
-        ia1_array = ia1.get_npy_array()
-        ia1_array[:] = np.arange(10, dtype=np.int)
+        lla1 = LongLongArray(10)
+        lla1_array = lla1.get_npy_array()
+        lla1_array[:] = np.arange(10, dtype=np.int64)
 
         new_indices = np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int)
-        ia1.align_array(new_indices)
+        lla1.align_array(new_indices)
 
         self.assertEqual(np.allclose(
-            np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int),
-            ia1.get_npy_array()), True)
+            np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int64),
+            lla1.get_npy_array()), True)
