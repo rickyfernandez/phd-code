@@ -20,15 +20,21 @@ particles = Extension("phd.particles.*",
         )
 extensions.append(particles)
 
+domain = Extension("phd.domain.*",
+        ["phd/domain/*.pyx"],
+        include_dirs=[np.get_include()]
+        )
+extensions.append(domain)
+
 setup(
         name="phd",
-        verision="0.1",
+        version="0.1",
         author="Ricardo Fernandez",
         license="MIT",
         cmdclass={'build_ext':build_ext},
         ext_modules=cythonize(extensions),
-        packages=["phd", "phd.utils", "phd.particles"],
-        package_data={'phd.utils':['*.pxd'], 'phd.particles':['*.pxd']
+        packages=["phd", "phd.utils", "phd.particles", "phd.doamin"],
+        package_data={'phd.utils':['*.pxd'], 'phd.particles':['*.pxd'], 'phd.domain':['*.pxd']
             },
         )
 #setup(
