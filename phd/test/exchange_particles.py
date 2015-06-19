@@ -39,7 +39,6 @@ import numpy as np
 
 from particles.particle_array import ParticleArray
 from utils.exchange_particles import exchange_particles
-#from load_balance.load_balance import LoadBalance
 
 
 comm = MPI.COMM_WORLD
@@ -141,9 +140,6 @@ comm.Bcast(buf=X, root=0)
 comm.Bcast(buf=Y, root=0)
 comm.Bcast(buf=GID, root=0)
 
-# use the load balance to exchange the particles
-#lb = LoadBalance(pc, factor=1.0, comm=comm)
-
 # arrange particles in process order
 ind = exportProcs.argsort()
 exportProcs = exportProcs[ind]
@@ -157,10 +153,12 @@ send_data = {}
 for prop in pa.properties.keys():
     send_data[prop] = pa[prop][exportLocalids]
 
-# remove exported and ghost particles: only real particles are in the container now
+# remove exported and ghost particles
 pa.remove_particles(exportLocalids)
-#pa.remove_tagged_particles(1)
-#pa.discard_ghost_and_export_particles(exportLocalids)
+
+# place incoming particles at the end of the array
+# after resizing
+displacement = pa.get_number_of_particles()
 
 # how many particles are being sent from each process
 recv_particles = np.empty(size, dtype=np.int32)
@@ -168,15 +166,10 @@ comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
 
 # resize arrays to give room for incoming particles and update
 # the new number of real particles in the container
-#current_size = pa.num_real_particles
-#new_size = current_size + np.sum(recv_particles)
-#pa.resize(new_size)
-#pa.num_real_particles = new_size
 num_incoming_particles = np.sum(recv_particles)
 pa.extend(num_incoming_particles)
 
-#lb.exchange_particles(pa, send_data, send_particles, recv_particles, current_size)
-exchange_particles(pa, send_data, send_particles, recv_particles, pa.num_real_particles, comm)
+exchange_particles(pa, send_data, send_particles, recv_particles, displacement, comm)
 
 # after the exchange each proc should have 6 particles except for proc 0
 numParticles = 6
