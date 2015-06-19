@@ -32,10 +32,10 @@ setup(
             },
         )
 #setup(
-#        cmdclass={'build_ext':build_ext},
-#        ext_modules= cythonize([
-#            'phd/utils/carray.pyx',
-#            'phd/particles/particle_array.pyx'
+#        #cmdclass={'build_ext':build_ext},
+#        ext_modules=cythonize([
+#            'phd/utils/carray.pyx'#,
+#            #'phd/particles/particle_array.pyx'
 #            ],
 #            include_path=[np.get_include()]
 #            )
