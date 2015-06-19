@@ -35,7 +35,6 @@ def find_boundary_particles(neighbor_graph, neighbors_graph_size, ghost_indices,
 
 class LoadBalance(object):
 
-    #def __init__(self, particles, corner=None, box_length=1.0, comm=None, factor=0.1, order=21):
     def __init__(self, parray, domain, comm=None, factor=0.1, order=21):
         """Constructor for load balance
 
@@ -63,7 +62,6 @@ class LoadBalance(object):
         self.number_real_particles = parray.num_real_particles
         self.parray = parray
 
-        #self.box_length = box_length
         fudge_factor = 1.001
         self.box_length = max(domain.xtranslate,
                 domain.ytranslate)*fudge_factor
@@ -73,29 +71,18 @@ class LoadBalance(object):
             domain.ytranslate*0.5-0.5*self.box_length],
             dtype=np.float64)
 
-        #if corner is None:
-        #    self.corner = np.zeros(2, dtype=np.float64)
-        #else:
-        #    self.corner = corner
-
         self.keys = None
         self.sorted_keys = None
         self.global_num_real_particles = None
 
     def calculate_hilbert_keys(self):
-        """map particle positions to hilbert space
-        """
+        """map particle positions to hilbert space"""
 
-        # make sure real particles are placed in the front of
-        # the array
-        self.parray.align_particles()
+        x = self.parray.get('position-x')
+        y = self.parray.get('position-y')
 
         # normalize coordinates to hilbert space
         fac = (1 << self.order)/ self.box_length
-        #x = self.parray['position-x']
-        #y = self.parray['position-y']
-        x = self.parray.get('position-x')
-        y = self.parray.get('position-y')
 
         # create hilbert key for each particle
         self.keys = np.array([hilbert_key_2d(
@@ -305,22 +292,12 @@ class LoadBalance(object):
             send_data[prop] = self.parray[prop][self.export_ids]
         #send_data = extract_particles(self.export_ids)
 
-        # remove exported and ghost particles: only real particles remain
-        #self.particles.discard_ghost_and_export_particles(self.export_ids)
+        # remove exported particles
         self.parray.remove_particles(self.export_ids)
-        self.parray.remove_tagged_particles(ParticleTAGS.Ghost)
-
 
         # how many particles are being sent from each process
         recv_particles = np.empty(self.size, dtype=np.int32)
         self.comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
-
-        # resize arrays to give room for incoming particles and update
-        # the new number of real particles in the container
-        #current_size = self.particles.num_real_particles
-        #new_size = current_size + np.sum(recv_particles)
-        #self.particles.resize(new_size)
-        #self.particles.num_real_particles = new_size
 
         # resize particle array and place incoming particles at the
         # end of the array
@@ -422,39 +399,3 @@ class LoadBalance(object):
 
         leaves_end[-1] = self.global_work.size-1
         self.leaf_proc[j:] = self.size-1
-
-#    def exchange_particles(self, particles, send_data, send_particles, recv_particles, current_size):
-#        """Exchange particles between processes. Note you have allocate the appropriate space for
-#        incoming particles in the particle container.
-#
-#        parameters
-#        ----------
-#            particles - particle container
-#            send_data - dictionary of particle properties to send
-#            send_particles - array of number particles to send to each process
-#            recv_particles - array of number particles to receive from each process
-#            current_size - starting index position for incoming particles
-#        """
-#        # displacements for the send and reveive buffers
-#        offset_se = np.zeros(self.size, dtype=np.int32)
-#        offset_re = np.zeros(self.size, dtype=np.int32)
-#        for i in xrange(1,self.size):
-#            offset_se[i] = send_particles[i-1] + offset_se[i-1]
-#            offset_re[i] = recv_particles[i-1] + offset_re[i-1]
-#
-#        ptask = 0
-#        while self.size > (1<<ptask):
-#            ptask += 1
-#
-#        for ngrp in xrange(1,1 << ptask):
-#            sendTask = self.rank
-#            recvTask = self.rank ^ ngrp
-#            if recvTask < self.size:
-#                if send_particles[recvTask] > 0 or recv_particles[recvTask] > 0:
-#                    for prop in particles.properties.keys():
-#
-#                        sendbuf=[send_data[prop],   (send_particles[recvTask], offset_se[recvTask])]
-#                        recvbuf=[particles[prop][current_size:], (recv_particles[recvTask],
-#                            offset_re[recvTask])]
-#
-#                        self.comm.Sendrecv(sendbuf=sendbuf, dest=recvTask, recvbuf=recvbuf, source=recvTask)
