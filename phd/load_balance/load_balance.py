@@ -3,9 +3,10 @@ import numpy as np
 from mpi4py import MPI
 
 from .tree import QuadTree
-from particles.particles import ParticleTAGS
+from particles.particle_tags import ParticleTAGS
 from hilbert.hilbert import hilbert_key_2d
 from mesh.voronoi_mesh_2d import VoronoiMesh2D
+from utils.exchange_particles import exchange_particles
 
 
 def find_boundary_particles(neighbor_graph, neighbors_graph_size, ghost_indices, total_ghost_indices):
@@ -35,12 +36,12 @@ def find_boundary_particles(neighbor_graph, neighbors_graph_size, ghost_indices,
 class LoadBalance(object):
 
     #def __init__(self, particles, corner=None, box_length=1.0, comm=None, factor=0.1, order=21):
-    def __init__(self, pcontainer, domain, comm=None, factor=0.1, order=21):
+    def __init__(self, parray, domain, comm=None, factor=0.1, order=21):
         """Constructor for load balance
 
         Parameters
         ----------
-        particles : ParticleContainer
+        parray : ParticleArray
             Particle container of fluid values.
         corner : ndarray
             Left corner of the box simulation.
@@ -59,12 +60,18 @@ class LoadBalance(object):
         self.factor = factor
 
         self.order = order
-        self.number_real_particles = particles.num_real_particles
-        self.pcontainer = pcontainer
+        self.number_real_particles = parray.num_real_particles
+        self.parray = parray
 
         #self.box_length = box_length
-        self.box_length = domain.xtranslate
-        self.corner = np.array([domain.xmin, domain.ymin], dtype=np.float64)
+        fudge_factor = 1.001
+        self.box_length = max(domain.xtranslate,
+                domain.ytranslate)*fudge_factor
+
+        self.corner = np.array([
+            domain.xtranslate*0.5-0.5*self.box_length,
+            domain.ytranslate*0.5-0.5*self.box_length],
+            dtype=np.float64)
 
         #if corner is None:
         #    self.corner = np.zeros(2, dtype=np.float64)
@@ -78,10 +85,17 @@ class LoadBalance(object):
     def calculate_hilbert_keys(self):
         """map particle positions to hilbert space
         """
+
+        # make sure real particles are placed in the front of
+        # the array
+        self.parray.align_particles()
+
         # normalize coordinates to hilbert space
         fac = (1 << self.order)/ self.box_length
-        x = self.pcontainer['position-x']
-        y = self.pcontainer['position-y']
+        #x = self.parray['position-x']
+        #y = self.parray['position-y']
+        x = self.parray.get('position-x')
+        y = self.parray.get('position-y')
 
         # create hilbert key for each particle
         self.keys = np.array([hilbert_key_2d(
@@ -253,9 +267,16 @@ class LoadBalance(object):
         """Perform domain decomposition
         """
 
+        # remove current (if any) ghost particles
+        self.parray.remove_tagged_particles(ParticleTAGS.Ghost)
+
+        # generate hilbert keys for real particles and create
+        # global tree over all process
         self.calculate_hilbert_keys()
         global_tree = self.build_global_tree()
 
+        # partion tree leaves by the amount work done
+        # in each leaf
         self.calculate_global_work(global_tree)
         self.find_split_in_work()
 
@@ -279,15 +300,16 @@ class LoadBalance(object):
                 minlength=self.size).astype(np.int32)
 
         # extract particles to send 
-        #send_data = {}
-        #for prop in self.particles.properties.keys():
-        #    send_data[prop] = self.particles[prop][self.export_ids]
-        send_data = extract_particles(self.export_ids)
+        send_data = {}
+        for prop in self.parray.properties.keys():
+            send_data[prop] = self.parray[prop][self.export_ids]
+        #send_data = extract_particles(self.export_ids)
 
-        # remove exported and ghost particles: only real particles are in the container now
+        # remove exported and ghost particles: only real particles remain
         #self.particles.discard_ghost_and_export_particles(self.export_ids)
-        self.pcontainer.remove_particles(self.export_ids)
-        self.pcontainer.remove_tagged_particles(ParticleTAGS.Ghost)
+        self.parray.remove_particles(self.export_ids)
+        self.parray.remove_tagged_particles(ParticleTAGS.Ghost)
+
 
         # how many particles are being sent from each process
         recv_particles = np.empty(self.size, dtype=np.int32)
@@ -299,12 +321,19 @@ class LoadBalance(object):
         #new_size = current_size + np.sum(recv_particles)
         #self.particles.resize(new_size)
         #self.particles.num_real_particles = new_size
+
+        # resize particle array and place incoming particles at the
+        # end of the array
+        displacement = self.parray.num_real_particles
         num_incoming_particles = np.sum(recv_particles)
-        self.pcontainer.extend(num_incoming_particles)
+        self.parray.extend(num_incoming_particles)
 
         # exchange load balance particles
-        self.exchange_particles(self.particles, send_data, send_particles, recv_particles,
-                current_size)
+        exchange_particles(self.parray, send_data, send_particles, recv_particles,
+                displacement, self.comm)
+
+        # align particles and count the number of real particles
+        self.parray.align_particles()
 
         return global_tree
 
@@ -314,7 +343,7 @@ class LoadBalance(object):
         leaves are collected to all process and a second tree is created using the leaves
         (i.e. the hilbert cuts).
         """
-        # collect number of particles from all process
+        # collect number of real particles from all process
         sendbuf = np.array([self.number_real_particles], dtype=np.int32)
         proc_num_real_particles = np.empty(self.size, dtype=np.int32)
 

@@ -18,8 +18,9 @@ The particles are then redistributed by the load balance scheme
 import mpi4py.MPI as MPI
 import numpy as np
 
+from domain.domain import DomainLimits
 from load_balance.load_balance import LoadBalance
-from particles.particle_container import ParticleContainer
+from particles.particle_array import ParticleArray
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -43,7 +44,7 @@ if rank == 0:
 
     gid = np.array( [0, 1, 2, 3, 4, 5,
                      6, 7, 8, 9, 10,
-                     11], dtype=np.int8 )
+                     11], dtype=np.int32 )
 
 if rank == 1:
     num_particles = 6
@@ -54,14 +55,14 @@ if rank == 1:
                    3.0, 3.0, 3.0] , dtype=np.float64)
 
     gid = np.array( [12, 13, 14, 15,
-                     16, 17], dtype=np.int8 )
+                     16, 17], dtype=np.int32 )
 
 if rank == 2:
     num_particles = 3
     x = np.array( [4.0, 3.0, 0.0] , dtype=np.float64)
     y = np.array( [3.0, 3.0, 4.0] , dtype=np.float64)
 
-    gid = np.array( [18, 19, 20], dtype=np.int8 )
+    gid = np.array( [18, 19, 20], dtype=np.int32 )
 
 
 if rank == 3:
@@ -69,19 +70,21 @@ if rank == 3:
     x = np.array( [1.0, 2.0, 3.0, 4.0] , dtype=np.float64)
     y = np.array( [4.0, 4.0, 4.0, 4.0] , dtype=np.float64)
 
-    gid = np.array( [21, 22, 23, 24], dtype=np.int8 )
+    gid = np.array( [21, 22, 23, 24], dtype=np.int32 )
 
 
 # create particle data structure
-pc = ParticleContainer(num_particles)
-pc['position-x'][:] = x
-pc['position-y'][:] = y
-pc['tag'][:] = gid
+pa = ParticleArray(num_particles)
+pa['position-x'][:] = x
+pa['position-y'][:] = y
+
+pa.register_property('gid', 'long')
+pa['gid'][:] = gid
 
 # Gather the global data on root
 X = np.zeros(shape=25, dtype=np.float64)
 Y = np.zeros(shape=25, dtype=np.float64)
-GID = np.zeros(shape=25, dtype=np.int8)
+GID = np.zeros(shape=25, dtype=np.int32)
 
 displacements = np.array([12, 6, 3, 4], dtype=np.int32)
 
@@ -95,10 +98,12 @@ comm.Bcast(buf=Y,  root=0)
 comm.Bcast(buf=GID,root=0)
 
 # perform the load decomposition
+dom = DomainLimits(dim=2, xmin=0., xmax=4.)
 order = 3
-box_length = 4*1.001
-corner = np.ones(2, dtype=np.float64)*(0.5*4 - 0.5*box_length)
-load_b = LoadBalance(pc, corner, box_length, comm, 1.0, order)
+#box_length = 4*1.001
+#corner = np.ones(2, dtype=np.float64)*(0.5*4 - 0.5*box_length)
+#load_b = LoadBalance(pc, corner, box_length, comm, 1.0, order)
+load_b = LoadBalance(pa, dom, comm=comm, factor=1.0, order=order)
 load_b.decomposition()
 
 # make sure every key has been accounted for
@@ -118,7 +123,10 @@ assert(load_b.global_num_real_particles == 25)
 # so the sum of each leaf should be the total number of particles
 assert(np.sum(load_b.global_work) == 25)
 
-for i in xrange(pc.num_real_particles):
-    assert(abs(X[pc['tag'][i]] - pc['position-x'][i]) < 1e-15)
-    assert(abs(Y[pc['tag'][i]] - pc['position-y'][i]) < 1e-15)
-    assert(GID[pc['tag'][i]] == pc['tag'][i])
+# the particle array should only have real particles
+assert(pa.num_real_particles == pa.get_number_of_particles())
+
+for i in xrange(pa.get_number_of_particles()):
+    assert(abs(X[pa['gid'][i]] - pa['position-x'][i]) < 1e-15)
+    assert(abs(Y[pa['gid'][i]] - pa['position-y'][i]) < 1e-15)
+    assert(GID[pa['gid'][i]] == pa['gid'][i])
