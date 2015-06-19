@@ -1,12 +1,9 @@
 import numpy as np
 cimport numpy as np
 
-#from ..utils.carray import BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
-#from .particle_tags import ParticleTAGS
 from utils.carray import BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
 from particles.particle_tags import ParticleTAGS
 
-#from ..utils.carray cimport BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
 from utils.carray cimport BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
 from cpython cimport PyDict_Contains, PyDict_GetItem
 
