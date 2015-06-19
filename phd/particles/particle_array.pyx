@@ -269,51 +269,51 @@ cdef class ParticleArray:
 #        if prop_array is not None:
 #            return prop_array.get_npy_array()[:self.num_real_particles]
 #
-#    def get(self, *args, only_real_particles=True):
-#        """Return the numpy array for the property names in the
-#        arguments.
-#
-#        Parameters
-#        ---------
-#        only_real_particles : bool
-#            Indicates if properties of only real particles need to be
-#            returned or all particles to be returned. By default only
-#            real particles will be returned.
-#        args : list
-#            List of property names
-#        """
-#        cdef int nargs = len(args)
-#        cdef list result = []
-#        cdef str arg
-#        cdef int i
-#        cdef BaseArray arg_array
-#
-#        if nargs == 0:
-#            return
-#
-#        if only_real_particles == True:
-#            for i in xrange(nargs):
-#                arg = args[i]
-#                self._check_property(arg)
-#
-#                if arg in self.properties:
-#                    arg_array = self.properties[arg]
-#                    result.append(
-#                            arg_array.get_npy_array()[:self.num_real_particles])
-#        else:
-#            for i in xrange(nargs):
-#                arg = args[i]
-#                self._check_property(arg)
-#
-#                if arg in self.properties:
-#                    arg_array = self.properties[arg]
-#                    result.append(arg_array.get_npy_array())
-#
-#        if nargs == 1:
-#            return result[0]
-#        else:
-#            return tuple(result)
-#
+    def get(self, *args, only_real_particles=True):
+        """Return the numpy array for the property names in the
+        arguments.
+
+        Parameters
+        ---------
+        only_real_particles : bool
+            Indicates if properties of only real particles need to be
+            returned or all particles to be returned. By default only
+            real particles will be returned.
+        args : list
+            List of property names
+        """
+        cdef int nargs = len(args)
+        cdef list result = []
+        cdef str arg
+        cdef int i
+        cdef BaseArray arg_array
+
+        if nargs == 0:
+            return
+
+        if only_real_particles == True:
+            for i in range(nargs):
+                arg = args[i]
+                self._check_property(arg)
+
+                if arg in self.properties:
+                    arg_array = self.properties[arg]
+                    result.append(
+                            arg_array.get_npy_array()[:self.num_real_particles])
+        else:
+            for i in range(nargs):
+                arg = args[i]
+                self._check_property(arg)
+
+                if arg in self.properties:
+                    arg_array = self.properties[arg]
+                    result.append(arg_array.get_npy_array())
+
+        if nargs == 1:
+            return result[0]
+        else:
+            return tuple(result)
+
     cpdef BaseArray get_carray(self, str prop):
         """Return the c-array for the property."""
         if PyDict_Contains(self.properties, prop) == 1:
@@ -321,13 +321,13 @@ cdef class ParticleArray:
         else:
             return None
 
-#    cdef _check_property(self, str prop):
-#        """Check if a property is present or not."""
-#        if PyDict_Contains(slef.properties, prop):
-#                return
-#        else:
-#            raise AttributeError, 'property %s not present' % (prop)
-#
+    cdef _check_property(self, str prop):
+        """Check if a property is present or not."""
+        if PyDict_Contains(self.properties, prop):
+                return
+        else:
+            raise AttributeError, 'property %s not present' % (prop)
+
     cpdef int align_particles(self) except -1:
         """Moves all Real particles to the beginning of the array.
 

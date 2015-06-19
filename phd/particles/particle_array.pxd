@@ -17,5 +17,6 @@ cdef class ParticleArray:
     cpdef remove_tagged_particles(self, np.int8_t tag)
     cpdef extend(self, int num_particles)
     cpdef BaseArray get_carray(self, str prop)
+    cdef  _check_property(self, str prop)
     cpdef int align_particles(self) except -1
     cpdef resize(self, long size)
