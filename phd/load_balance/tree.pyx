@@ -9,43 +9,7 @@ from particles.particle_array cimport ParticleArray
 from hilbert.hilbert import hilbert_key_2d
 
 
-#cdef struct Node:
-#
-#    np.int64_t sfc_key          # space filling curve key for node
-#    np.int64_t sfc_start_key    # first key in space filling curve cut in node
-#    np.int64_t number_sfc_keys  # total number of possible space filling keys in this node
-#
-#    np.int64_t level            # level of tree
-#    np.float64_t box_length     # side length of node
-#    np.float64_t center[2]      # center coordinates of node
-#
-#    int particle_index_start    # index of first particle in space filling curve cut
-#    int number_particles        # number of particles in cut
-#    int number_segments         # number of hilbert cuts
-#    int leaf                    # is this node a leaf
-#    int array_index             # index of global array that stores leaf data
-#
-#    Node* children              # children nodes, 4 of them
-#    int   children_index[4]     # index to point to the right child
-
-
 cdef class QuadTree:
-
-#    cdef np.int64_t[:] sorted_part_keys    # hilbert keys of the particles/segments in order
-#    cdef np.int64_t[:] sorted_segm_keys    # hilbert keys of the particles/segments in order
-#    cdef np.int32_t[:] num_part_leaf       # if using segments, then this number of particles in segment 
-#
-#    cdef int order                         # number of bits per dimension
-#    cdef double factor                     #  
-#    cdef int build_using_cuts              # flag tree built from hilbert cuts 
-#    cdef int total_num_process             # global total number of process
-#    cdef int total_num_part                # global total number of particles
-#    cdef int max_in_leaf                   # max allowed particles in a leaf
-#    cdef int number_leaves                 # number of leaves
-#    cdef int number_nodes                  # number of created nodes
-#
-#    cdef Node* root                        # pointer to the root of the tree
-#    cdef np.float64_t xmin, xmax, ymin, ymax
 
     def __init__(self, int total_num_part,
             np.ndarray[np.int64_t, ndim=1] sorted_part_keys,
@@ -422,16 +386,6 @@ cdef class QuadTree:
             for i in range(4):
                 self._collect_leaves_for_export(&node.children[i], start_keys, num_part_leaf, counter)
 
-    # temp: delete later
-    def find_particles_process(self, np.int64_t[:] keys, np.int32_t[:] leaf_proc,
-            np.int32_t[:] proc_id):
-
-        cdef Node* node
-        cdef int i
-        for i in xrange(proc_id.size):
-            node = self._find_leaf(keys[i])
-            proc_id[i] = leaf_proc[node.array_index]
-
     def collect_leaves_for_export(self):
         """
         For each leaf store the first key in the hilbert cut and the number of particles.
@@ -505,30 +459,22 @@ cdef class QuadTree:
 
         return candidate
 
-    #def create_boundary_particles(self, int rank, np.int32_t[:] leaf_proc):
     def create_boundary_particles(self, ParticleArray part_array, int rank, np.int32_t[:] leaf_proc):
         """create boundary ghost particles"""
-        #cdef list particles = list()
         cdef set boundary_keys = set()
         self._create_boundary_particles(self.root, part_array, &leaf_proc[0], boundary_keys, rank)
-        #self._create_boundary_particles(self.root, &leaf_proc[0], particles, boundary_keys, rank)
-        #return particles
 
-    #cdef _create_boundary_particles(self, Node* node, np.int32_t* leaf_proc, list particles, set boundary_keys, int rank):
     cdef void _create_boundary_particles(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank):
         cdef int i
         if node.children == NULL:
             # leaf belongs to our domain
             if leaf_proc[node.array_index] == rank:
-                #self.node_neighbor_search(node, leaf_proc, particles, boundary_keys, rank)
                 self.node_neighbor_search(node, part_array, leaf_proc, boundary_keys, rank)
         else:
             for i in range(4):
                 self._create_boundary_particles(&node.children[i], part_array, leaf_proc, boundary_keys, rank)
-                #self._create_boundary_particles(&node.children[i], leaf_proc, particles, boundary_keys, rank)
 
-    #cdef node_neighbor_search(self, Node* node, np.int32_t* leaf_proc, list particles, set boundary_keys, int rank):
     cdef void node_neighbor_search(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank):
         """
@@ -569,7 +515,6 @@ cdef class QuadTree:
 
                         # check if their are sub nodes, if so collect them too
                         if neighbor.children != NULL:
-                            #self._subneighbor_find(neighbor, leaf_proc, particles, boundary_keys, rank, i, j)
                             self._subneighbor_find(neighbor, leaf_proc, part_array, boundary_keys, rank, i, j)
                         else:
                             if leaf_proc[neighbor.array_index] != rank:
@@ -577,18 +522,13 @@ cdef class QuadTree:
                                     boundary_keys.add(neighbor.sfc_key)
                                     part_array.make_ghost(neighbor.center[0], neighbor.center[1],
                                             leaf_proc[neighbor.array_index])
-                                    #particles.append([neighbor.center[0], neighbor.center[1],
-                                    #        leaf_proc[neighbor.array_index]])
 
                 # domain bondary node
                 else:
                     if (i == 1 and j != 1) or (i != 1 and j == 1):
-                        part_array.make_ghost(x, y, -1)
-                        #particles.append([x, y, -1])
+                        part_array.make_ghost(<np.float64_t> x, <np.float64_t> y, -1)
 
-        #return node_list
 
-    #cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, list particles,
     cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleArray part_array,
             set boundary_keys, int rank, int i, int j):
         """
@@ -629,7 +569,6 @@ cdef class QuadTree:
                 child_cand = &candidate.children[candidate.children_index[child_index]]
 
                 if child_cand.children != NULL:
-                    #self._subneighbor_find(child_cand, leaf_proc, particles, boundary_keys, rank, i, j)
                     self._subneighbor_find(child_cand, leaf_proc, part_array, boundary_keys, rank, i, j)
                 else:
                     if leaf_proc[child_cand.array_index] != rank:
@@ -637,8 +576,6 @@ cdef class QuadTree:
                             boundary_keys.add(child_cand.sfc_key)
                             part_array.make_ghost(child_cand.center[0], child_cand.center[1],
                                     leaf_proc[child_cand.array_index])
-                            #particles.append([child_cand.center[0], child_cand.center[1],
-                            #    leaf_proc[child_cand.array_index]])
 
 #    def update_hilbert_keys_and_process_id(self, np.float64_t[:] x_pos, np.float64_t[:] y_pos, np.int64_t[:] keys,
 #            np.int8_t[:] tags, np.int32_t[:] proc_ids, np.int32_t[:] leaf_procs, np.float64_t[:] corner,
