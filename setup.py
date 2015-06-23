@@ -26,6 +26,12 @@ domain = Extension("phd.domain.*",
         )
 extensions.append(domain)
 
+load_balance = Extension("phd.load_balance.*",
+        ["phd/load_balance/*.pyx"],
+        include_dirs=[np.get_include()]
+        )
+extensions.append(load_balance)
+
 setup(
         name="phd",
         version="0.1",
@@ -33,8 +39,9 @@ setup(
         license="MIT",
         cmdclass={'build_ext':build_ext},
         ext_modules=cythonize(extensions),
-        packages=["phd", "phd.utils", "phd.particles", "phd.doamin"],
-        package_data={'phd.utils':['*.pxd'], 'phd.particles':['*.pxd'], 'phd.domain':['*.pxd']
+        packages=["phd", "phd.utils", "phd.particles", "phd.doamin", "phd.load_balance"],
+        package_data={'phd.utils':['*.pxd'], 'phd.particles':['*.pxd'],
+            'phd.domain':['*.pxd'], 'phd.load_balance':['*.pxd']
             },
         )
 #setup(

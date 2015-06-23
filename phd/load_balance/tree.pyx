@@ -4,46 +4,48 @@ cimport numpy as np
 cimport libc.stdlib as stdlib
 cimport cython
 
+from particles.particle_array cimport ParticleArray
+
 from hilbert.hilbert import hilbert_key_2d
 
 
-cdef struct Node:
-
-    np.int64_t sfc_key          # space filling curve key for node
-    np.int64_t sfc_start_key    # first key in space filling curve cut in node
-    np.int64_t number_sfc_keys  # total number of possible space filling keys in this node
-
-    np.int64_t level            # level of tree
-    np.float64_t box_length     # side length of node
-    np.float64_t center[2]      # center coordinates of node
-
-    int particle_index_start    # index of first particle in space filling curve cut
-    int number_particles        # number of particles in cut
-    int number_segments         # number of hilbert cuts
-    int leaf                    # is this node a leaf
-    int array_index             # index of global array that stores leaf data
-
-    Node* children              # children nodes, 4 of them
-    int   children_index[4]     # index to point to the right child
+#cdef struct Node:
+#
+#    np.int64_t sfc_key          # space filling curve key for node
+#    np.int64_t sfc_start_key    # first key in space filling curve cut in node
+#    np.int64_t number_sfc_keys  # total number of possible space filling keys in this node
+#
+#    np.int64_t level            # level of tree
+#    np.float64_t box_length     # side length of node
+#    np.float64_t center[2]      # center coordinates of node
+#
+#    int particle_index_start    # index of first particle in space filling curve cut
+#    int number_particles        # number of particles in cut
+#    int number_segments         # number of hilbert cuts
+#    int leaf                    # is this node a leaf
+#    int array_index             # index of global array that stores leaf data
+#
+#    Node* children              # children nodes, 4 of them
+#    int   children_index[4]     # index to point to the right child
 
 
 cdef class QuadTree:
 
-    cdef np.int64_t[:] sorted_part_keys    # hilbert keys of the particles/segments in order
-    cdef np.int64_t[:] sorted_segm_keys    # hilbert keys of the particles/segments in order
-    cdef np.int32_t[:] num_part_leaf       # if using segments, then this number of particles in segment 
-
-    cdef int order                         # number of bits per dimension
-    cdef double factor                     #  
-    cdef int build_using_cuts              # flag tree built from hilbert cuts 
-    cdef int total_num_process             # global total number of process
-    cdef int total_num_part                # global total number of particles
-    cdef int max_in_leaf                   # max allowed particles in a leaf
-    cdef int number_leaves                 # number of leaves
-    cdef int number_nodes                  # number of created nodes
-
-    cdef Node* root                        # pointer to the root of the tree
-    cdef np.float64_t xmin, xmax, ymin, ymax
+#    cdef np.int64_t[:] sorted_part_keys    # hilbert keys of the particles/segments in order
+#    cdef np.int64_t[:] sorted_segm_keys    # hilbert keys of the particles/segments in order
+#    cdef np.int32_t[:] num_part_leaf       # if using segments, then this number of particles in segment 
+#
+#    cdef int order                         # number of bits per dimension
+#    cdef double factor                     #  
+#    cdef int build_using_cuts              # flag tree built from hilbert cuts 
+#    cdef int total_num_process             # global total number of process
+#    cdef int total_num_part                # global total number of particles
+#    cdef int max_in_leaf                   # max allowed particles in a leaf
+#    cdef int number_leaves                 # number of leaves
+#    cdef int number_nodes                  # number of created nodes
+#
+#    cdef Node* root                        # pointer to the root of the tree
+#    cdef np.float64_t xmin, xmax, ymin, ymax
 
     def __init__(self, int total_num_part,
             np.ndarray[np.int64_t, ndim=1] sorted_part_keys,
@@ -334,7 +336,7 @@ cdef class QuadTree:
         self._create_node_children(node)
 
         # loop over parent segments and assign them to proper child
-        for i in xrange(node.particle_index_start, node.particle_index_start + node.number_segments):
+        for i in range(node.particle_index_start, node.particle_index_start + node.number_segments):
 
             # which node does this segment belong to
             child_node_index = (self.sorted_segm_keys[i] - node.sfc_start_key)/(node.number_sfc_keys/4)
@@ -350,7 +352,7 @@ cdef class QuadTree:
             node.children[child_node_index].number_segments += 1
 
         # if child has more particles then the maximum allowed, then subdivide 
-        for i in xrange(4):
+        for i in range(4):
             if node.children[i].number_particles > max_in_leaf:
                 self._fill_segments_nodes(&node.children[i], max_in_leaf)
 
@@ -366,7 +368,7 @@ cdef class QuadTree:
         if node.children == NULL:
             self.number_leaves += 1
         else:
-            for i in xrange(4):
+            for i in range(4):
                 self._count_leaves(&node.children[i])
 
     def count_leaves(self):
@@ -504,31 +506,30 @@ cdef class QuadTree:
         return candidate
 
     #def create_boundary_particles(self, int rank, np.int32_t[:] leaf_proc):
-    def create_boundary_particles(self, ParticleContainer part_container, int rank, np.int32_t[:] leaf_proc):
+    def create_boundary_particles(self, ParticleArray part_array, int rank, np.int32_t[:] leaf_proc):
         """create boundary ghost particles"""
         #cdef list particles = list()
         cdef set boundary_keys = set()
-
-        self._create_boundary_particles(self.root, &part_container, &leaf_proc[0], boundary_keys, rank)
+        self._create_boundary_particles(self.root, part_array, &leaf_proc[0], boundary_keys, rank)
         #self._create_boundary_particles(self.root, &leaf_proc[0], particles, boundary_keys, rank)
         #return particles
 
     #cdef _create_boundary_particles(self, Node* node, np.int32_t* leaf_proc, list particles, set boundary_keys, int rank):
-    cdef _create_boundary_particles(self, Node* node, ParticleContainer* part_container, np.int32_t* leaf_proc,
+    cdef void _create_boundary_particles(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank):
         cdef int i
         if node.children == NULL:
             # leaf belongs to our domain
             if leaf_proc[node.array_index] == rank:
                 #self.node_neighbor_search(node, leaf_proc, particles, boundary_keys, rank)
-                self.node_neighbor_search(node, part_container, leaf_proc, boundary_keys, rank)
+                self.node_neighbor_search(node, part_array, leaf_proc, boundary_keys, rank)
         else:
             for i in range(4):
-                self._create_boundary_particles(&node.children[i], part_container, leaf_proc, boundary_keys, rank)
+                self._create_boundary_particles(&node.children[i], part_array, leaf_proc, boundary_keys, rank)
                 #self._create_boundary_particles(&node.children[i], leaf_proc, particles, boundary_keys, rank)
 
     #cdef node_neighbor_search(self, Node* node, np.int32_t* leaf_proc, list particles, set boundary_keys, int rank):
-    cdef node_neighbor_search(self, Node* node, ParticleContainer* part_container, np.int32_t* leaf_proc, list particles,
+    cdef void node_neighbor_search(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank):
         """
         Loop over neighbor leafs of leaf, for each leaf that does not belong in the domain
@@ -568,12 +569,13 @@ cdef class QuadTree:
 
                         # check if their are sub nodes, if so collect them too
                         if neighbor.children != NULL:
-                            self._subneighbor_find(neighbor, leaf_proc, particles, boundary_keys, rank, i, j)
+                            #self._subneighbor_find(neighbor, leaf_proc, particles, boundary_keys, rank, i, j)
+                            self._subneighbor_find(neighbor, leaf_proc, part_array, boundary_keys, rank, i, j)
                         else:
                             if leaf_proc[neighbor.array_index] != rank:
                                 if neighbor.sfc_key not in boundary_keys:
                                     boundary_keys.add(neighbor.sfc_key)
-                                    pa.make_ghost(neighbor.center[0], neighbor.center[1],
+                                    part_array.make_ghost(neighbor.center[0], neighbor.center[1],
                                             leaf_proc[neighbor.array_index])
                                     #particles.append([neighbor.center[0], neighbor.center[1],
                                     #        leaf_proc[neighbor.array_index]])
@@ -581,12 +583,13 @@ cdef class QuadTree:
                 # domain bondary node
                 else:
                     if (i == 1 and j != 1) or (i != 1 and j == 1):
-                        pa.make_ghost(x, y, -1)
+                        part_array.make_ghost(x, y, -1)
                         #particles.append([x, y, -1])
 
-        return node_list
+        #return node_list
 
-    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, list particles,
+    #cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, list particles,
+    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleArray part_array,
             set boundary_keys, int rank, int i, int j):
         """
         Find subneighbor leafs.
@@ -626,62 +629,65 @@ cdef class QuadTree:
                 child_cand = &candidate.children[candidate.children_index[child_index]]
 
                 if child_cand.children != NULL:
-                    self._subneighbor_find(child_cand, leaf_proc, particles, boundary_keys, rank, i, j)
+                    #self._subneighbor_find(child_cand, leaf_proc, particles, boundary_keys, rank, i, j)
+                    self._subneighbor_find(child_cand, leaf_proc, part_array, boundary_keys, rank, i, j)
                 else:
                     if leaf_proc[child_cand.array_index] != rank:
                         if child_cand.sfc_key not in boundary_keys:
                             boundary_keys.add(child_cand.sfc_key)
-                            particles.append([child_cand.center[0], child_cand.center[1],
-                                leaf_proc[child_cand.array_index]])
+                            part_array.make_ghost(child_cand.center[0], child_cand.center[1],
+                                    leaf_proc[child_cand.array_index])
+                            #particles.append([child_cand.center[0], child_cand.center[1],
+                            #    leaf_proc[child_cand.array_index]])
 
-    def update_hilbert_keys_and_process_id(self, np.float64_t[:] x_pos, np.float64_t[:] y_pos, np.int64_t[:] keys,
-            np.int8_t[:] tags, np.int32_t[:] proc_ids, np.int32_t[:] leaf_procs, np.float64_t[:] corner,
-            np.float64_t box_length, int my_proc):
-        """
-        real particle = 0
-        boundary ghost interior = 1
-        boundary ghost exterior = 2
-        ghost interior = 3
-        ghost exterior = 4
-        """
-
-        cdef Node *node
-        cdef np.int32_t x, y
-        cdef np.int64_t key
-
-        cdef int i
-        for i in xrange(x.size): # loop over all particles, real + ghost
-
-            # map particle position into hilbert space
-            x = <np.int32_t> ((x_pos[i] - corner[0])*fac)
-            y = <np.int32_t> ((y_pos[i] - corner[1])*fac)
-
-            # make sure the key is in the global domain
-            if (self.xmin <= x and x <= self.xmax) and (self.ymin <= y and y <= self.ymax):
-
-                # generate hilbert key for particle
-                key = hilbert_key_2d(x, y, self.order)
-                keys[i] = key
-
-                # use key to find which leaf the particles lives in and store process id
-                node = self._find_leaf(key)
-                procs_id[i] = leaf_procs[node.array_index]
-
-                # check if this particle is real or it is a interior ghost 
-                if procs_id[i] != my_proc:
-                    tags[i] = 3
-                else:
-                    tags[i] = 0
-
-            else:
-
-                # ghost particles outside the domain are assigned -1 key
-                keys[i] = -1
-                procs_id[i] = -1
-                tags[i] = 4
+#    def update_hilbert_keys_and_process_id(self, np.float64_t[:] x_pos, np.float64_t[:] y_pos, np.int64_t[:] keys,
+#            np.int8_t[:] tags, np.int32_t[:] proc_ids, np.int32_t[:] leaf_procs, np.float64_t[:] corner,
+#            np.float64_t box_length, int my_proc):
+#        """
+#        real particle = 0
+#        boundary ghost interior = 1
+#        boundary ghost exterior = 2
+#        ghost interior = 3
+#        ghost exterior = 4
+#        """
+#
+#        cdef Node *node
+#        cdef np.int32_t x, y
+#        cdef np.int64_t key
+#
+#        cdef int i
+#        for i in xrange(x.size): # loop over all particles, real + ghost
+#
+#            # map particle position into hilbert space
+#            x = <np.int32_t> ((x_pos[i] - corner[0])*fac)
+#            y = <np.int32_t> ((y_pos[i] - corner[1])*fac)
+#
+#            # make sure the key is in the global domain
+#            if (self.xmin <= x and x <= self.xmax) and (self.ymin <= y and y <= self.ymax):
+#
+#                # generate hilbert key for particle
+#                key = hilbert_key_2d(x, y, self.order)
+#                keys[i] = key
+#
+#                # use key to find which leaf the particles lives in and store process id
+#                node = self._find_leaf(key)
+#                procs_id[i] = leaf_procs[node.array_index]
+#
+#                # check if this particle is real or it is a interior ghost 
+#                if procs_id[i] != my_proc:
+#                    tags[i] = 3
+#                else:
+#                    tags[i] = 0
+#
+#            else:
+#
+#                # ghost particles outside the domain are assigned -1 key
+#                keys[i] = -1
+#                procs_id[i] = -1
+#                tags[i] = 4
 
     # temporary function to do outputs in python
-    cdef _iterate(self, Node* node, list data_list):
+    cdef void _iterate(self, Node* node, list data_list):
 
         data_list.append([node.center[0], node.center[1], node.box_length,
             node.level, node.particle_index_start, node.number_particles])
