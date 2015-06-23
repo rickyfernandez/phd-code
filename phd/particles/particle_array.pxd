@@ -20,3 +20,4 @@ cdef class ParticleArray:
     cdef  _check_property(self, str prop)
     cpdef int align_particles(self) except -1
     cpdef resize(self, long size)
+    cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc)

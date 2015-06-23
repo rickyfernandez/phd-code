@@ -369,6 +369,8 @@ cdef class ParticleArray:
                 index_array.data[i] = i
 
         self.num_real_particles = num_real_particles
+        self.num_ghost_particles = num_particles - num_real_particles
+
         # we now have the alinged indices. Rearrange the particles
         # accordingly
         arrays = self.properties.values()
@@ -425,7 +427,7 @@ cdef class ParticleArray:
 #
     cpdef resize(self, long size):
         """Resize all arrays to the new size."""
-        cdef BaseArray
+        cdef BaseArray array
         for array in self.properties.values():
             array.resize(size)
 
@@ -544,21 +546,31 @@ cdef class ParticleArray:
 #        # update nubmer of ghost particle
 #        self.num_ghost_particles += 1
 #
-#  cdef make_ghost(self, np.float64_t x, np.float64_t y):
-#       cdef str field
-#       cdef np.float64_t mass
-#
-#        # check if adding a new particle exceeds array size
-#        if self.total_particles() + 1 > self.properties["mass"].alloc:
-#            # resize all arrays by 10%
-#            self.resize(int(1.1*self.total_particles())):
-#
-#        # new position
-#        self["position-x"] = x
-#        self["position-y"] = y
-#
-#        self["key"] = -1
-#        self["proc"] = -1
-#
-#        # update nubmer of ghost particle
-#        self.num_ghost_particles += 1
+    cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc):
+
+        cdef long j, new_size
+        cdef BaseArray array
+
+        # check if adding a new particle exceeds causes the array size
+        # to be larger then the allocated memory
+        j = self.get_number_of_particles()
+        if j + 1 > self.properties["mass"].alloc:
+            # reserve memory by 10% of existing memory for all arrays
+            new_size = int(1.1*self.get_number_of_particles())
+            for array in self.properties.values():
+                array.reserve(new_size)
+                array.append(0)
+        else:
+            # makes sure that each array has added
+            # one more particle
+            for array in self.properties.values():
+                array.append(0)
+
+        # j is the next avaiable slot for a new ghost particle
+        self["position-x"][j] = x
+        self["position-y"][j] = y
+        self["process"][j] = proc
+        self["tag"][j] = Ghost
+
+        # update nubmer of ghost particle
+        self.num_ghost_particles += 1
