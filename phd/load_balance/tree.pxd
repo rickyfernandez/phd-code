@@ -30,6 +30,10 @@ cdef class QuadTree:
     cdef np.int64_t[:] sorted_segm_keys    # hilbert keys of the particles/segments in order
     cdef np.int32_t[:] num_part_leaf       # if using segments, then this number of particles in segment 
 
+    cdef np.float64_t[:] domain_corner     # corner of particle domain
+    cdef double domain_length              # particle domain size
+    cdef double domain_fac                 # factor for domain to hilbert space mapping
+
     cdef int order                         # number of bits per dimension
     cdef double factor                     #  
     cdef int build_using_cuts              # flag tree built from hilbert cuts 

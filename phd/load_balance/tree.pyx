@@ -13,6 +13,8 @@ cdef class QuadTree:
 
     def __init__(self, int total_num_part,
             np.ndarray[np.int64_t, ndim=1] sorted_part_keys,
+            np.ndarray[np.float64_t, ndim=1] corner,
+            double domain_length,
             np.ndarray[np.int64_t, ndim=1] sorted_segm_keys=None,
             np.ndarray[np.int32_t, ndim=1] num_part_leaf=None,
             int total_num_process=1, double factor=1.0, int order=21):
@@ -23,6 +25,11 @@ cdef class QuadTree:
         self.total_num_part = total_num_part
         self.total_num_process = total_num_process
         self.root = NULL
+
+        # original info of the particle domain
+        self.domain_corner = corner
+        self.domain_length = domain_length
+        self.domain_fac = (1 << order)/domain_length
 
         # size of the domain is the size of hilbert space
         self.xmin = self.ymin = 0
@@ -520,13 +527,15 @@ cdef class QuadTree:
                             if leaf_proc[neighbor.array_index] != rank:
                                 if neighbor.sfc_key not in boundary_keys:
                                     boundary_keys.add(neighbor.sfc_key)
-                                    part_array.make_ghost(neighbor.center[0], neighbor.center[1],
+                                    part_array.make_ghost(neighbor.center[0]/self.domain_fac + self.domain_corner[0],
+                                            neighbor.center[1]/self.domain_fac + self.domain_corner[1],
                                             leaf_proc[neighbor.array_index])
 
                 # domain bondary node
                 else:
                     if (i == 1 and j != 1) or (i != 1 and j == 1):
-                        part_array.make_ghost(<np.float64_t> x, <np.float64_t> y, -1)
+                        part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
+                                (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
 
 
     cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleArray part_array,
@@ -574,7 +583,8 @@ cdef class QuadTree:
                     if leaf_proc[child_cand.array_index] != rank:
                         if child_cand.sfc_key not in boundary_keys:
                             boundary_keys.add(child_cand.sfc_key)
-                            part_array.make_ghost(child_cand.center[0], child_cand.center[1],
+                            part_array.make_ghost(child_cand.center[0]/self.domain_fac + self.domain_corner[0],
+                                    child_cand.center[1]/self.domain_fac + self.domain_corner[1],
                                     leaf_proc[child_cand.array_index])
 
 #    def update_hilbert_keys_and_process_id(self, np.float64_t[:] x_pos, np.float64_t[:] y_pos, np.int64_t[:] keys,

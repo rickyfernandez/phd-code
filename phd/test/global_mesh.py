@@ -81,8 +81,6 @@ global_tree.create_boundary_particles(pa, rank, load_b.leaf_proc)
 #print pa['tag']
 tag = pa['tag']
 real = tag == 0
-pa['position-x'][~real] /= 2.0**order
-pa['position-y'][~real] /= 2.0**order
 plt.scatter(pa['position-x'][real], pa['position-y'][real])
 plt.scatter(pa['position-x'][~real], pa['position-y'][~real], color="red")
 ##plt.scatter(pc['position-x'][border], pc['position-y'][border], color="green")

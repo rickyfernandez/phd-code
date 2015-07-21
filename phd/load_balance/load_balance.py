@@ -9,29 +9,29 @@ from mesh.voronoi_mesh_2d import VoronoiMesh2D
 from utils.exchange_particles import exchange_particles
 
 
-def find_boundary_particles(neighbor_graph, neighbors_graph_size, ghost_indices, total_ghost_indices):
-    """Find border particles, two layers, and return their indicies.
-    """
-    cumsum_neighbors = neighbors_graph_size.cumsum()
-
-    # grab all neighbors of ghost particles, this includes border cells
-    border = set()
-    for i in ghost_indices:
-        start = cumsum_neighbors[i] - neighbors_graph_size[i]
-        end   = cumsum_neighbors[i]
-        border.update(neighbor_graph[start:end])
-
-    # grab neighbors again, this includes another layer of border cells 
-    border_tmp = set(border)
-    for i in border_tmp:
-        start = cumsum_neighbors[i] - neighbors_graph_size[i]
-        end   = cumsum_neighbors[i]
-        border.update(neighbor_graph[start:end])
-
-    # remove ghost particles leaving border cells that will create new ghost particles
-    border = border.difference(total_ghost_indices)
-
-    return np.array(list(border))
+#def find_boundary_particles(neighbor_graph, neighbors_graph_size, ghost_indices, total_ghost_indices):
+#    """Find border particles, two layers, and return their indicies.
+#    """
+#    cumsum_neighbors = neighbors_graph_size.cumsum()
+#
+#    # grab all neighbors of ghost particles, this includes border cells
+#    border = set()
+#    for i in ghost_indices:
+#        start = cumsum_neighbors[i] - neighbors_graph_size[i]
+#        end   = cumsum_neighbors[i]
+#        border.update(neighbor_graph[start:end])
+#
+#    # grab neighbors again, this includes another layer of border cells
+#    border_tmp = set(border)
+#    for i in border_tmp:
+#        start = cumsum_neighbors[i] - neighbors_graph_size[i]
+#        end   = cumsum_neighbors[i]
+#        border.update(neighbor_graph[start:end])
+#
+#    # remove ghost particles leaving border cells that will create new ghost particles
+#    border = border.difference(total_ghost_indices)
+#
+#    return np.array(list(border))
 
 class LoadBalance(object):
 
@@ -326,6 +326,7 @@ class LoadBalance(object):
 
         # construct local tree
         local_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
+                self.corner, self.box_length,
                 total_num_process=self.size, factor=self.factor, order=self.order)
         local_tree.build_tree()
 
@@ -354,6 +355,7 @@ class LoadBalance(object):
 
         # rebuild tree using global leaves
         global_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
+                self.corner, self.box_length,
                 global_leaf_keys, global_num_part_leaves,
                 total_num_process=self.size, factor=self.factor, order=self.order)
         global_tree.build_tree()
