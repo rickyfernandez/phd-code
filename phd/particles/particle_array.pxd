@@ -12,7 +12,7 @@ cdef class ParticleArray:
     cdef readonly dict properties
     cdef readonly list field_names
 
-    cpdef int get_number_of_particles(self)
+    cpdef int get_number_of_particles(self, bint real=*)
     cpdef remove_particles(self, np.ndarray index_list)
     cpdef remove_tagged_particles(self, np.int8_t tag)
     cpdef extend(self, int num_particles)

@@ -91,24 +91,15 @@ cdef class ParticleArray:
         else:
             raise AttributeError("Unrecognized field: %s" % name)
 
-#    cpdef set_dirty(self, bint value):
-#        """Set the is_dirty variable to given value."""
-#        self.is_dirty = value
-#
-#    cpdef set_indices_invalid(self, bint value):
-#        """Set the indices_invalid to the given value"""
-#        self.indices_invalid = value
-#
-#    cpdef has_array(self, str arr_name):
-#        """Returns true if the array arr_name is present"""
-#        return self.properties.has_key(arr_name)
-#
-    cpdef int get_number_of_particles(self):
+    cpdef int get_number_of_particles(self, bint real=False):
         """Return the number of particles"""
-        if len(self.properties) > 0:
-            return self.properties.values()[0].length
+        if real:
+            return self.num_real_particles
         else:
-            return 0
+            if len(self.properties) > 0:
+                return self.properties.values()[0].length
+            else:
+                return 0
 
     cpdef remove_particles(self, np.ndarray index_list):
         """
@@ -174,67 +165,6 @@ cdef class ParticleArray:
         ind = indices.get_npy_array()
         self.remove_particles(ind)
 
-#    cpdef int append_parray(self, ParticleArray parray):
-#        """
-#        Add particles from a particle array.
-#
-#        Properties that are not there in self will be added.
-#        """
-#        if parray.get_number_of_particles() == 0:
-#            return 0
-#
-#        cdef int num_extra_particles = parray.get_number_of_particles()
-#        cdef int old_num_particles = self.get_number_of_particles()
-#        cdef int new_num_particles = num_extra_particles + old_num_particles
-#        cdef str prop_name
-#        cdef BaseArray arr, source, dest
-#        cdef np.ndarray nparr_dest, nparr_source
-#
-#        # extend current arrays by the required number of particles
-#        self.extend(num_extra_particles)
-#
-#        # should check that fields are equal or not error
-#        for  prop_name in parray.properties.keys():
-#            if PyDict_Contains(self.properties, prop_name):
-#                arr = <BaseArray> PyDict_GetItem(self.properties, prop_name)
-#                source = <BaseArray> PyDict_GetItem(pcontainer.properties, prop_name)
-#                nparr_source = source.get_npy_array()
-#                nparr_dest = arr.get_npy_array()
-#                nparr_dest[old_num_particles:] = nparr_source
-#
-#        if num_extra_particles > 0:
-#            self.align_particles()
-#            self.is_dirty = True
-#
-#        return 0
-#
-#
-#    def discard_ghost_and_export_particles(self, indices):
-#        """
-#        Remove real particles with given indices
-#
-#        We repeatedly interchange the values of the last element and values from
-#        the indices and reduce the size of the array by one. This is done for every
-#        field in the container. Note the indices are sorted to matain order in the
-#        exchange
-#
-#        Parameters
-#        ----------
-#        indices : array
-#            numpy array of real particle indices to be removed"""
-#        self.discard_ghost_particles()
-#
-#        if indices.size > self.num_real_particles:
-#            raise ValueError("More indices than real particles")
-#
-#        sorted_indices = np.sort(indices)
-#
-#        # remove properties of real exported particles 
-#        for field in self.properties.values():
-#            field.remove(sorted_indices, 1)
-#
-#        self.num_real_particles = field.length
-#
     cpdef extend(self, int num_particles):
         """
         Increase the total number of particles by the requested amount.
@@ -252,23 +182,6 @@ cdef class ParticleArray:
         for arr in self.properties.values():
             arr.resize(new_size)
 
-#    def get_property_index(self, prop_name):
-#        """Get the index of the property in the property array."""
-#        return self.properties.get(prop_name)
-#
-#    cdef np.ndarray _get_real_particle_prop(self, str prop_name):
-#        """Get the numpy arrray of property corresponding to only real
-#        particles.
-#
-#        No checks are performed. Only call this after making sure that
-#        the property required already exists and that the real particles
-#        are placed in the beginning of the arrays.
-#        """
-#        cdef BaseArray prop_array
-#        prop_array = self.properties.get(prop_name)
-#        if prop_array is not None:
-#            return prop_array.get_npy_array()[:self.num_real_particles]
-#
     def get(self, *args, only_real_particles=True):
         """Return the numpy array for the property names in the
         arguments.
@@ -384,85 +297,113 @@ cdef class ParticleArray:
             self.is_dirty = True
             self.indices_invalid = True
 
-#    cpdef set_tag(self, str tag_value, int flag_value, LongArray indices):
-#        """Set property flag_name to flag_value for particles in indices."""
-#        cdef Intarray tag_array = self.get_carray('tag')
-#        cdef int i
-#
-#        for i in range(indices.length):
-#            tag_array.data[indices.data[i]] = tag_value
-#
-#    cpdef set_pid(self, LongArray pids):
-#        """Set property flag_name to flag_value for particles in indices."""
-#        cdef Intarray pid_array = self.get_carray('tag')
-#        cdef long i
-#
-#        cdef long np = self.get_number_of_particles()
-#        for i in range(np):
-#            pid_array.data[i] = pids[i]
-#
-#    cpdef set_to_zero(self, list props):
-#
-#        cdef long np = self.get_number_of_particles()
-#        cdef long i
-#
-#        cdef BaseArray prop_arr
-#        cdef str prop
-#
-#        for prop in props:
-#            prop_arr = self.get_carray(prop)
-#
-#            for i in range(np):
-#                prop_arr.data[a] = 0.0
-#
-#    def update_min_max(self, props=None):
-#        """Update the min, max values of all properties."""
-#        if props:
-#            for prop in props:
-#                array = self.properties[prop]
-#                array.update_min_max()
-#        else:
-#            for array in self.properties.values():
-#                array.update_min_max()
-#
     cpdef resize(self, long size):
         """Resize all arrays to the new size."""
         cdef BaseArray array
         for array in self.properties.values():
             array.resize(size)
 
-#    def discard_ghost_particles(self):
-#        """
-#        Discard ghost particles. This is simply done by setting the index of
-#        the last ghost particle to the index one past the last real particles.
-#        Also the counter of ghost particles is sent to zero.
-#        """
-#        for prop in self.properties.values():
-#            prop.shrink(self.num_real_particles)
-#        self.num_ghost_particles = 0
+    cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc):
+
+        cdef long j, new_size
+        cdef BaseArray array
+
+        # check if adding a new particle exceeds causes the array size
+        # to be larger then the allocated memory
+        j = self.get_number_of_particles()
+        if j + 1 > self.properties["mass"].alloc:
+            # reserve memory by 10% of existing memory for all arrays
+            new_size = int(1.1*self.get_number_of_particles())
+            for array in self.properties.values():
+                array.reserve(new_size)
+                array.append(0)
+        else:
+            # makes sure that each array has added
+            # one more particle
+            for array in self.properties.values():
+                array.append(0)
+
+        # j is the next avaiable slot for a new ghost particle
+        self["position-x"][j] = x
+        self["position-y"][j] = y
+        self["process"][j] = proc
+        self["tag"][j] = Ghost
+
+        # update nubmer of ghost particle
+        self.num_ghost_particles += 1
+
+    def get_sendbufs(self, np.ndarray indices):
+        cdef str prop
+        cdef dict sendbufs = {}
+
+        for prop in self.properties:
+            sendbufs[prop] = self[prop][indices]
+
+        return sendbufs
+
+#    def get_property_index(self, prop_name):
+#        """Get the index of the property in the property array."""
+#        return self.properties.get(prop_name)
 #
-#    def remove_tagged_particles(self):
-#        pass
+#    cdef np.ndarray _get_real_particle_prop(self, str prop_name):
+#        """Get the numpy arrray of property corresponding to only real
+#        particles.
 #
-#    cpdef resize(self, long new_size):
+#        No checks are performed. Only call this after making sure that
+#        the property required already exists and that the real particles
+#        are placed in the beginning of the arrays.
 #        """
-#        Resizes all fields to size of new_size. Note that the arrays
-#        are larger but the length occupied by the particles is still the same.
+#        cdef BaseArray prop_array
+#        prop_array = self.properties.get(prop_name)
+#        if prop_array is not None:
+#            return prop_array.get_npy_array()[:self.num_real_particles]
 #
-#        Parameters
-#        ----------
-#        new_size : long
-#            New number of particles.
+#    cpdef int append_parray(self, ParticleArray parray):
 #        """
-#        cdef BaseArray arr
-#        for prop in self.properties.values():
-#            arr.resize(new_size)
+#        Add particles from a particle array.
 #
-#    cpdef int total_particles(self):
+#        Properties that are not there in self will be added.
 #        """
-#        Total number of particles in the container (real + ghost)
-#        """
-#        return self.num_real_particles + self.num_ghost_particles
+#        if parray.get_number_of_particles() == 0:
+#            return 0
+#
+#        cdef int num_extra_particles = parray.get_number_of_particles()
+#        cdef int old_num_particles = self.get_number_of_particles()
+#        cdef int new_num_particles = num_extra_particles + old_num_particles
+#        cdef str prop_name
+#        cdef BaseArray arr, source, dest
+#        cdef np.ndarray nparr_dest, nparr_source
+#
+#        # extend current arrays by the required number of particles
+#        self.extend(num_extra_particles)
+#
+#        # should check that fields are equal or not error
+#        for  prop_name in parray.properties.keys():
+#            if PyDict_Contains(self.properties, prop_name):
+#                arr = <BaseArray> PyDict_GetItem(self.properties, prop_name)
+#                source = <BaseArray> PyDict_GetItem(pcontainer.properties, prop_name)
+#                nparr_source = source.get_npy_array()
+#                nparr_dest = arr.get_npy_array()
+#                nparr_dest[old_num_particles:] = nparr_source
+#
+#        if num_extra_particles > 0:
+#            self.align_particles()
+#            self.is_dirty = True
+#
+#        return 0
+#
+#
+#    cpdef set_dirty(self, bint value):
+#        """Set the is_dirty variable to given value."""
+#        self.is_dirty = value
+#
+#    cpdef set_indices_invalid(self, bint value):
+#        """Set the indices_invalid to the given value"""
+#        self.indices_invalid = value
+#
+#    cpdef has_array(self, str arr_name):
+#        """Returns true if the array arr_name is present"""
+#        return self.properties.has_key(arr_name)
 #
 #    cpdef BaseArray get_carray(self, str prop):
 #        """
@@ -514,6 +455,48 @@ cdef class ParticleArray:
 ##
 ##        return result_array
 ##
+
+#    cpdef set_tag(self, str tag_value, int flag_value, LongArray indices):
+#        """Set property flag_name to flag_value for particles in indices."""
+#        cdef Intarray tag_array = self.get_carray('tag')
+#        cdef int i
+#
+#        for i in range(indices.length):
+#            tag_array.data[indices.data[i]] = tag_value
+#
+#    cpdef set_pid(self, LongArray pids):
+#        """Set property flag_name to flag_value for particles in indices."""
+#        cdef Intarray pid_array = self.get_carray('tag')
+#        cdef long i
+#
+#        cdef long np = self.get_number_of_particles()
+#        for i in range(np):
+#            pid_array.data[i] = pids[i]
+#
+#    cpdef set_to_zero(self, list props):
+#
+#        cdef long np = self.get_number_of_particles()
+#        cdef long i
+#
+#        cdef BaseArray prop_arr
+#        cdef str prop
+#
+#        for prop in props:
+#            prop_arr = self.get_carray(prop)
+#
+#            for i in range(np):
+#                prop_arr.data[a] = 0.0
+#
+#    def update_min_max(self, props=None):
+#        """Update the min, max values of all properties."""
+#        if props:
+#            for prop in props:
+#                array = self.properties[prop]
+#                array.update_min_max()
+#        else:
+#            for array in self.properties.values():
+#                array.update_min_max()
+#
 #    cdef make_ghost_from_real(int i, np.float64_t[:] x, np.float64_t[:] vel):
 #        cdef int j
 #        cdef str field
@@ -546,31 +529,3 @@ cdef class ParticleArray:
 #        # update nubmer of ghost particle
 #        self.num_ghost_particles += 1
 #
-    cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc):
-
-        cdef long j, new_size
-        cdef BaseArray array
-
-        # check if adding a new particle exceeds causes the array size
-        # to be larger then the allocated memory
-        j = self.get_number_of_particles()
-        if j + 1 > self.properties["mass"].alloc:
-            # reserve memory by 10% of existing memory for all arrays
-            new_size = int(1.1*self.get_number_of_particles())
-            for array in self.properties.values():
-                array.reserve(new_size)
-                array.append(0)
-        else:
-            # makes sure that each array has added
-            # one more particle
-            for array in self.properties.values():
-                array.append(0)
-
-        # j is the next avaiable slot for a new ghost particle
-        self["position-x"][j] = x
-        self["position-y"][j] = y
-        self["process"][j] = proc
-        self["tag"][j] = Ghost
-
-        # update nubmer of ghost particle
-        self.num_ghost_particles += 1

@@ -287,10 +287,7 @@ class LoadBalance(object):
                 minlength=self.size).astype(np.int32)
 
         # extract particles to send 
-        send_data = {}
-        for prop in self.parray.properties.keys():
-            send_data[prop] = self.parray[prop][self.export_ids]
-        #send_data = extract_particles(self.export_ids)
+        send_data = self.parray.get_sendbufs(self.export_ids)
 
         # remove exported particles
         self.parray.remove_particles(self.export_ids)
