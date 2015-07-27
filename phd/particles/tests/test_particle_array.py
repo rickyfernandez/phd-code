@@ -165,3 +165,26 @@ class TestParticleArray(unittest.TestCase):
                                      [5, 9, 3, 7, 1]), True)
         self.assertEqual(check_array(pa2['tag'],
                                      [0, 0, 0, 1, 5]), True)
+
+    def test_append_parray(self):
+        """
+        Tests the append parray function.
+        """
+        pa1 = ParticleArray(5)
+        pa1['position-x'][:] = [1, 2, 3, 4, 5]
+        pa1['position-y'][:] = [10, 9, 8, 7, 6]
+        pa1['tag'][:] = [0, 0, 0, 0, 0]
+
+        pa2 = ParticleArray(5)
+        pa2['position-x'][:] = [6, 7, 8, 9, 10]
+        pa2['position-y'][:] = [5, 4, 3, 2, 1]
+        pa2['tag'][:] = [1, 1, 1, 1, 1]
+
+        pa1.append_parray(pa2)
+
+        self.assertEqual(check_array(pa1['position-x'],
+                                     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), True)
+        self.assertEqual(check_array(pa1['position-y'],
+                                     [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]), True)
+        self.assertEqual(check_array(pa1['tag'],
+                                     [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]), True)
