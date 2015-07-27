@@ -309,6 +309,9 @@ class LoadBalance(object):
         # align particles and count the number of real particles
         self.parray.align_particles()
 
+        # label all new particles to current process
+        self.parray['process'][:] = self.rank
+
         return global_tree
 
     def build_global_tree(self):

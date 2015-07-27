@@ -165,6 +165,18 @@ class TestDoubleArray(unittest.TestCase):
             np.array([1.0, 5.0, 3.0, 2.0, 4.0, 7.0, 8.0, 6.0, 9.0, 0.0], dtype=np.float64),
             da1.get_npy_array()), True)
 
+    def test_copy_values(self):
+        """Tests the copy values function."""
+        da1 = DoubleArray(5)
+        da2 = DoubleArray(5)
+
+        for i in range(5):
+            da1[i] = i
+            da2[i] = 0
+
+        da1.copy_values(np.arange(5), da2)
+        self.assertEqual(np.allclose(da1.get_npy_array(), da2.get_npy_array()), True)
+
 
 class TestIntArray(unittest.TestCase):
     """Tests for the DoubleArray class."""
@@ -319,6 +331,18 @@ class TestIntArray(unittest.TestCase):
             np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int8),
             ia1.get_npy_array()), True)
 
+    def test_copy_values(self):
+        """Tests the copy values function."""
+        ia1 = IntArray(5)
+        ia2 = IntArray(5)
+
+        for i in range(5):
+            ia1[i] = i
+            ia2[i] = 0
+
+        ia1.copy_values(np.arange(5), ia2)
+        self.assertEqual(np.allclose(ia1.get_npy_array(), ia2.get_npy_array()), True)
+
 class TestLongArray(unittest.TestCase):
     """Tests for the DoubleArray class."""
     def test_constructor(self):
@@ -472,6 +496,19 @@ class TestLongArray(unittest.TestCase):
             np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int32),
             la1.get_npy_array()), True)
 
+    def test_copy_values(self):
+        """Tests the copy values function."""
+        la1 = LongArray(5)
+        la2 = LongArray(5)
+
+        for i in range(5):
+            la1[i] = i
+            la2[i] = 0
+
+        la1.copy_values(np.arange(5), la2)
+        self.assertEqual(np.allclose(la1.get_npy_array(), la2.get_npy_array()), True)
+
+
 class TestLongLongArray(unittest.TestCase):
     """Tests for the LongLongArray class."""
     def test_constructor(self):
@@ -624,3 +661,15 @@ class TestLongLongArray(unittest.TestCase):
         self.assertEqual(np.allclose(
             np.array([1, 5, 3, 2, 4, 7, 8, 6, 9, 0], dtype=np.int64),
             lla1.get_npy_array()), True)
+
+    def test_copy_values(self):
+        """Tests the copy values function."""
+        lla1 = LongLongArray(5)
+        lla2 = LongLongArray(5)
+
+        for i in range(5):
+            lla1[i] = i
+            lla2[i] = 0
+
+        lla1.copy_values(np.arange(5), lla2)
+        self.assertEqual(np.allclose(lla1.get_npy_array(), lla2.get_npy_array()), True)

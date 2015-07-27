@@ -146,3 +146,22 @@ class TestParticleArray(unittest.TestCase):
         self.assertEqual(pa.get_number_of_particles(), 100)
         for field in pa.properties.itervalues():
             self.assertEqual(field.length, 100)
+
+    def test_extract_particles(self):
+        """
+        Tests the extract particles function.
+        """
+        pa = ParticleArray(10)
+        pa['position-x'][:] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        pa['position-y'][:] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+        pa['tag'][:] = [0, 0, 1, 1, 1, 0, 4, 0, 1, 5]
+
+        indices = np.array([5, 1, 7, 3, 9])
+        pa2 = pa.extract_particles(indices)
+
+        self.assertEqual(check_array(pa2['position-x'],
+                                     [6, 2, 8, 4, 10]), True)
+        self.assertEqual(check_array(pa2['position-y'],
+                                     [5, 9, 3, 7, 1]), True)
+        self.assertEqual(check_array(pa2['tag'],
+                                     [0, 0, 0, 1, 5]), True)

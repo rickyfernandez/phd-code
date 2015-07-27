@@ -1,6 +1,9 @@
 cimport numpy as np
 from ..utils.carray cimport BaseArray
 
+# forward declaration
+cdef class ParticleArray
+
 cdef class ParticleArray:
 
     cdef readonly long num_real_particles
@@ -21,3 +24,5 @@ cdef class ParticleArray:
     cpdef int align_particles(self) except -1
     cpdef resize(self, long size)
     cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc)
+    cpdef ParticleArray extract_particles(self, np.ndarray index_array, list props=*)
+    cpdef int append_parray(self, ParticleArray parray)

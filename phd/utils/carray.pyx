@@ -564,7 +564,7 @@ cdef class IntArray(BaseArray):
         num_values = indices.size
 
         for i in range(num_values):
-            dest_array.data[i] = self.data[indices.data[i]]
+            dest_array.data[i] = self.data[indices[i]]
 
 cdef class LongArray(BaseArray):
     """Represents an array of np.int32_t."""
@@ -796,7 +796,7 @@ cdef class LongArray(BaseArray):
         num_values = indices.size
 
         for i in range(num_values):
-            dest_array.data[i] = self.data[indices.data[i]]
+            dest_array.data[i] = self.data[indices[i]]
 
 
 cdef class LongLongArray(BaseArray):
@@ -1029,4 +1029,4 @@ cdef class LongLongArray(BaseArray):
         num_values = indices.size
 
         for i in range(num_values):
-            dest_array.data[i] = self.data[indices.data[i]]
+            dest_array.data[i] = self.data[indices[i]]

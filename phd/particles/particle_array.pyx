@@ -126,7 +126,6 @@ cdef class ParticleArray:
             msg += 'number of particles in array'
             raise ValueError, msg
 
-        #sorted_indices = np.sort(index_list.get_npy_array())
         sorted_indices = np.sort(index_list)
         num_arrays = len(self.properties.keys())
 
@@ -358,41 +357,40 @@ cdef class ParticleArray:
 #        if prop_array is not None:
 #            return prop_array.get_npy_array()[:self.num_real_particles]
 #
-#    cpdef int append_parray(self, ParticleArray parray):
-#        """
-#        Add particles from a particle array.
-#
-#        Properties that are not there in self will be added.
-#        """
-#        if parray.get_number_of_particles() == 0:
-#            return 0
-#
-#        cdef int num_extra_particles = parray.get_number_of_particles()
-#        cdef int old_num_particles = self.get_number_of_particles()
-#        cdef int new_num_particles = num_extra_particles + old_num_particles
-#        cdef str prop_name
-#        cdef BaseArray arr, source, dest
-#        cdef np.ndarray nparr_dest, nparr_source
-#
-#        # extend current arrays by the required number of particles
-#        self.extend(num_extra_particles)
-#
-#        # should check that fields are equal or not error
-#        for  prop_name in parray.properties.keys():
-#            if PyDict_Contains(self.properties, prop_name):
-#                arr = <BaseArray> PyDict_GetItem(self.properties, prop_name)
-#                source = <BaseArray> PyDict_GetItem(pcontainer.properties, prop_name)
-#                nparr_source = source.get_npy_array()
-#                nparr_dest = arr.get_npy_array()
-#                nparr_dest[old_num_particles:] = nparr_source
-#
-#        if num_extra_particles > 0:
-#            self.align_particles()
-#            self.is_dirty = True
-#
-#        return 0
-#
-#
+    cpdef int append_parray(self, ParticleArray parray):
+        """
+        Add particles from a particle array.
+
+        Properties that are not there in self will be added.
+        """
+        if parray.get_number_of_particles() == 0:
+            return 0
+
+        cdef int num_extra_particles = parray.get_number_of_particles()
+        cdef int old_num_particles = self.get_number_of_particles()
+        cdef str prop_name
+        cdef BaseArray dest, source
+        cdef np.ndarray nparr_dest, nparr_source
+
+        # extend current arrays by the required number of particles
+        self.extend(num_extra_particles)
+
+        # should check that fields are equal or not error
+        for prop_name in parray.properties.keys():
+            if PyDict_Contains(self.properties, prop_name):
+                dest = <BaseArray> PyDict_GetItem(self.properties, prop_name)
+                source = <BaseArray> PyDict_GetItem(parray.properties, prop_name)
+                nparr_source = source.get_npy_array()
+                nparr_dest = dest.get_npy_array()
+                nparr_dest[old_num_particles:] = nparr_source
+
+        if num_extra_particles > 0:
+            self.align_particles()
+            self.is_dirty = True
+
+        return 0
+
+
 #    cpdef set_dirty(self, bint value):
 #        """Set the is_dirty variable to given value."""
 #        self.is_dirty = value
@@ -405,56 +403,48 @@ cdef class ParticleArray:
 #        """Returns true if the array arr_name is present"""
 #        return self.properties.has_key(arr_name)
 #
-#    cpdef BaseArray get_carray(self, str prop):
-#        """
-#        Return the c-array for the property or temporary array
-#        """
-#        if PyDict_Contains(self.properties, prop) == 1:
-#            return <BaseArray> PyDict_GetItem(self.properties, prop)
-#        return None
-#
-##    cpdef ParticleArray extract_particles(self, np.ndarray index_array,
-##            list props=None):
-##        """
-##        Create new particle array for particles with indices in index_array
-##
-##        Parameters
-##        ----------
-##
-##        index_array : np.ndarray
-##            Indices of particles to be extracted.
-##        props : list
-##            The list of properties to extract, if None all properties
-##            are extracted.
-##        """
-##        cdef ParticleArray result_array = ParticleArray()
-##        cdef BaseArray dst_prop_array, src_prop_array
-##        cdef list prop_names
-##        cdef str prop_type, prop
-##
-##        if props is None:
-##            prop_names = self.properties.keys()
-##        else:
-##            prop_names = props
-##
-##        # need to add a way to add fields into result in case
-##        # this array has non default fields
-##
-##        # now we have the result array setup
-##        # resize it
-##        if index_array.size == 0:
-##            return result_array
-##
-##        result_array.resize(index_array.size)
-##
-##        # copy the required indices for each property
-##        for prop in prop_names:
-##            src_prop_array = self.get_carray(prop)
-##            dst_prop_array = result_array.get_carray(prop)
-##            src_prop_array.copy_values(index_array, dst_prop_array)
-##
-##        return result_array
-##
+    cpdef ParticleArray extract_particles(self, np.ndarray index_array,
+            list props=None):
+        """
+        Create new particle array for particles with indices in index_array
+
+        Parameters
+        ----------
+
+        index_array : np.ndarray
+            Indices of particles to be extracted.
+        props : list
+            The list of properties to extract, if None all properties
+            are extracted.
+        """
+        cdef ParticleArray result_array = ParticleArray()
+        cdef BaseArray dst_prop_array, src_prop_array
+        cdef list prop_names
+        cdef str prop_type, prop
+
+        if props is None:
+            prop_names = self.properties.keys()
+        else:
+            prop_names = props
+
+        # need to add a way to add fields into result in case
+        # this array has non default fields
+
+        # now we have the result array setup
+        # resize it
+        if index_array.size == 0:
+            return result_array
+
+        result_array.resize(index_array.size)
+
+        # copy the required indices for each property
+        for prop in prop_names:
+            src_prop_array = self.get_carray(prop)
+            dst_prop_array = result_array.get_carray(prop)
+            src_prop_array.copy_values(index_array, dst_prop_array)
+
+        return result_array
+
 
 #    cpdef set_tag(self, str tag_value, int flag_value, LongArray indices):
 #        """Set property flag_name to flag_value for particles in indices."""

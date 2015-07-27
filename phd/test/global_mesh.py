@@ -10,6 +10,7 @@ from matplotlib.patches import Rectangle
 from domain.domain import DomainLimits
 from load_balance.load_balance import LoadBalance
 from particles.particle_array import ParticleArray
+from boundary.boundary import Boundary
 #from mesh.voronoi_mesh_2d import VoronoiMesh2D
 
 comm = MPI.COMM_WORLD
@@ -26,6 +27,7 @@ my_particles = np.random.random(2*my_num_particles).reshape(2, my_num_particles)
 pa = ParticleArray(my_num_particles)
 pa['position-x'][:] = my_particles[0,:]
 pa['position-y'][:] = my_particles[1,:]
+pa['process'][:] = rank
 
 #plot initial distribuition
 #plt.scatter(pc['position-x'], pc['position-y'])
@@ -33,11 +35,11 @@ pa['position-y'][:] = my_particles[1,:]
 #plt.clf()
 
 # perform load balance
-order = 21
 #lb = LoadBalance(pc, comm=comm)
 #global_tree = lb.decomposition()
 
 # perform the load decomposition
+order = 21
 dom = DomainLimits(dim=2, xmin=0., xmax=1.)
 load_b = LoadBalance(pa, dom, comm=comm, order=order)
 global_tree = load_b.decomposition()
@@ -77,7 +79,9 @@ for node in global_tree.dump_data():
 #plt.savefig("plot_proc_%d.png" % rank)
 #
 # plot particles
-global_tree.create_boundary_particles(pa, rank, load_b.leaf_proc)
+#global_tree.create_boundary_particles(pa, rank, load_b.leaf_proc)
+bound = Boundary()
+bound.create_ghost_particles(pa, load_b.leaf_proc, global_tree, dom, comm)
 #print pa['tag']
 tag = pa['tag']
 real = tag == 0
