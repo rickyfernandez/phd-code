@@ -32,6 +32,18 @@ load_balance = Extension("phd.load_balance.*",
         )
 extensions.append(load_balance)
 
+reconstruction = Extension("phd.reconstruction.*",
+        ["phd/reconstruction/*.pyx"],
+        include_dirs=[np.get_include()]
+        )
+extensions.append(reconstruction)
+
+fluxes = Extension("phd.fluxes.*",
+        ["phd/fluxes/*.pyx"],
+        include_dirs=[np.get_include()]
+        )
+extensions.append(fluxes)
+
 setup(
         name="phd",
         version="0.1",
@@ -41,7 +53,8 @@ setup(
         ext_modules=cythonize(extensions),
         packages=["phd", "phd.utils", "phd.particles", "phd.doamin", "phd.load_balance"],
         package_data={'phd.utils':['*.pxd'], 'phd.particles':['*.pxd'],
-            'phd.domain':['*.pxd'], 'phd.load_balance':['*.pxd']
+            'phd.domain':['*.pxd'], 'phd.load_balance':['*.pxd'],
+            'phd.reconstruction':['*.pxd'], 'phd.fluxes':['*.pxd']
             },
         )
 #setup(
