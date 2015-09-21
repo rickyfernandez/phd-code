@@ -21,7 +21,7 @@ cdef list _base_properties = _base_coords + _base_fields + _base_tags
 cdef class ParticleArray:
 
     # add a method to add extra fields
-    def __cinit__(self, int num_real_parts=0):
+    def __cinit__(self, int num_real_parts=0, dict var_dict=None):
         """
         Create a particle array with property arrays of size
         num_real_particles
@@ -36,20 +36,29 @@ cdef class ParticleArray:
         self.properties = {}
         self.field_names = []
 
-        cdef str coord, field
-        for coord in _base_coords:
-            self.register_property(coord)
+        cdef str coord, field, name, dtype
 
-        for field in _base_fields:
-            self.field_names.append(field)
-            self.register_property(field)
+        if var_dict == None:
 
-        self.register_property("key", "longlong")
-        self.register_property("tag", "int")
-        self.register_property("process", "long")
+            for coord in _base_coords:
+                self.register_property(coord)
 
-        # set initial particle tags to be real
-        self['tag'][:] = Real
+            for field in _base_fields:
+                self.field_names.append(field)
+                self.register_property(field)
+
+            self.register_property("key", "longlong")
+            self.register_property("tag", "int")
+            self.register_property("process", "long")
+
+            # set initial particle tags to be real
+            self['tag'][:] = Real
+
+        else:
+
+            for name in var_dict:
+                dtype = var_dict[name]
+                self.register_property(name, dtype)
 
     def register_property(self, str name, str dtype="double"):
         """

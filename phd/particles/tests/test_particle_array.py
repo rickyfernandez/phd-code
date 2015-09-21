@@ -30,6 +30,23 @@ class TestParticleArray(unittest.TestCase):
         for field_name in pc.field_names:
             self.assertEqual(pc[field_name].size, 10)
 
+    def test_constructor_dict(self):
+        """Test the constructor using dict."""
+
+        flux_vars = {
+                "mass": "double",
+                "momentum-x": "double",
+                "momentum-y": "double",
+                "energy": "double",
+                }
+        pc = ParticleArray(var_dict=flux_vars)
+
+        self.assertEqual(pc.get_number_of_particles(), 0)
+        self.assertItemsEqual(pc.properties.keys(), flux_vars.keys())
+
+        for field_name in pc.field_names:
+            self.assertEqual(pc[field_name].size, 0)
+
     def test_get_number_of_particles(self):
         """
         Tests the get_number_of_particles of particles.
