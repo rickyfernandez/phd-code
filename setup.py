@@ -26,11 +26,11 @@ domain = Extension("phd.domain.*",
         )
 extensions.append(domain)
 
-load_balance = Extension("phd.load_balance.*",
-        ["phd/load_balance/*.pyx"],
-        include_dirs=[np.get_include()]
-        )
-extensions.append(load_balance)
+#load_balance = Extension("phd.load_balance.*",
+#        ["phd/load_balance/*.pyx"],
+#        include_dirs=[np.get_include()]
+#        )
+#extensions.append(load_balance)
 
 reconstruction = Extension("phd.reconstruction.*",
         ["phd/reconstruction/*.pyx"],
@@ -38,11 +38,17 @@ reconstruction = Extension("phd.reconstruction.*",
         )
 extensions.append(reconstruction)
 
-fluxes = Extension("phd.fluxes.*",
-        ["phd/fluxes/*.pyx"],
-        include_dirs=[np.get_include()]
+riemann = Extension("phd.riemann.*",
+        ["phd/riemann/*.pyx"],
+        include_dirs=[np.get_include(), "m"]
         )
-extensions.append(fluxes)
+extensions.append(riemann)
+
+integrate = Extension("phd.integrate.*",
+        ["phd/integrate/*.pyx"],
+        include_dirs=[np.get_include(), "m"]
+        )
+extensions.append(integrate)
 
 setup(
         name="phd",
@@ -51,10 +57,11 @@ setup(
         license="MIT",
         cmdclass={'build_ext':build_ext},
         ext_modules=cythonize(extensions),
-        packages=["phd", "phd.utils", "phd.particles", "phd.doamin", "phd.load_balance"],
+        packages=["phd", "phd.utils", "phd.particles", "phd.doamin", "phd.reconstruction", "phd.riemann", "phd.integrate"],#    "phd.load_balance"],
         package_data={'phd.utils':['*.pxd'], 'phd.particles':['*.pxd'],
-            'phd.domain':['*.pxd'], 'phd.load_balance':['*.pxd'],
-            'phd.reconstruction':['*.pxd'], 'phd.fluxes':['*.pxd']
+            'phd.domain':['*.pxd'], #'phd.load_balance':['*.pxd'],
+            'phd.reconstruction':['*.pxd'], 'phd.riemann':['*.pxd'],
+            'phd.integrate':['*.pxd']
             },
         )
 #setup(

@@ -1,25 +1,27 @@
-from utils.carray cimport DoubleArray, LongLongArray
 from particles.particle_array cimport ParticleArray
+from utils.carray cimport DoubleArray
 from reconstruction.reconstruction cimport ReconstructionBase
 
 import numpy as np
 cimport numpy as np
 
-cdef class FluxBase:
+from libc.math cimport sqrt, pow, fmin, fmax
+
+cdef class RiemannBase:
     def __init__(self, object mesh, ReconstructionBase reconstruction, double gamma=1.4, double cfl=0.3):
         self.mesh = mesh
         self.reconstruction = reconstruction
         self.gamma = gamma
         self.cfl = cfl
 
-    cdef solve(self, DoubleArray fluxes, DoubleArray left_faces, DoubleArray right_faces, DoubleArray faces,
+    cdef solve(self, ParticleArray fluxes, ParticleArray left_faces, ParticleArray right_faces, ParticleArray faces,
             double t, double dt, int iteration_count):
-        msg = "Flux::solve called!"
+        msg = "RiemannBase::solve called!"
         raise NotImplementedError(msg)
 
-cdef class HLLC(FluxBase):
+cdef class HLLC(RiemannBase):
 
-    cdef solve(self, DoubleArray fluxes, DoubleArray left_faces, DoubleArray right_faces, DoubleArray faces,
+    cdef solve(self, ParticleArray fluxes, ParticleArray left_faces, ParticleArray right_faces, ParticleArray faces,
             double t, double dt, int iteration_count):
 
         # left state primitive variables
@@ -48,8 +50,8 @@ cdef class HLLC(FluxBase):
         cdef int i
         cdef double _nx, _ny
         cdef double factor_1, factor_2
-        cdef double _dl, _ul, _vl, _pl, _el, _hl
-        cdef double _dr, _ur, _vr, _pr, _er, _hr
+        cdef double _dl, _ul, _vl, _pl, _el
+        cdef double _dr, _ur, _vr, _pr, _er
         cdef double _wn, _Vnl, _Vnr, _sl, _sr, s_contact
 
         cdef double gamma = self.gamma
@@ -99,7 +101,7 @@ cdef class HLLC(FluxBase):
 
                     # left star state
                     factor_1 = _dl*(_sl - _Vnl)/(_sl - s_contact)
-                    factor_2 = factor_1*(_sl - _wn) *(s_contact - _ul) + _pl
+                    factor_2 = factor_1*(_sl - _wn)*(s_contact - _ul) + _pl
 
                     # density flux
                     frho = _dl*(_Vnl - _sl) + factor_1*(_sl - _wn)
@@ -108,11 +110,10 @@ cdef class HLLC(FluxBase):
                     fmu.data[i] = frho*_ul + factor_2*_nx
                     fmv.data[i] = frho*_vl + factor_2*_ny
 
-                    # internal energy and enthalpy
-                    _el = _pl/(_dl*(gamma-1.0))
-                    _hl = 0.5*_dl*(_ul*_ul + _vl*_vl) + _pl*gamma/(gamma-1.0)
+                    # total energy
+                    _el = 0.5*_dl*(_ul*_ul + _vl*_vl) + _pl/(gamma-1.0)
 
-                    fe.data[i] = _hl*_Vnl - _el*_sl +\
+                    fe.data[i] = (_el + _pl)*_Vnl - _el*_sl +\
                             (_sl - _wn)*factor_1*(_el/_pl + (s_contact - _Vnl)*\
                             (s_contact + _pl/(_dl*(_sl - _Vnl))))
 
@@ -129,11 +130,10 @@ cdef class HLLC(FluxBase):
                     fmu.data[i] = frho*_ur + factor_2*_nx
                     fmv.data[i] = frho*_vr + factor_2*_ny
 
-                    # internal energy and enthalpy
-                    _er = _pr/(_dr*(gamma-1.0))
-                    _hr = 0.5*_dr*(_ur*_ur + _vr*_vr) + _pr*gamma/(gamma-1.0)
+                    # total energy
+                    _er = 0.5*_dr*(_ur*_ur + _vr*_vr) + _pr*gamma/(gamma-1.0)
 
-                    fe.data[i] = _hr*_Vnr - _er*_sr +\
+                    fe.data[i] = (_er + _pr)*_Vnr - _er*_sr +\
                             (_sr - _wn)*factor_1*(_er/_pr + (s_contact - _Vnr)*\
                             (s_contact + _pr/(_dr*(_sr - _Vnr))))
 
@@ -164,17 +164,17 @@ cdef class HLLC(FluxBase):
         cdef double p_max
         cdef double c_floor = 1.0E-10
 
-        c_l = max(np.sqrt(gamma*p_l/d_l), c_floor)
-        c_r = max(np.sqrt(gamma*p_r/d_r), c_floor)
+        c_l = fmax(sqrt(gamma*p_l/d_l), c_floor)
+        c_r = fmax(sqrt(gamma*p_r/d_r), c_floor)
 
         d_avg = 0.5*(d_l + d_r)
         c_avg = 0.5*(c_l + c_r)
 
         # estimate p* - eq. 9.20
-        p_star = max(0.0, 0.5*(p_l + p_r) + 0.5*(u_l - u_r)*d_avg*c_avg)
+        p_star = fmax(0.0, 0.5*(p_l + p_r) + 0.5*(u_l - u_r)*d_avg*c_avg)
 
-        p_min = min(p_l, p_r)
-        p_max = max(p_l, p_r)
+        p_min = fmin(p_l, p_r)
+        p_max = fmax(p_l, p_r)
 
         if(((p_max/p_min) < Q) and ((p_min < p_star) and (p_star < p_max))):
 
@@ -208,8 +208,8 @@ cdef class HLLC(FluxBase):
             B_r = p_r*((gamma - 1.0)/(gamma + 1.0))
 
             # 9.41
-            g_l = np.sqrt(A_l/(p_star + B_l))
-            g_r = np.sqrt(A_r/(p_star + B_r))
+            g_l = sqrt(A_l/(p_star + B_l))
+            g_r = sqrt(A_r/(p_star + B_r))
 
             # estimate p* from two shock aprroximation - eq. 9.43
             p_star = (g_l*p_l + g_r*p_r - (u_r- u_l))/(g_l + g_r)
@@ -223,7 +223,7 @@ cdef class HLLC(FluxBase):
 
         else:
             # shock wave
-            s_l = u_l - c_l*np.sqrt(1.0+((gamma+1.0)/(2.0*gamma))*(p_star/p_l - 1.0))
+            s_l = u_l - c_l*sqrt(1.0+((gamma+1.0)/(2.0*gamma))*(p_star/p_l - 1.0))
 
         # calculate fastest right wave speed estimates - eq. 10.68-10.69
         if(p_star <= p_r):
@@ -232,7 +232,7 @@ cdef class HLLC(FluxBase):
 
         else:
             # shock wave
-            s_r = u_r+ c_r*np.sqrt(1.0+((gamma+1.0)/(2.0*gamma))*(p_star/p_r - 1.0))
+            s_r = u_r+ c_r*sqrt(1.0+((gamma+1.0)/(2.0*gamma))*(p_star/p_r - 1.0))
 
 
         # contact wave speed - eq. 10.70
