@@ -1,24 +1,24 @@
-"""Implementation for the integrator"""
-
-from utils.carray cimport BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
 from particles.particle_tags import ParticleTAGS
+
+from riemann.riemann cimport RiemannBase
 from particles.particle_array import ParticleArray
+from utils.carray cimport DoubleArray, IntArray, LongLongArray
+from libc.math cimport sqrt, fabs, fmin
+
+import numpy as np
+cimport numpy as np
 
 cdef int Real = ParticleTAGS.Real
 cdef int Boundary = ParticleTAGS.Boundary
 
-
-cdef class Integrator:
-    def __init__(self, RightHandSide rhs, int regularize, double eta = 0.25):
+cdef class IntegrateBase:
+    def __init__(self, RiemannBase riemann):
         """Constructor for the Integrator"""
-        self.rhs = rhs
-
-        self.regularize = regularize
-        self.eta = eta
+        self.riemann = riemann
 
         # properties inherited from the function
-        self.mesh = rhs.mesh
-        self.pa = rhs.pa
+        self.mesh = riemann.mesh
+        self.pa = riemann.pa
 
         # create flux data array
         flux_vars = {
@@ -27,7 +27,7 @@ cdef class Integrator:
                 "momentum-y": "double",
                 "energy": "double",
                 }
-        self.fluxes = ParticleArray(flux_vars)
+        self.flux = ParticleArray(var_dict=flux_vars)
 
         # create left/right face state array 
         state_vars = {
@@ -36,24 +36,59 @@ cdef class Integrator:
                 "velocity-y": "double",
                 "pressure": "double",
                 }
-        self.left_state = ParticleArray(state_vars)
-        self.right_state = ParticleArray(state_vars)
+        self.left_state  = ParticleArray(var_dict=state_vars)
+        self.right_state = ParticleArray(var_dict=state_vars)
+
+    def compute_time_step(self):
+        return self._compute_time_step()
 
     def integrate(self, double dt, double t, int iteration_count):
         self._integrate(dt, t, iteration_count)
 
+
+    cdef double _compute_time_step(self):
+        msg = "IntegrateBase::compute_time_step called!"
+        raise NotImplementedError(msg)
+
+    cdef _integrate(self, double dt, double t, int iteration_count):
+        msg = "IntegrateBase::_integrate called!"
+        raise NotImplementedError(msg)
+
+
+cdef class MovingMesh(IntegrateBase):
+    def __init__(self, RiemannBase riemann, int regularize, double eta = 0.25):
+        """Constructor for the Integrator"""
+
+        IntegrateBase.__init__(riemann)
+
+        self.regularize = regularize
+        self.eta = eta
+
+
     cdef _integrate(self, double dt, double t, int iteration_count):
         """Main step routine"""
 
-        cdef LongArray pair_i = faces.get_carray("pair-i")
-        cdef LongArray pair_j = faces.get_carray("pair-j")
-        cdef DoubleArray area = faces.get_carray("area")
+        # particle flag information
+        cdef IntArray tags = self.pa.get_carray("tags")
 
+        # face information
+        cdef LongLongArray pair_i = self.mesh.faces.get_carray("pair-i")
+        cdef LongLongArray pair_j = self.mesh.faces.get_carray("pair-j")
+        cdef DoubleArray area = self.mesh.faces.get_carray("area")
+
+        # particle position and velocity
+        cdef DoubleArray x = self.pa.get_carray("position-x")
+        cdef DoubleArray y = self.pa.get_carray("position-y")
+        cdef DoubleArray wx = self.pa.get_carray("w-x")
+        cdef DoubleArray wy = self.pa.get_carray("w-y")
+
+        # particle values
         cdef DoubleArray m  = self.pa.get_carray("mass")
         cdef DoubleArray mu = self.pa.get_carray("momentum-x")
         cdef DoubleArray mv = self.pa.get_carray("momentum-y")
         cdef DoubleArray E  = self.pa.get_carray("energy")
 
+        # flux values
         cdef DoubleArray f_m  = self.flux.get_carray("mass")
         cdef DoubleArray f_mu = self.flux.get_carray("momentum-x")
         cdef DoubleArray f_mv = self.flux.get_carray("momentum-y")
@@ -62,7 +97,7 @@ cdef class Integrator:
         cdef int i, j, k
         cdef double a
 
-        cdef long num_faces = faces.get_number_of_particles()
+        cdef long num_faces = self.mesh.faces.get_number_of_particles()
         cdef long npart = self.pa.get_number_of_particles()
 
 
@@ -70,16 +105,16 @@ cdef class Integrator:
         self.compute_face_velocities()
 
         # resize face/states arrays
-        self.left_state(num_faces)
-        self.right_state(num_faces)
-        self.fluxes(num_faces)
+        self.left_state.resize(num_faces)
+        self.right_state.resize(num_faces)
+        self.flux.resize(num_faces)
 
         # reconstruct left\right states at each face
-        self.rhs.interpolation.compute(self.pa, mesh.faces, self.left_state, self.right_state,
+        self.riemann.interpolation.compute(self.pa, self.mesh.faces, self.left_state, self.right_state,
                 t, dt, iteration_count)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
-        self.rhs.solve(self.fluxes, self.left_state, self.right_state, mesh.faces,
+        self.riemann.solve(self.flux, self.left_state, self.right_state, self.mesh.faces,
                 t, dt, iteration_count)
 
         # update conserved quantities
@@ -107,12 +142,46 @@ cdef class Integrator:
         # move particles
         for i in range(npart):
             if tags.data[i] == Real:
-                x.data[i] += self.dt*wx.data[i]
-                y.data[i] += self.dt*wy.data[i]
+                x.data[i] += dt*wx.data[i]
+                y.data[i] += dt*wy.data[i]
+
+    cdef double _compute_time_step(self):
+
+        cdef IntArray tags = self.pa.get_carray("tags")
+
+        cdef DoubleArray r = self.pa.get_carray("density")
+        cdef DoubleArray p = self.pa.get_carray("pressure")
+        cdef DoubleArray u = self.pa.get_carray("velocity-x")
+        cdef DoubleArray v = self.pa.get_carray("velocity-y")
+
+        cdef DoubleArray vol = self.pa.get_carray("volume")
+
+        cdef double gamma = self.gamma
+        cdef double c, R, dt, dt_x, dt_y
+        cdef long i, npart = self.pa.get_number_of_particles()
+
+        c = sqrt(gamma*p.data[0]/r.data[0])
+        R = sqrt(vol.data[0]/np.pi)
+        dt = R/(fabs(u.data[0]) + c)
+
+        for i in range(npart):
+            if tags.data[i] == Real:
+
+                c = sqrt(gamma*p.data[i]/r.data[i])
+
+                # calculate approx radius of each voronoi cell
+                R = sqrt(vol.data[i]/np.pi)
+
+                dt_x = R/(fabs(u.data[i]) + c)
+                dt_y = R/(fabs(v.data[i]) + c)
+
+                dt = fmin(dt_x, fmin(dt_y, dt))
+
+        return dt
 
     cdef _compute_face_velocities(self):
-        self.assign_particle_velocities()
-        self.assign_face_velocities(faces)
+        self._assign_particle_velocities()
+        self._assign_face_velocities()
 
     cdef _assign_particle_velocities(self):
         """
@@ -124,9 +193,11 @@ cdef class Integrator:
         cdef IntArray type = self.pa.get_carray("type")
         cdef IntArray tags = self.pa.get_carray("tags")
 
-        # particle position
+        # particle position and velocity
         cdef DoubleArray x = self.pa.get_carray("position-x")
         cdef DoubleArray y = self.pa.get_carray("position-y")
+        cdef DoubleArray wx = self.pa.get_carray("w-x")
+        cdef DoubleArray wy = self.pa.get_carray("w-y")
 
         # center of mass of particle cell
         cdef DoubleArray cx = self.pa.get_carray("com-x")
@@ -142,7 +213,7 @@ cdef class Integrator:
         cdef double _x, _y, _cx, _cy, _wx, _wy, cs, d, R
         cdef double eta = self.eta
 
-        cdef long npart = self.pa.get_number_of_particles()
+        cdef long i, npart = self.pa.get_number_of_particles()
 
         for i in range(npart):
             if tags.data[i] == Real or type.data[i] == Boundary:
@@ -152,7 +223,7 @@ cdef class Integrator:
                 if self.regularize == 1:
 
                     # sound speed 
-                    cs = np.sqrt(self.gamma*p.data[i]/r.data[i])
+                    cs = sqrt(self.gamma*p.data[i]/r.data[i])
 
                     # particle positions and center of mass of real particles
                     _x = x.data[i]
@@ -162,10 +233,10 @@ cdef class Integrator:
                     _cy = cy.data[i]
 
                     # distance form cell com to particle position
-                    d = np.sqrt( (_cx - _x)**2 + (_cy - _y)**2 )
+                    d = sqrt( (_cx - _x)**2 + (_cy - _y)**2 )
 
                     # approximate length of cell
-                    R = np.sqrt(v.data[i]/np.pi)
+                    R = sqrt(v.data[i]/np.pi)
 
                     # regularize - eq. 63
                     if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
@@ -181,7 +252,7 @@ cdef class Integrator:
                 wy.data[i] = _wy + v.data[i]
 
 
-    cdef assign_face_velocities(self, ParticleArray faces):
+    cdef _assign_face_velocities(self):
         """
         Assigns velocities to the center of mass of the face
         defined by neighboring particles. The face velocity
@@ -190,7 +261,7 @@ cdef class Integrator:
         taken from Springel (2009).
         """
         # particle flag information
-        cdef IntArray tag = self.pa.get_carray("tag")
+        cdef IntArray tags = self.pa.get_carray("tags")
         cdef IntArray type = self.pa.get_carray("type")
 
         # particle position
@@ -202,14 +273,14 @@ cdef class Integrator:
         cdef DoubleArray wy = self.pa.get_carray("w-y")
 
         # face information
-        cdef DoubleArray fu  = self.faces.get_carray("velocity-x")
-        cdef DoubleArray fv  = self.faces.get_carray("velocity-y")
-        cdef DoubleArray fcx = self.faces.get_carray("com-x")
-        cdef DoubleArray fcy = self.faces.get_carray("com-y")
+        cdef DoubleArray fu  = self.mesh.faces.get_carray("velocity-x")
+        cdef DoubleArray fv  = self.mesh.faces.get_carray("velocity-y")
+        cdef DoubleArray fcx = self.mesh.faces.get_carray("com-x")
+        cdef DoubleArray fcy = self.mesh.faces.get_carray("com-y")
 
         # neighbor arrays
-        cdef np.int32[:] neighbors = self.mesh["neighbors"]
-        cdef np.int32[:] num_neighbors = self.mesh["number of neighbors"]
+        cdef np.int32_t[:] neighbors = self.mesh["neighbors"]
+        cdef np.int32_t[:] num_neighbors = self.mesh["number of neighbors"]
 
         # local variables
         cdef double _xi, _yi, _xj, _yj
@@ -217,11 +288,12 @@ cdef class Integrator:
         cdef double factor
 
         # k is the face index and ind is the neighbor index
-        cdef int k = ind = 0
+        cdef int k, ind
         cdef int n
 
         cdef long npart = self.pa.get_number_of_particles()
 
+        k = ind = 0
         for i in range(npart):
             if tags.data[i] == Real or type.data[i] == Boundary:
 

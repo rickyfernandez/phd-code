@@ -1,27 +1,26 @@
-
 from particles.particle_array cimport ParticleArray
-from right_hand_side.right_hand_side cimport RightHandSide
+from riemann.riemann cimport RiemannBase
 
+cdef class IntegrateBase:
 
-cdef class Integrator:
-    ############################################################
-    # Data attributes
-    ############################################################
     cdef public ParticleArray pa
     cdef public ParticleArray left_state
     cdef public ParticleArray right_state
-    cdef public ParticleArray fluxes
+    cdef public ParticleArray flux
 
-    cdef public RightHandSide rhs
+    cdef public RiemannBase riemann
     cdef public object mesh
+
+    cdef double _compute_time_step(self)
+    cdef _integrate(self, double dt, double t, int iteration_count)
+
+cdef class MovingMesh(IntegrateBase):
 
     # particle properties used for time stepping
     cdef int regularize
     cdef double eta
 
-    ############################################################
-    # Member functions
-    ############################################################
     cdef _integrate(self, double dt, double t, int iteration_count)
     cdef _compute_face_velocities(self)
     cdef _assign_particle_velocities(self)
+    cdef _assign_face_velocities(self)
