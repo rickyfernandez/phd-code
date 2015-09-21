@@ -1,5 +1,5 @@
-from utils.carray cimport DoubleArray, LongLongArray
 from particles.particle_array cimport ParticleArray
+from utils.carray cimport DoubleArray, LongLongArray
 
 cdef class ReconstructionBase:
     def __init__(self):
@@ -37,7 +37,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef LongLongArray pair_i = faces.get_carray("pair-i")
         cdef LongLongArray pair_j = faces.get_carray("pair-j")
 
-        cdef long k
+        cdef long k, i, j
         cdef long num_faces = faces.get_number_of_particles()
 
         # loop through each face
