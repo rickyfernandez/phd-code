@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as npparray
 
 from particles.particle_tags import ParticleTAGS
 from utils.carray import IntArray, LongArray
@@ -7,7 +7,7 @@ from utils.exchange_particles import exchange_particles
 
 class Boundary(object):
 
-    def create_ghost_particles(self, parray, leaf_proc, global_tree,
+    def create_ghost_particles(self, particles, leaf_proc, global_tree,
             domain, comm, iteration=5):
         """Create initial ghost particles that hug the boundary
         """
@@ -15,20 +15,20 @@ class Boundary(object):
         size = comm.Get_size()
 
         # remove current (if any) ghost particles
-        parray.remove_tagged_particles(ParticleTAGS.Ghost)
-        current_size = parray.get_number_of_particles()
+        particles.remove_tagged_particles(ParticleTAGS.Ghost)
+        current_size = particles.get_number_of_particles()
 
-        # create initial ghost particles, parray is now larger
-        global_tree.create_boundary_particles(parray, rank, leaf_proc)
+        # create initial ghost particles, particles is now larger
+        global_tree.create_boundary_particles(particles, rank, leaf_proc)
 
         # reorder ghost in processors order: exterior have a process id of -1 so
         # their put before interior ghost particles
-        ghost_proc = np.array(parray["process"][current_size:])
+        ghost_proc = np.array(particles["process"][current_size:])
         ind = np.argsort(ghost_proc)
         ghost_proc = ghost_proc[ind]
 
-        for field in parray.properties.keys():
-            array = parray[field][current_size:]
+        for field in particles.properties.keys():
+            array = particles[field][current_size:]
             array[:] = array[ind]
 
         mesh = VoronoiMesh2D()
@@ -39,12 +39,12 @@ class Boundary(object):
         for i in range(iteration):
 
             # build the mesh
-            p = np.array([parray['position-x'], parray['position-y']])
+            p = np.array([particles['position-x'], particles['position-y']])
             mesh.tessellate(p)
             cumsum_neighbors = mesh["number of neighbors"].cumsum()
 
             # create indices for ghost particles
-            ghost_indices = np.arange(current_size, parray.get_number_of_particles())
+            ghost_indices = np.arange(current_size, particles.get_number_of_particles())
 
             # select exterior ghost particles
             exterior_ghost = ghost_proc == -1
@@ -52,7 +52,7 @@ class Boundary(object):
             exterior_ghost_indices = ghost_indices[exterior_ghost]
 
             # create exterior boundary ghost particles
-            num_exterior_ghost = create_reflect_ghost(parray, domain, exterior_ghost_indices, ghost_indices,
+            num_exterior_ghost = create_reflect_ghost(particles, domain, exterior_ghost_indices, ghost_indices,
                     mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors)
 
             # do the interior particles
@@ -77,8 +77,8 @@ class Boundary(object):
 
             # extract data to send and remove the particles
             send_data = {}
-            for prop in parray.properties.keys():
-                send_data[prop] = np.ascontiguousarray(parray[prop][indices.get_npy_array()])
+            for prop in particles.properties.keys():
+                send_data[prop] = np.ascontiguousarray(particles[prop][indices.get_npy_array()])
             send_data["tag"][:] = ParticleTAGS.Ghost
 
             # how many particles are being sent from each process
@@ -86,14 +86,110 @@ class Boundary(object):
             comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
 
             # resize arrays to give room for incoming particles
-            parray.resize(current_size + num_exterior_ghost + np.sum(recv_particles))
+            particles.resize(current_size + num_exterior_ghost + np.sum(recv_particles))
 
             #print "rank: %d iteration: %d num: %d" % (rank, i, np.sum(recv_particles))
 
-            exchange_particles(parray, send_data, send_particles, recv_particles,
+            exchange_particles(particles, send_data, send_particles, recv_particles,
                     current_size + num_exterior_ghost, comm)
 
-            ghost_proc = np.array(parray["process"][current_size:])
+            ghost_proc = np.array(particles["process"][current_size:])
+
+    def update_ghost_particles(self, particles, mesh, leaf_proc, global_tree,
+            domain, comm):
+
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+
+
+        # relabel all particles
+        global_tree.update_boundary_particles(particles, rank, leaf_proc)
+        ghost_indices = np.where(particles["tag"] == ParticleTAGS.OldGhost)[0]
+
+        # create new exterior boundary ghost particles
+        cumsum_neighbors = mesh["number of neighbors"].cumsum()
+        exterior_ghost_indices = np.where(particles["type"] == ParticleTAGS.Exterior)[0]
+        num_exterior_ghost = create_reflect_ghost(particles, domain, exterior_ghost_indices, ghost_indices,
+                mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors)
+
+        # import/export interior ghost particles
+        interior_ghost_indices = np.where(
+                (particles["type"] == ParticleTAGS.Interior) | (particles["type"] == ParticleTAGS.ExportInterior))[0]
+        interior_ghost_proc = particles["process"][interior_ghost_indices]
+
+        # arrange particles in process order
+        ind = interior_ghost_proc.argsort()
+        interior_ghost_proc = interior_ghost_proc[ind]
+        interior_ghost_indices = interior_ghost_indices[ind]
+
+        # bin processors
+        interior_ghost_proc_bin = np.bincount(interior_ghost_proc, minlength=size)
+        send_particles = np.zeros(size, dtype=np.int32)
+
+        # collect the indices of particles to be export to each process
+        indices = LongArray()
+        cumsum_proc = interior_ghost_proc_bin.cumsum()
+        for proc in range(size):
+            if interior_ghost_proc_bin[proc] != 0:
+
+                start = cumsum_proc[proc] - interior_ghost_proc_bin[proc]
+                end   = cumsum_proc[proc]
+
+                send_particles[proc] = find_boundary_particles(indices, interior_ghost_indices[start:end], ghost_indices,
+                        mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, False)
+
+        # extract data to send and remove the particles
+        send_data = {}
+        for prop in particles.properties.keys():
+            send_data[prop] = np.ascontiguousarray(particles[prop][indices.get_npy_array()])
+
+        # these particles are now ghost particles for the process their going to
+        send_data["tag"][:] = ParticleTAGS.Ghost
+
+        # how many particles are being sent from each process
+        recv_particles = np.empty(size, dtype=np.int32)
+        comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
+
+        # resize arrays to give room for incoming particles
+        current_size = particles.get_number_of_particles()
+        particles.extend(np.sum(recv_particles))
+
+        exchange_particles(particles, send_data, send_particles, recv_particles,
+                current_size, comm)
+
+        # export real particles that left the domain
+        export_ghost_indices = np.where(particles["tag"] == ParticleTAGS.ExportInterior)[0]
+        export_ghost_proc = particles["process"][export_ghost_indices]
+
+        # arrange particles in process order
+        ind = export_ghost_proc.argsort()
+        export_ghost_proc = export_ghost_proc[ind]
+        export_ghost_indices  = export_ids[ind]
+
+        # count the number of particles to send to each process
+        send_particles = np.bincount(export_ghost_proc,
+                minlength=size).astype(np.int32)
+
+        # extract particles to send 
+        send_data = particles.get_sendbufs(export_ghost_indices)
+        send_data["tag"][:] = ParticleTAGS.Real
+
+        # how many particles are being sent from each process
+        recv_particles = np.empty(size, dtype=np.int32)
+        comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
+
+        # resize particle array and place incoming particles at the
+        # end of the array
+        current_size = particles.get_number_of_particles()
+        particles.extend(np.sum(recv_particles))
+
+        # exchange load balance particles
+        exchange_particles(particles, send_data, send_particles, recv_particles,
+                current_size, comm)
+
+        # finally remove old ghost particles from previous time step
+        # this also puts real particles in front and ghost in the back
+        particles.remove_tagged_particles(ParticleTAGS.OldGhost)
 
 
 def create_reflect_ghost(parray, domain, exterior_ghost_indices, ghost_indices,
