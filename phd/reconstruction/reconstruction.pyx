@@ -1,25 +1,25 @@
-from particles.particle_array cimport ParticleArray
+from containers.containers cimport CarrayContainer, ParticleContainer
 from utils.carray cimport DoubleArray, LongLongArray
 
 cdef class ReconstructionBase:
     def __init__(self):
         pass
 
-    cdef compute(self, ParticleArray pa, ParticleArray faces, ParticleArray left_faces, ParticleArray right_faces,
+    cdef compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_faces, CarrayContainer right_faces,
             double gamma, double dt):
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
 
 cdef class PieceWiseConstant(ReconstructionBase):
 
-    cdef compute(self, ParticleArray pa, ParticleArray left_faces, ParticleArray right_faces,
-            ParticleArray faces, double gamma, double dt):
+    cdef compute(self, ParticleContainer particles, CarrayContainer left_faces, CarrayContainer right_faces,
+            CarrayContainer faces, double gamma, double dt):
 
         # particle primitive variables
-        cdef DoubleArray d = pa.get_carray("density")
-        cdef DoubleArray u = pa.get_carray("velocity-x")
-        cdef DoubleArray v = pa.get_carray("velocity-y")
-        cdef DoubleArray p = pa.get_carray("pressure")
+        cdef DoubleArray d = particles.get_carray("density")
+        cdef DoubleArray u = particles.get_carray("velocity-x")
+        cdef DoubleArray v = particles.get_carray("velocity-y")
+        cdef DoubleArray p = particles.get_carray("pressure")
 
         # left state primitive variables
         cdef DoubleArray dl = left_faces.get_carray("density")
@@ -38,7 +38,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef LongLongArray pair_j = faces.get_carray("pair-j")
 
         cdef long k, i, j
-        cdef long num_faces = faces.get_number_of_particles()
+        cdef long num_faces = faces.get_number_of_items()
 
         # loop through each face
         for k in range(num_faces):
