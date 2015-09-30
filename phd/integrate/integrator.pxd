@@ -1,12 +1,12 @@
-from particles.particle_array cimport ParticleArray
+from containers.containers cimport CarrayContainer, ParticleContainer
 from riemann.riemann cimport RiemannBase
 
 cdef class IntegrateBase:
 
-    cdef public ParticleArray pa
-    cdef public ParticleArray left_state
-    cdef public ParticleArray right_state
-    cdef public ParticleArray flux
+    cdef public ParticleContainer particles
+    cdef public CarrayContainer left_state
+    cdef public CarrayContainer right_state
+    cdef public CarrayContainer flux
 
     cdef public RiemannBase riemann
     cdef public object mesh

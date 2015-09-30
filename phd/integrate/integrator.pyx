@@ -1,7 +1,7 @@
-from particles.particle_tags import ParticleTAGS
+from utils.particle_tags import ParticleTAGS
 
 from riemann.riemann cimport RiemannBase
-from particles.particle_array import ParticleArray
+from containers.containers cimport CarrayContainer
 from utils.carray cimport DoubleArray, IntArray, LongLongArray
 from libc.math cimport sqrt, fabs, fmin
 
@@ -18,7 +18,7 @@ cdef class IntegrateBase:
 
         # properties inherited from the function
         self.mesh = riemann.mesh
-        self.pa = riemann.pa
+        self.particles = riemann.mesh.particles
 
         # create flux data array
         flux_vars = {
@@ -27,7 +27,7 @@ cdef class IntegrateBase:
                 "momentum-y": "double",
                 "energy": "double",
                 }
-        self.flux = ParticleArray(var_dict=flux_vars)
+        self.flux = CarrayContainer(var_dict=flux_vars)
 
         # create left/right face state array 
         state_vars = {
@@ -36,8 +36,8 @@ cdef class IntegrateBase:
                 "velocity-y": "double",
                 "pressure": "double",
                 }
-        self.left_state  = ParticleArray(var_dict=state_vars)
-        self.right_state = ParticleArray(var_dict=state_vars)
+        self.left_state  = CarrayContainer(var_dict=state_vars)
+        self.right_state = CarrayContainer(var_dict=state_vars)
 
     def compute_time_step(self):
         return self._compute_time_step()
@@ -69,7 +69,7 @@ cdef class MovingMesh(IntegrateBase):
         """Main step routine"""
 
         # particle flag information
-        cdef IntArray tags = self.pa.get_carray("tags")
+        cdef IntArray tags = self.particles.get_carray("tag")
 
         # face information
         cdef LongLongArray pair_i = self.mesh.faces.get_carray("pair-i")
@@ -77,16 +77,16 @@ cdef class MovingMesh(IntegrateBase):
         cdef DoubleArray area = self.mesh.faces.get_carray("area")
 
         # particle position and velocity
-        cdef DoubleArray x = self.pa.get_carray("position-x")
-        cdef DoubleArray y = self.pa.get_carray("position-y")
-        cdef DoubleArray wx = self.pa.get_carray("w-x")
-        cdef DoubleArray wy = self.pa.get_carray("w-y")
+        cdef DoubleArray  x = self.particles.get_carray("position-x")
+        cdef DoubleArray  y = self.particles.get_carray("position-y")
+        cdef DoubleArray wx = self.particles.get_carray("w-x")
+        cdef DoubleArray wy = self.particles.get_carray("w-y")
 
         # particle values
-        cdef DoubleArray m  = self.pa.get_carray("mass")
-        cdef DoubleArray mu = self.pa.get_carray("momentum-x")
-        cdef DoubleArray mv = self.pa.get_carray("momentum-y")
-        cdef DoubleArray E  = self.pa.get_carray("energy")
+        cdef DoubleArray m  = self.particles.get_carray("mass")
+        cdef DoubleArray mu = self.particles.get_carray("momentum-x")
+        cdef DoubleArray mv = self.particles.get_carray("momentum-y")
+        cdef DoubleArray E  = self.particles.get_carray("energy")
 
         # flux values
         cdef DoubleArray f_m  = self.flux.get_carray("mass")
@@ -97,8 +97,8 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i, j, k
         cdef double a
 
-        cdef long num_faces = self.mesh.faces.get_number_of_particles()
-        cdef long npart = self.pa.get_number_of_particles()
+        cdef long num_faces = self.mesh.faces.get_number_of_items()
+        cdef long npart = self.particles.get_number_of_particles()
 
 
         # compute particle and face velocities
@@ -110,7 +110,7 @@ cdef class MovingMesh(IntegrateBase):
         self.flux.resize(num_faces)
 
         # reconstruct left\right states at each face
-        self.riemann.interpolation.compute(self.pa, self.mesh.faces, self.left_state, self.right_state,
+        self.riemann.interpolation.compute(self.particles, self.mesh.faces, self.left_state, self.right_state,
                 t, dt, iteration_count)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
@@ -147,18 +147,18 @@ cdef class MovingMesh(IntegrateBase):
 
     cdef double _compute_time_step(self):
 
-        cdef IntArray tags = self.pa.get_carray("tags")
+        cdef IntArray tags = self.particles.get_carray("tag")
 
-        cdef DoubleArray r = self.pa.get_carray("density")
-        cdef DoubleArray p = self.pa.get_carray("pressure")
-        cdef DoubleArray u = self.pa.get_carray("velocity-x")
-        cdef DoubleArray v = self.pa.get_carray("velocity-y")
+        cdef DoubleArray r = self.particles.get_carray("density")
+        cdef DoubleArray p = self.particles.get_carray("pressure")
+        cdef DoubleArray u = self.particles.get_carray("velocity-x")
+        cdef DoubleArray v = self.particles.get_carray("velocity-y")
 
-        cdef DoubleArray vol = self.pa.get_carray("volume")
+        cdef DoubleArray vol = self.particles.get_carray("volume")
 
         cdef double gamma = self.gamma
         cdef double c, R, dt, dt_x, dt_y
-        cdef long i, npart = self.pa.get_number_of_particles()
+        cdef long i, npart = self.particles.get_number_of_particles()
 
         c = sqrt(gamma*p.data[0]/r.data[0])
         R = sqrt(vol.data[0]/np.pi)
@@ -190,30 +190,30 @@ cdef class MovingMesh(IntegrateBase):
         term. The algorithm is taken from Springel (2009).
         """
         # particle flag information
-        cdef IntArray type = self.pa.get_carray("type")
-        cdef IntArray tags = self.pa.get_carray("tags")
+        cdef IntArray type = self.particles.get_carray("type")
+        cdef IntArray tags = self.particles.get_carray("tag")
 
         # particle position and velocity
-        cdef DoubleArray x = self.pa.get_carray("position-x")
-        cdef DoubleArray y = self.pa.get_carray("position-y")
-        cdef DoubleArray wx = self.pa.get_carray("w-x")
-        cdef DoubleArray wy = self.pa.get_carray("w-y")
+        cdef DoubleArray x = self.particles.get_carray("position-x")
+        cdef DoubleArray y = self.particles.get_carray("position-y")
+        cdef DoubleArray wx = self.particles.get_carray("w-x")
+        cdef DoubleArray wy = self.particles.get_carray("w-y")
 
         # center of mass of particle cell
-        cdef DoubleArray cx = self.pa.get_carray("com-x")
-        cdef DoubleArray cy = self.pa.get_carray("com-y")
+        cdef DoubleArray cx = self.particles.get_carray("com-x")
+        cdef DoubleArray cy = self.particles.get_carray("com-y")
 
         # particle values
-        cdef DoubleArray r = self.pa.get_carray("density")
-        cdef DoubleArray p = self.pa.get_carray("pressure")
-        cdef DoubleArray u = self.pa.get_carray("velocity-x")
-        cdef DoubleArray v = self.pa.get_carray("velocity-y")
+        cdef DoubleArray r = self.particles.get_carray("density")
+        cdef DoubleArray p = self.particles.get_carray("pressure")
+        cdef DoubleArray u = self.particles.get_carray("velocity-x")
+        cdef DoubleArray v = self.particles.get_carray("velocity-y")
 
         # local variables
         cdef double _x, _y, _cx, _cy, _wx, _wy, cs, d, R
         cdef double eta = self.eta
 
-        cdef long i, npart = self.pa.get_number_of_particles()
+        cdef long i, npart = self.particles.get_number_of_particles()
 
         for i in range(npart):
             if tags.data[i] == Real or type.data[i] == Boundary:
@@ -261,16 +261,16 @@ cdef class MovingMesh(IntegrateBase):
         taken from Springel (2009).
         """
         # particle flag information
-        cdef IntArray tags = self.pa.get_carray("tags")
-        cdef IntArray type = self.pa.get_carray("type")
+        cdef IntArray tags = self.particles.get_carray("tags")
+        cdef IntArray type = self.particles.get_carray("type")
 
         # particle position
-        cdef DoubleArray x = self.pa.get_carray("position-x")
-        cdef DoubleArray y = self.pa.get_carray("position-y")
+        cdef DoubleArray x = self.particles.get_carray("position-x")
+        cdef DoubleArray y = self.particles.get_carray("position-y")
 
         # particle velocity
-        cdef DoubleArray wx = self.pa.get_carray("w-x")
-        cdef DoubleArray wy = self.pa.get_carray("w-y")
+        cdef DoubleArray wx = self.particles.get_carray("w-x")
+        cdef DoubleArray wy = self.particles.get_carray("w-y")
 
         # face information
         cdef DoubleArray fu  = self.mesh.faces.get_carray("velocity-x")
@@ -291,7 +291,7 @@ cdef class MovingMesh(IntegrateBase):
         cdef int k, ind
         cdef int n
 
-        cdef long npart = self.pa.get_number_of_particles()
+        cdef long npart = self.particles.get_number_of_particles()
 
         k = ind = 0
         for i in range(npart):
