@@ -1,4 +1,4 @@
-from particles.particle_array cimport ParticleArray
+from containers.containers cimport CarrayContainer
 from utils.carray cimport DoubleArray
 from reconstruction.reconstruction cimport ReconstructionBase
 
@@ -14,14 +14,14 @@ cdef class RiemannBase:
         self.gamma = gamma
         self.cfl = cfl
 
-    cdef solve(self, ParticleArray fluxes, ParticleArray left_faces, ParticleArray right_faces, ParticleArray faces,
+    cdef solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
             double t, double dt, int iteration_count):
         msg = "RiemannBase::solve called!"
         raise NotImplementedError(msg)
 
 cdef class HLLC(RiemannBase):
 
-    cdef solve(self, ParticleArray fluxes, ParticleArray left_faces, ParticleArray right_faces, ParticleArray faces,
+    cdef solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
             double t, double dt, int iteration_count):
 
         # left state primitive variables
@@ -55,7 +55,7 @@ cdef class HLLC(RiemannBase):
         cdef double _wn, _Vnl, _Vnr, _sl, _sr, s_contact
 
         cdef double gamma = self.gamma
-        cdef long num_faces = faces.get_number_of_particles()
+        cdef long num_faces = faces.get_number_of_items()
 
         for i in range(num_faces):
 

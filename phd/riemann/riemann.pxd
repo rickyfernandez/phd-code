@@ -1,4 +1,4 @@
-from particles.particle_array cimport ParticleArray
+from containers.containers cimport CarrayContainer
 from reconstruction.reconstruction cimport ReconstructionBase
 
 
@@ -9,7 +9,7 @@ cdef class RiemannBase:
     cdef public double gamma
     cdef public double cfl
 
-    cdef solve(self, ParticleArray fluxes, ParticleArray left_face, ParticleArray right_face, ParticleArray faces,
+    cdef solve(self, CarrayContainer fluxes, CarrayContainer left_face, CarrayContainer right_face, CarrayContainer faces,
             double t, double dt, int iteration_count)
 
 cdef class HLLC(RiemannBase):
