@@ -5,15 +5,18 @@ cdef class ReconstructionBase:
     def __init__(self):
         pass
 
-    cdef compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_faces, CarrayContainer right_faces,
+    def compute(self, particles, faces, left_state, right_state, gamma, dt):
+        self._compute(particles, faces, left_state, right_state, gamma, dt)
+
+    cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
             double gamma, double dt):
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
 
 cdef class PieceWiseConstant(ReconstructionBase):
 
-    cdef compute(self, ParticleContainer particles, CarrayContainer left_faces, CarrayContainer right_faces,
-            CarrayContainer faces, double gamma, double dt):
+    cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+            double gamma, double dt):
 
         # particle primitive variables
         cdef DoubleArray d = particles.get_carray("density")
@@ -22,16 +25,16 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef DoubleArray p = particles.get_carray("pressure")
 
         # left state primitive variables
-        cdef DoubleArray dl = left_faces.get_carray("density")
-        cdef DoubleArray ul = left_faces.get_carray("velocity-x")
-        cdef DoubleArray vl = left_faces.get_carray("velocity-y")
-        cdef DoubleArray pl = left_faces.get_carray("pressure")
+        cdef DoubleArray dl = left_state.get_carray("density")
+        cdef DoubleArray ul = left_state.get_carray("velocity-x")
+        cdef DoubleArray vl = left_state.get_carray("velocity-y")
+        cdef DoubleArray pl = left_state.get_carray("pressure")
 
         # left state primitive variables
-        cdef DoubleArray dr = right_faces.get_carray("density")
-        cdef DoubleArray ur = right_faces.get_carray("velocity-x")
-        cdef DoubleArray vr = right_faces.get_carray("velocity-y")
-        cdef DoubleArray pr = right_faces.get_carray("pressure")
+        cdef DoubleArray dr = right_state.get_carray("density")
+        cdef DoubleArray ur = right_state.get_carray("velocity-x")
+        cdef DoubleArray vr = right_state.get_carray("velocity-y")
+        cdef DoubleArray pr = right_state.get_carray("pressure")
 
         # particle indices that make up the face
         cdef LongLongArray pair_i = faces.get_carray("pair-i")
@@ -55,10 +58,10 @@ cdef class PieceWiseConstant(ReconstructionBase):
             pl.data[k] = p.data[i]
 
             # right face values
-            dl.data[k] = d.data[j]
-            ul.data[k] = u.data[j]
-            vl.data[k] = v.data[j]
-            pl.data[k] = p.data[j]
+            dr.data[k] = d.data[j]
+            ur.data[k] = u.data[j]
+            vr.data[k] = v.data[j]
+            pr.data[k] = p.data[j]
 
 
 
