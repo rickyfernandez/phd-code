@@ -8,20 +8,22 @@ cimport numpy as np
 from libc.math cimport sqrt, pow, fmin, fmax
 
 cdef class RiemannBase:
-    def __init__(self, object mesh, ReconstructionBase reconstruction, double gamma=1.4, double cfl=0.3):
-        self.mesh = mesh
+    def __init__(self, ReconstructionBase reconstruction, double gamma=1.4, double cfl=0.3):
         self.reconstruction = reconstruction
         self.gamma = gamma
         self.cfl = cfl
 
-    cdef solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
+    def solve(self, fluxes, left_faces, right_faces, faces, t, dt, iteration_count):
+        self._solve(fluxes, left_faces, right_faces, faces, t, dt, iteration_count)
+
+    cdef _solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
             double t, double dt, int iteration_count):
         msg = "RiemannBase::solve called!"
         raise NotImplementedError(msg)
 
 cdef class HLLC(RiemannBase):
 
-    cdef solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
+    cdef _solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
             double t, double dt, int iteration_count):
 
         # left state primitive variables
@@ -55,7 +57,7 @@ cdef class HLLC(RiemannBase):
         cdef double _wn, _Vnl, _Vnr, _sl, _sr, s_contact
 
         cdef double gamma = self.gamma
-        cdef long num_faces = faces.get_number_of_items()
+        cdef int num_faces = faces.get_number_of_items()
 
         for i in range(num_faces):
 
