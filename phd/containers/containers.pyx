@@ -125,7 +125,7 @@ cdef class CarrayContainer:
         else:
             raise AttributeError, 'property %s not present' % (prop)
 
-    cpdef resize(self, long size):
+    cpdef resize(self, int size):
         """Resize all arrays to the new size."""
         cdef BaseArray array
         for array in self.properties.values():
@@ -184,7 +184,7 @@ cdef class CarrayContainer:
         cdef BaseArray dst_prop_array, src_prop_array
         cdef list prop_names
         cdef str prop_type, prop, dtype
-        cdef long size = index_array.size
+        cdef int size = index_array.size
 
         prop_names = self.properties.keys()
 
@@ -274,6 +274,10 @@ cdef class ParticleContainer(CarrayContainer):
             self.register_property(num_real_parts, "tag", "int")
             self.register_property(num_real_parts, "process", "long")
 
+            self.register_property(num_real_parts, "com-x", "double")
+            self.register_property(num_real_parts, "com-y", "double")
+            self.register_property(num_real_parts, "volume", "double")
+
             # set initial particle tags to be real
             self['tag'][:] = Real
 
@@ -307,10 +311,10 @@ cdef class ParticleContainer(CarrayContainer):
         cdef IntArray tag_array = self.properties['tag']
         cdef np.int8_t* tagarrptr = tag_array.get_data_ptr()
         cdef np.ndarray ind
-        cdef long i
+        cdef int i
 
         # find the indices of the particles to be removed
-        for i in xrange(tag_array.length):
+        for i in range(tag_array.length):
             if tagarrptr[i] == tag:
                 indices.append(i)
 
@@ -328,13 +332,13 @@ cdef class ParticleContainer(CarrayContainer):
         cdef size_t i, num_particles
         cdef size_t next_insert
         cdef size_t num_arrays
-        cdef long tmp
+        cdef int tmp
         cdef LongArray index_array
         cdef IntArray tag_arr
         cdef BaseArray arr
         cdef list arrays
-        cdef long num_real_particles = 0
-        cdef long num_moves = 0
+        cdef int num_real_particles = 0
+        cdef int num_moves = 0
 
         next_insert = 0
         num_particles = self.get_number_of_particles()
@@ -373,7 +377,7 @@ cdef class ParticleContainer(CarrayContainer):
 
     cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc):
 
-        cdef long j, new_size
+        cdef int j, new_size
         cdef BaseArray array
 
         # check if adding a new particle exceeds causes the array size

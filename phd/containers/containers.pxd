@@ -14,14 +14,14 @@ cdef class CarrayContainer:
     cpdef extend(self, int num_particles)
     cpdef BaseArray get_carray(self, str prop)
     cdef  _check_property(self, str prop)
-    cpdef resize(self, long size)
+    cpdef resize(self, int size)
     cpdef CarrayContainer extract_items(self, np.ndarray index_array)
     cpdef int append_container(self, CarrayContainer carray)
 
 cdef class ParticleContainer(CarrayContainer):
 
-    cdef readonly long num_real_particles
-    cdef readonly long num_ghost_particles
+    cdef readonly int num_real_particles
+    cdef readonly int num_ghost_particles
 
     cpdef int get_number_of_particles(self, bint real=*)
     cpdef remove_tagged_particles(self, np.int8_t tag)
