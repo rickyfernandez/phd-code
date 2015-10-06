@@ -25,11 +25,11 @@ cdef class BaseArray:
         """Return the c data type of this array."""
         raise NotImplementedError, 'BaseArray::get_c_type'
 
-    cpdef reserve(self, long size):
+    cpdef reserve(self, int size):
         """Resizes the internal data to required size."""
         raise NotImplementedError, 'BaseArray::reserve'
 
-    cpdef resize(self, long size):
+    cpdef resize(self, int size):
         """Resizes the internal data to required size."""
         raise NotImplementedError, 'BaseArray::resize'
 
@@ -59,7 +59,7 @@ cdef class BaseArray:
         self.length = 0
         arr.dimensions[0] = self.length
 
-    cpdef shrink(self, long size):
+    cpdef shrink(self, int size):
         """Reset the length of the array to length size."""
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
@@ -104,7 +104,7 @@ cdef class BaseArrayIter:
 cdef class DoubleArray(BaseArray):
     """Represents an array of 64 bit floats."""
 
-    def __cinit__(self, long n=0):
+    def __cinit__(self, int n=0):
         """
         Constructor for the class.
 
@@ -113,7 +113,7 @@ cdef class DoubleArray(BaseArray):
 
         Parameters:
         -----------
-        n : long
+        n : int
             Length of the initial buffer.
 
         Data attributes:
@@ -139,11 +139,11 @@ cdef class DoubleArray(BaseArray):
         """Frees the c array."""
         stdlib.free(<void*>self.data)
 
-    def __getitem__(self, long pid):
+    def __getitem__(self, int pid):
         """Get particle item at position pid."""
         return self.data[pid]
 
-    def __setitem__(self, long pid, np.float64_t value):
+    def __setitem__(self, int pid, np.float64_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
@@ -163,17 +163,17 @@ cdef class DoubleArray(BaseArray):
         """Return the internal data pointer."""
         return self.data
 
-    cpdef np.float64_t get(self, long pid):
+    cpdef np.float64_t get(self, int pid):
         """Get item at position pid."""
         return self.data[pid]
 
-    cpdef set(self, long pid, np.float64_t value):
+    cpdef set(self, int pid, np.float64_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
     cpdef append(self, np.float64_t value):
         """Appends value to the end of the array."""
-        cdef long l = self.length
+        cdef int l = self.length
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if l >= self.alloc:
@@ -184,7 +184,7 @@ cdef class DoubleArray(BaseArray):
         # update the numpy arrays length
         arr.dimensions[0] = self.length
 
-    cpdef reserve(self, long size):
+    cpdef reserve(self, int size):
         """Resizes the internal data to size*sizeof(np.float64_t) bytes."""
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
         cdef void* data = NULL
@@ -199,7 +199,7 @@ cdef class DoubleArray(BaseArray):
             self.alloc = size
             arr.data = <char*> self.data
 
-    cpdef resize(self, long size):
+    cpdef resize(self, int size):
         """
         Resizes internal data to size*sizeof(np.float64_t) bytes
         and sets the length to the new size.
@@ -240,10 +240,10 @@ cdef class DoubleArray(BaseArray):
             Indicates if the input is sorted in ascending order. If not
             the array will be sorted internally.
         """
-        cdef long i
-        cdef long inlength = index_list.size
+        cdef int i
+        cdef int inlength = index_list.size
         cdef np.ndarray sorted_indices
-        cdef long pid
+        cdef int pid
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if inlength > self.length:
@@ -254,7 +254,7 @@ cdef class DoubleArray(BaseArray):
         else:
             sorted_indices = index_list
 
-        for i in xrange(inlength):
+        for i in range(inlength):
             pid = sorted_indices[inlength-(i+1)]
             if pid < self.length:
                 self.data[pid] = self.data[self.length-1]
@@ -270,9 +270,9 @@ cdef class DoubleArray(BaseArray):
         in_array : ndarray
             Array with data to be added to the current array.
         """
-        cdef long length = in_array.size
-        cdef long i
-        for i in xrange(length):
+        cdef int length = in_array.size
+        cdef int i
+        for i in range(length):
             self.append(in_array[i])
 
     cpdef align_array(self, np.ndarray new_indices):
@@ -280,9 +280,9 @@ cdef class DoubleArray(BaseArray):
         if new_indices.size != self.length:
             raise ValueError, 'Unequal array lengths'
 
-        cdef long i
-        cdef long length = self.length
-        cdef long n_bytes
+        cdef int i
+        cdef int length = self.length
+        cdef int n_bytes
         cdef np.float64_t *temp
 
         n_bytes = sizeof(np.float64_t)*length
@@ -291,7 +291,7 @@ cdef class DoubleArray(BaseArray):
         string.memcpy(<void*> temp, <void*> self.data, n_bytes)
 
         # copy the data from the resized portion to the actual positions.
-        for i in xrange(length):
+        for i in range(length):
             if i != new_indices[i]:
                 self.data[i] = temp[new_indices[i]]
 
@@ -299,7 +299,7 @@ cdef class DoubleArray(BaseArray):
 
     cpdef update_min_max(self):
         """Updates the min and max values of the array."""
-        cdef long i = 0
+        cdef int i = 0
         cdef np.float64_t min_val, max_val
 
         if self.length == 0:
@@ -327,7 +327,7 @@ cdef class DoubleArray(BaseArray):
         i.e. atleast as long as indices.
         """
         cdef DoubleArray dest_array = <DoubleArray>dest
-        cdef long i, num_values
+        cdef int i, num_values
         num_values = indices.size
 
         for i in range(num_values):
@@ -337,7 +337,7 @@ cdef class DoubleArray(BaseArray):
 cdef class IntArray(BaseArray):
     """Represents an array of 8 bit integers."""
 
-    def __cinit__(self, long n=0):
+    def __cinit__(self, int n=0):
         """
         Constructor for the class.
 
@@ -346,16 +346,16 @@ cdef class IntArray(BaseArray):
 
         Parameters:
         -----------
-        n : long
+        n : int
             Length of the initial buffer.
 
         Data attributes:
         ----------------
         data : np.int8_t*
             Pointer to np.int8t buffer.
-        alloc : long
+        alloc : int
             Size of the data buffer allocated
-        length : long
+        length : int
             Number of slots used in the buffer
         """
         self.length = n
@@ -372,11 +372,11 @@ cdef class IntArray(BaseArray):
         """Frees the c array."""
         stdlib.free(<void*>self.data)
 
-    def __getitem__(self, long pid):
+    def __getitem__(self, int pid):
         """Get item at position pid."""
         return self.data[pid]
 
-    def __setitem__(self, long pid, np.int8_t value):
+    def __setitem__(self, int pid, np.int8_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
@@ -396,17 +396,17 @@ cdef class IntArray(BaseArray):
         """Return the internal data pointer."""
         return self.data
 
-    cpdef np.int8_t get(self, long pid):
+    cpdef np.int8_t get(self, int pid):
         """Get item at position pid."""
         return self.data[pid]
 
-    cpdef set(self, long pid, np.int8_t value):
+    cpdef set(self, int pid, np.int8_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
     cpdef append(self, np.int8_t value):
         """Appends value to the end of the array."""
-        cdef long l = self.length
+        cdef int l = self.length
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if l >= self.alloc:
@@ -417,7 +417,7 @@ cdef class IntArray(BaseArray):
         # update the numpy arrays length
         arr.dimensions[0] = self.length
 
-    cpdef reserve(self, long size):
+    cpdef reserve(self, int size):
         """Resizes the internal data to size*sizeof(np.int8_t) bytes."""
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
         cdef void* data = NULL
@@ -432,7 +432,7 @@ cdef class IntArray(BaseArray):
             self.alloc = size
             arr.data = <char*> self.data
 
-    cpdef resize(self, long size):
+    cpdef resize(self, int size):
         """
         Resizes internal data to size*sizeof(np.int8_t) bytes
         and sets the length to the new size.
@@ -473,10 +473,10 @@ cdef class IntArray(BaseArray):
             Indicates if the input is sorted in ascending order. If not
             the array will be sorted internally.
         """
-        cdef long i
-        cdef long inlength = index_list.size
+        cdef int i
+        cdef int inlength = index_list.size
         cdef np.ndarray sorted_indices
-        cdef long pid
+        cdef int pid
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if inlength > self.length:
@@ -487,7 +487,7 @@ cdef class IntArray(BaseArray):
         else:
             sorted_indices = index_list
 
-        for i in xrange(inlength):
+        for i in range(inlength):
             pid = sorted_indices[inlength-(i+1)]
             if pid < self.length:
                 self.data[pid] = self.data[self.length-1]
@@ -503,9 +503,9 @@ cdef class IntArray(BaseArray):
         in_array : ndarray
             Array with data to be added to the current array.
         """
-        cdef long length = in_array.size
-        cdef long i
-        for i in xrange(length):
+        cdef int length = in_array.size
+        cdef int i
+        for i in range(length):
             self.append(in_array[i])
 
     cpdef align_array(self, np.ndarray new_indices):
@@ -513,9 +513,9 @@ cdef class IntArray(BaseArray):
         if new_indices.size != self.length:
             raise ValueError, 'Unequal array lengths'
 
-        cdef long i
-        cdef long length = self.length
-        cdef long n_bytes
+        cdef int i
+        cdef int length = self.length
+        cdef int n_bytes
         cdef np.int8_t *temp
 
         n_bytes = sizeof(np.int8_t)*length
@@ -524,7 +524,7 @@ cdef class IntArray(BaseArray):
         string.memcpy(<void*> temp, <void*> self.data, n_bytes)
 
         # copy the data from the resized portion to the actual positions.
-        for i in xrange(length):
+        for i in range(length):
             if i != new_indices[i]:
                 self.data[i] = temp[new_indices[i]]
 
@@ -532,7 +532,7 @@ cdef class IntArray(BaseArray):
 
     cpdef update_min_max(self):
         """Updates the min and max values of the array."""
-        cdef long i = 0
+        cdef int i = 0
         cdef np.int8_t min_val, max_val
 
         if self.length == 0:
@@ -560,7 +560,7 @@ cdef class IntArray(BaseArray):
         i.e. atleast as long as indices.
         """
         cdef IntArray dest_array = <IntArray>dest
-        cdef long i, num_values
+        cdef int i, num_values
         num_values = indices.size
 
         for i in range(num_values):
@@ -569,7 +569,7 @@ cdef class IntArray(BaseArray):
 cdef class LongArray(BaseArray):
     """Represents an array of np.int32_t."""
 
-    def __cinit__(self, long n=0):
+    def __cinit__(self, int n=0):
         """
         Constructor for the class.
 
@@ -578,16 +578,16 @@ cdef class LongArray(BaseArray):
 
         Parameters:
         -----------
-        n : long
+        n : int
             Length of the initial buffer.
 
         Data attributes:
         ----------------
         data : np.int32_t*
             Pointer to np.int32 buffer.
-        alloc : long
+        alloc : int
             Size of the data buffer allocated
-        length : long
+        length : int
             Number of slots used in the buffer
         """
         self.length = n
@@ -604,11 +604,11 @@ cdef class LongArray(BaseArray):
         """Frees the c array."""
         stdlib.free(<void*>self.data)
 
-    def __getitem__(self, long pid):
+    def __getitem__(self, int pid):
         """Get particle item at position pid."""
         return self.data[pid]
 
-    def __setitem__(self, long pid, np.int32_t value):
+    def __setitem__(self, int pid, np.int32_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
@@ -628,17 +628,17 @@ cdef class LongArray(BaseArray):
         """Return the internal data pointer."""
         return self.data
 
-    cpdef np.int32_t get(self, long pid):
+    cpdef np.int32_t get(self, int pid):
         """Get item at position pid."""
         return self.data[pid]
 
-    cpdef set(self, long pid, np.int32_t value):
+    cpdef set(self, int pid, np.int32_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
     cpdef append(self, np.int32_t value):
         """Appends value to the end of the array."""
-        cdef long l = self.length
+        cdef int l = self.length
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if l >= self.alloc:
@@ -649,7 +649,7 @@ cdef class LongArray(BaseArray):
         # update the numpy arrays length
         arr.dimensions[0] = self.length
 
-    cpdef reserve(self, long size):
+    cpdef reserve(self, int size):
         """Resizes the internal data to size*sizeof(np.float32_t) bytes."""
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
         cdef void* data = NULL
@@ -664,7 +664,7 @@ cdef class LongArray(BaseArray):
             self.alloc = size
             arr.data = <char*> self.data
 
-    cpdef resize(self, long size):
+    cpdef resize(self, int size):
         """
         Resizes internal data to size*sizeof(np.int32_t) bytes
         and sets the length to the new size.
@@ -705,10 +705,10 @@ cdef class LongArray(BaseArray):
             Indicates if the input is sorted in ascending order. If not
             the array will be sorted internally.
         """
-        cdef long i
-        cdef long inlength = index_list.size
+        cdef int i
+        cdef int inlength = index_list.size
         cdef np.ndarray sorted_indices
-        cdef long pid
+        cdef int pid
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if inlength > self.length:
@@ -719,7 +719,7 @@ cdef class LongArray(BaseArray):
         else:
             sorted_indices = index_list
 
-        for i in xrange(inlength):
+        for i in range(inlength):
             pid = sorted_indices[inlength-(i+1)]
             if pid < self.length:
                 self.data[pid] = self.data[self.length-1]
@@ -735,9 +735,9 @@ cdef class LongArray(BaseArray):
         in_array : ndarray
             Array with data to be added to the current array.
         """
-        cdef long length = in_array.size
-        cdef long i
-        for i in xrange(length):
+        cdef int length = in_array.size
+        cdef int i
+        for i in range(length):
             self.append(in_array[i])
 
     cpdef align_array(self, np.ndarray new_indices):
@@ -745,9 +745,9 @@ cdef class LongArray(BaseArray):
         if new_indices.size != self.length:
             raise ValueError, 'Unequal array lengths'
 
-        cdef long i
-        cdef long length = self.length
-        cdef long n_bytes
+        cdef int i
+        cdef int length = self.length
+        cdef int n_bytes
         cdef np.int32_t *temp
 
         n_bytes = sizeof(np.int32_t)*length
@@ -756,7 +756,7 @@ cdef class LongArray(BaseArray):
         string.memcpy(<void*> temp, <void*> self.data, n_bytes)
 
         # copy the data from the resized portion to the actual positions.
-        for i in xrange(length):
+        for i in range(length):
             if i != new_indices[i]:
                 self.data[i] = temp[new_indices[i]]
 
@@ -764,7 +764,7 @@ cdef class LongArray(BaseArray):
 
     cpdef update_min_max(self):
         """Updates the min and max values of the array."""
-        cdef long i = 0
+        cdef int i = 0
         cdef np.int32_t min_val, max_val
 
         if self.length == 0:
@@ -792,7 +792,7 @@ cdef class LongArray(BaseArray):
         i.e. atleast as long as indices.
         """
         cdef LongArray dest_array = <LongArray>dest
-        cdef long i, num_values
+        cdef int i, num_values
         num_values = indices.size
 
         for i in range(num_values):
@@ -802,7 +802,7 @@ cdef class LongArray(BaseArray):
 cdef class LongLongArray(BaseArray):
     """Represents an array of np.int64_t."""
 
-    def __cinit__(self, long n=0):
+    def __cinit__(self, int n=0):
         """
         Constructor for the class.
 
@@ -811,16 +811,16 @@ cdef class LongLongArray(BaseArray):
 
         Parameters:
         -----------
-        n : long
+        n : int
             Length of the initial buffer.
 
         Data attributes:
         ----------------
         data : np.int64_t*
             Pointer to np.int64 buffer.
-        alloc : long
+        alloc : int
             Size of the data buffer allocated
-        length : long
+        length : int
             Number of slots used in the buffer
         """
         self.length = n
@@ -837,11 +837,11 @@ cdef class LongLongArray(BaseArray):
         """Frees the c array."""
         stdlib.free(<void*>self.data)
 
-    def __getitem__(self, long pid):
+    def __getitem__(self, int pid):
         """Get particle item at position pid."""
         return self.data[pid]
 
-    def __setitem__(self, long pid, np.int64_t value):
+    def __setitem__(self, int pid, np.int64_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
@@ -861,17 +861,17 @@ cdef class LongLongArray(BaseArray):
         """Return the internal data pointer."""
         return self.data
 
-    cpdef np.int64_t get(self, long pid):
+    cpdef np.int64_t get(self, int pid):
         """Get item at position pid."""
         return self.data[pid]
 
-    cpdef set(self, long pid, np.int64_t value):
+    cpdef set(self, int pid, np.int64_t value):
         """Set location pid to value."""
         self.data[pid] = value
 
     cpdef append(self, np.int64_t value):
         """Appends value to the end of the array."""
-        cdef long l = self.length
+        cdef int l = self.length
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if l >= self.alloc:
@@ -882,7 +882,7 @@ cdef class LongLongArray(BaseArray):
         # update the numpy arrays length
         arr.dimensions[0] = self.length
 
-    cpdef reserve(self, long size):
+    cpdef reserve(self, int size):
         """Resizes the internal data to size*sizeof(np.float64_t) bytes."""
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
         cdef void* data = NULL
@@ -897,7 +897,7 @@ cdef class LongLongArray(BaseArray):
             self.alloc = size
             arr.data = <char*> self.data
 
-    cpdef resize(self, long size):
+    cpdef resize(self, int size):
         """
         Resizes internal data to size*sizeof(np.int64_t) bytes
         and sets the length to the new size.
@@ -938,10 +938,10 @@ cdef class LongLongArray(BaseArray):
             Indicates if the input is sorted in ascending order. If not
             the array will be sorted internally.
         """
-        cdef long i
-        cdef long inlength = index_list.size
+        cdef int i
+        cdef int inlength = index_list.size
         cdef np.ndarray sorted_indices
-        cdef long pid
+        cdef int pid
         cdef PyArrayObject* arr = <PyArrayObject*> self._npy_array
 
         if inlength > self.length:
@@ -952,7 +952,7 @@ cdef class LongLongArray(BaseArray):
         else:
             sorted_indices = index_list
 
-        for i in xrange(inlength):
+        for i in range(inlength):
             pid = sorted_indices[inlength-(i+1)]
             if pid < self.length:
                 self.data[pid] = self.data[self.length-1]
@@ -968,9 +968,9 @@ cdef class LongLongArray(BaseArray):
         in_array : ndarray
             Array with data to be added to the current array.
         """
-        cdef long length = in_array.size
-        cdef long i
-        for i in xrange(length):
+        cdef int length = in_array.size
+        cdef int i
+        for i in range(length):
             self.append(in_array[i])
 
     cpdef align_array(self, np.ndarray new_indices):
@@ -978,9 +978,9 @@ cdef class LongLongArray(BaseArray):
         if new_indices.size != self.length:
             raise ValueError, 'Unequal array lengths'
 
-        cdef long i
-        cdef long length = self.length
-        cdef long n_bytes
+        cdef int i
+        cdef int length = self.length
+        cdef int n_bytes
         cdef np.int64_t *temp
 
         n_bytes = sizeof(np.int64_t)*length
@@ -989,7 +989,7 @@ cdef class LongLongArray(BaseArray):
         string.memcpy(<void*> temp, <void*> self.data, n_bytes)
 
         # copy the data from the resized portion to the actual positions.
-        for i in xrange(length):
+        for i in range(length):
             if i != new_indices[i]:
                 self.data[i] = temp[new_indices[i]]
 
@@ -997,7 +997,7 @@ cdef class LongLongArray(BaseArray):
 
     cpdef update_min_max(self):
         """Updates the min and max values of the array."""
-        cdef long i = 0
+        cdef int i = 0
         cdef np.int64_t min_val, max_val
 
         if self.length == 0:
@@ -1025,7 +1025,7 @@ cdef class LongLongArray(BaseArray):
         i.e. atleast as long as indices.
         """
         cdef LongLongArray dest_array = <LongLongArray>dest
-        cdef long i, num_values
+        cdef int i, num_values
         num_values = indices.size
 
         for i in range(num_values):

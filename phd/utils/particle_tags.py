@@ -2,6 +2,7 @@
 class ParticleTAGS:
     Real = 0
     Ghost = 1
-    Exterior = 2
-    ExportInterior = 3
-    OldGhost = 4
+    Boundary = 2
+    Exterior = 3
+    ExportInterior = 4
+    OldGhost = 5
