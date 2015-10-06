@@ -40,8 +40,8 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef LongLongArray pair_i = faces.get_carray("pair-i")
         cdef LongLongArray pair_j = faces.get_carray("pair-j")
 
-        cdef long k, i, j
-        cdef long num_faces = faces.get_number_of_items()
+        cdef int k, i, j
+        cdef int num_faces = faces.get_number_of_items()
 
         # loop through each face
         for k in range(num_faces):
