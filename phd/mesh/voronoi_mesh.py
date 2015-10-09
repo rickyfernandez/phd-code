@@ -5,14 +5,24 @@ from scipy.spatial import Voronoi
 
 from containers.containers import ParticleContainer
 
-class VoronoiMeshBase(dict):
+class VoronoiMeshBase(object):
     """
     voronoi mesh base class
     """
-    def __init__(self, particles, *arg, **kw):
+    def __init__(self, particles, boundary):
 
-        super(VoronoiMeshBase, self).__init__(*arg, **kw)
         self.particles = particles
+        self.boundary = boundary
+
+        self.graph = {
+                'neighbors': None,
+                'number of neighbors': None,
+                'faces': None,
+                'voronoi vertices': None,
+                }
+
+    def __getitem__(self, name):
+        return self.graph[name]
 
     def tessellate(self):
         pass
@@ -24,13 +34,8 @@ class VoronoiMesh2D(VoronoiMeshBase):
     """
     2d voronoi mesh class
     """
-    def __init__(self, particles, *arg, **kw):
-        super(VoronoiMesh2D, self).__init__(particles, *arg, **kw)
-
-        self["neighbors"] = None
-        self["number of neighbors"] = None
-        self["faces"] = None
-        self["voronoi vertices"] = None
+    def __init__(self, particles, boundary):
+        super(VoronoiMesh2D, self).__init__(particles, boundary)
 
         face_vars = {
                 "area": "double",
@@ -51,23 +56,20 @@ class VoronoiMesh2D(VoronoiMeshBase):
         face pairs, and number of faces for faces
         """
 
-        num_faces = mesh.number_of_faces(self.particles, self["neighbors"], self["number of neighbors"])
+        num_faces = mesh.number_of_faces(self.particles, self.graph["neighbors"], self.graph["number of neighbors"])
         self.faces.resize(num_faces)
 
-        vol  = self.particles["volume"]
-        xcom = self.particles["com-x"]
-        ycom = self.particles["com-y"]
+        # the algorithms are cumulative so we have to zero out the data
+        self.particles["volume"][:] = 0.0
+        self.particles["com-x"][:]  = 0.0
+        self.particles["com-y"][:]  = 0.0
 
-        vol[:] = 0.0
-        xcom[:] = 0.0
-        ycom[:] = 0.0
-
-        mesh.cell_face_info_2d(self.particles, self.faces, self["neighbors"], self["number of neighbors"],
-                self["faces"], self["voronoi vertices"])
+        mesh.cell_face_info_2d(self.particles, self.faces, self.graph["neighbors"], self.graph["number of neighbors"],
+                self.graph["faces"], self.graph["voronoi vertices"])
 
     def update_boundary_particles(self):
-        cumsum = np.cumsum(self["number of neighbors"], dtype=np.int32)
-        mesh.flag_boundary_particles(self.particles, self["neighbors"], self["number of neighbors"], cumsum)
+        cumsum = np.cumsum(self.graph["number of neighbors"], dtype=np.int32)
+        mesh.flag_boundary_particles(self.particles, self.graph["neighbors"], self.graph["number of neighbors"], cumsum)
 
     def tessellate(self):
         """
@@ -106,7 +108,7 @@ class VoronoiMesh2D(VoronoiMeshBase):
         neighbor_graph = np.array(list(itertools.chain.from_iterable(neighbor_graph)), dtype=np.int32)
         face_graph = np.array(list(itertools.chain.from_iterable(face_graph)), dtype=np.int32)
 
-        self["neighbors"] = neighbor_graph
-        self["number of neighbors"] = neighbor_graph_sizes
-        self["faces"] = face_graph
-        self["voronoi vertices"] = vor.vertices
+        self.graph["neighbors"] = neighbor_graph
+        self.graph["number of neighbors"] = neighbor_graph_sizes
+        self.graph["faces"] = face_graph
+        self.graph["voronoi vertices"] = vor.vertices

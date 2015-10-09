@@ -56,7 +56,7 @@ class TestVoronoiMesh2dBox(unittest.TestCase):
         volumes.
         """
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
 
         # calculate voronoi volumes of all real particles 
@@ -83,7 +83,7 @@ class TestVoronoiMesh2dBox(unittest.TestCase):
         y_in[k] += 0.2*self.dx*(2.0*np.random.random(num_points)-1.0)
 
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
 
         # calculate voronoi volumes of all real particles 
@@ -101,7 +101,7 @@ class TestVoronoiMesh2dBox(unittest.TestCase):
         indices = np.arange(self.particles.get_number_of_particles())
 
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
         mesh.update_boundary_particles()
 
@@ -123,7 +123,7 @@ class TestVoronoiMesh2dBox(unittest.TestCase):
             ])
 
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
 
         # calculate voronoi volumes of all real particles 
@@ -209,7 +209,7 @@ class TestVoronoiMesh2dRectangle(unittest.TestCase):
             ])
 
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
 
         # calculate voronoi volumes of all real particles 
@@ -249,7 +249,7 @@ class TestVoronoiMesh2dRectangle(unittest.TestCase):
             ])
 
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
 
         # calculate voronoi volumes of all real particles 
@@ -267,7 +267,7 @@ class TestVoronoiMesh2dRectangle(unittest.TestCase):
         indices = np.arange(self.particles.get_number_of_particles())
 
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
         mesh.update_boundary_particles()
 
@@ -288,7 +288,7 @@ class TestVoronoiMesh2dRectangle(unittest.TestCase):
             ])
 
         # generate voronoi mesh 
-        mesh = VoronoiMesh2D(self.particles)
+        mesh = VoronoiMesh2D(self.particles, object())
         mesh.tessellate()
 
         # calculate voronoi volumes of all real particles 
