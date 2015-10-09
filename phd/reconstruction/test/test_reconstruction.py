@@ -5,12 +5,6 @@ from phd.containers.containers import CarrayContainer, ParticleContainer
 from phd.reconstruction.reconstruction import PieceWiseConstant
 
 
-def check_array(x, y):
-    """Check if two array are equal with an absolute tolerance of
-    1e-16."""
-    return np.allclose(x, y , atol=1e-16, rtol=0)
-
-
 class TestPieceWiseConstant(unittest.TestCase):
     """Tests for the Reconstruction class."""
     def test_compute(self):
@@ -38,16 +32,11 @@ class TestPieceWiseConstant(unittest.TestCase):
         # setup particles that defined the face
         pc = ParticleContainer(2)
 
-        dens = pc['density']
-        velx = pc['velocity-x']
-        vely = pc['velocity-y']
-        pres = pc['pressure']
-
-        # both particles have the same value
-        dens[:] = 1.0
-        velx[:] = 1.5
-        vely[:] = 5.0
-        pres[:] = 0.1
+        # initial state 
+        pc['density'][:] = 1.0
+        pc['velocity-x'][:] = 1.5
+        pc['velocity-y'][:] = 5.0
+        pc['pressure'][:] = 0.1
 
         # compute reconstruction to face
         gamma = 1.4

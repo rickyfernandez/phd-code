@@ -19,7 +19,8 @@ class TestParticleArray(unittest.TestCase):
 
         expected = ['position-x', 'position-y', 'mass', 'momentum-x',
                 'momentum-y', 'energy', 'density', 'velocity-x',
-                'velocity-y', 'pressure', 'key', 'tag', 'process']
+                'velocity-y', 'pressure', 'key', 'tag', 'type',
+                'process', 'com-x', 'com-y', 'volume']
 
         self.assertItemsEqual(pc.properties.keys(), expected)
 
@@ -52,28 +53,14 @@ class TestParticleArray(unittest.TestCase):
 
     def test_remove_items(self):
         """"Test the discard ghost and export particles function"""
-        x = [5.0, 2.0, 1.0, 4.0]
-        y = [2.0, 6.0, 3.0, 1.0]
-        m = [1.0, 2.0, 3.0, 4.0]
-        u = [0.0, 1.0, 2.0, 3.0]
-        v = [1.0, 1.0, 1.0, 1.0]
-        e = [1.0, 1.0, 1.0, 1.0]
-
         pc = ParticleContainer(4)
 
-        xpos = pc['position-x']
-        ypos = pc['position-y']
-        mass = pc['mass']
-        momx = pc['momentum-x']
-        momy = pc['momentum-y']
-        ener = pc['energy']
-
-        xpos[:] = x
-        ypos[:] = y
-        mass[:] = m
-        momx[:] = u
-        momy[:] = v
-        ener[:] = e
+        pc['position-x'][:] = [5.0, 2.0, 1.0, 4.0]
+        pc['position-y'][:] = [2.0, 6.0, 3.0, 1.0]
+        pc['mass'][:] = [1.0, 2.0, 3.0, 4.0]
+        pc['momentum-x'][:] = [0.0, 1.0, 2.0, 3.0]
+        pc['momentum-y'][:] = [1.0, 1.0, 1.0, 1.0]
+        pc['energy'][:] = [1.0, 1.0, 1.0, 1.0]
 
         # remove items with indicies 0 and 1
         remove_arr = np.array([0, 1], dtype=np.int)
