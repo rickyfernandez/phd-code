@@ -9,10 +9,11 @@ class VoronoiMeshBase(object):
     """
     voronoi mesh base class
     """
-    def __init__(self, particles, boundary):
+    def __init__(self, particles, domain, boundary):
 
         self.particles = particles
         self.boundary = boundary
+        self.domain = domain
 
         self.graph = {
                 'neighbors': None,
@@ -34,8 +35,8 @@ class VoronoiMesh2D(VoronoiMeshBase):
     """
     2d voronoi mesh class
     """
-    def __init__(self, particles, boundary):
-        super(VoronoiMesh2D, self).__init__(particles, boundary)
+    def __init__(self, particles, domain, boundary):
+        super(VoronoiMesh2D, self).__init__(particles, domain, boundary)
 
         face_vars = {
                 "area": "double",
