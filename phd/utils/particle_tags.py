@@ -6,3 +6,4 @@ class ParticleTAGS:
     Exterior = 3
     ExportInterior = 4
     OldGhost = 5
+    Undefined = 6
