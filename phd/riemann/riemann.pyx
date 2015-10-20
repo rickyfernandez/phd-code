@@ -21,7 +21,7 @@ cdef class RiemannBase:
         msg = "RiemannBase::solve called!"
         raise NotImplementedError(msg)
 
-cdef class HLLC(RiemannBase):
+cdef class HLL(RiemannBase):
 
     cdef _solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
             double t, double dt, int iteration_count):
@@ -51,9 +51,9 @@ cdef class HLLC(RiemannBase):
         # local variables
         cdef int i
         cdef double _nx, _ny
-        cdef double factor_1, factor_2
-        cdef double _dl, _ul, _vl, _pl, _el
-        cdef double _dr, _ur, _vr, _pr, _er
+        cdef double fac1, fac2, el, er
+        cdef double _dl, _ul, _vl, _pl
+        cdef double _dr, _ur, _vr, _pr
         cdef double _wn, _Vnl, _Vnr, _sl, _sr, s_contact
 
         cdef double gamma = self.gamma
@@ -87,7 +87,7 @@ cdef class HLLC(RiemannBase):
             # velocity of face projected onto face normal
             _wn = wx.data[i]*_nx + wy.data[i]*_ny
 
-            # calculate interface flux - eq. 10.71
+            # calculate interface flux - eq. 10.21
             if(_wn <= _sl):
 
                 # left state
@@ -98,46 +98,22 @@ cdef class HLLC(RiemannBase):
 
             elif((_sl < _wn) and (_wn <= _sr)):
 
-                # intermediate state
-                if(_wn <= s_contact):
+                fac1 = _sr - _wn
+                fac2 = _sl - _wn
+                fac3 = _sr - _sl
 
-                    # left star state
-                    factor_1 = _dl*(_sl - _Vnl)/(_sl - s_contact)
-                    factor_2 = factor_1*(_sl - _wn)*(s_contact - _ul) + _pl
+                # eqs. 10.20 and 10.13
+                fm.data[i] = (_dl*_Vnl*fac1 - _dr*_Vnr*fac2 - _sl*_dl*fac1 + _sr*_dr*fac2)/fac3
 
-                    # density flux
-                    frho = _dl*(_Vnl - _sl) + factor_1*(_sl - _wn)
+                fmu.data[i] = ((_dl*_ul*_Vnl + _pl*_nx)*fac1 - (_dr*_ur*_Vnr + _pr*_nx)*fac2 \
+                        - _sl*(_dl*_ul)*fac1 + _sr*(_dr*_ur)*fac2)/fac3
 
-                    fm.data[i]  = frho
-                    fmu.data[i] = frho*_ul + factor_2*_nx
-                    fmv.data[i] = frho*_vl + factor_2*_ny
+                fmv.data[i] = ((_dl*_vl*_Vnl + _pl*_ny)*fac1 - (_dr*_vr*_Vnr + _pr*_ny)*fac2 \
+                        - _sl*(_dl*_vl)*fac1 + _sr*(_dr*_vr)*fac2)/fac3
 
-                    # total energy
-                    _el = 0.5*_dl*(_ul*_ul + _vl*_vl) + _pl/(gamma-1.0)
-
-                    fe.data[i] = (_el + _pl)*_Vnl - _el*_sl +\
-                            (_sl - _wn)*factor_1*(_el/_pl + (s_contact - _Vnl)*\
-                            (s_contact + _pl/(_dl*(_sl - _Vnl))))
-
-                else:
-
-                    # right star state
-                    factor_1 = _dr*(_sr - _Vnr)/(_sr - s_contact)
-                    factor_2 = factor_1*(_sr - _wn) *(s_contact - _ur) + _pr
-
-                    # density flux
-                    frho = _dr*(_Vnr - _sr) + factor_1*(_sr - _wn)
-
-                    fm.data[i]  = frho
-                    fmu.data[i] = frho*_ur + factor_2*_nx
-                    fmv.data[i] = frho*_vr + factor_2*_ny
-
-                    # total energy
-                    _er = 0.5*_dr*(_ur*_ur + _vr*_vr) + _pr*gamma/(gamma-1.0)
-
-                    fe.data[i] = (_er + _pr)*_Vnr - _er*_sr +\
-                            (_sr - _wn)*factor_1*(_er/_pr + (s_contact - _Vnr)*\
-                            (s_contact + _pr/(_dr*(_sr - _Vnr))))
+                el = 0.5*_dl*(_ul*_ul + _vl*_vl) + _pl/(gamma - 1.0)
+                er = 0.5*_dr*(_ur*_ur + _vr*_vr) + _pr/(gamma - 1.0)
+                fe.data[i]  = ((el + _pl)*_Vnl*fac1 - (er + _pr)*_Vnr*fac2 - _sl*el*fac1 + _sr*er*fac2)/fac3
 
             else:
 
@@ -243,3 +219,129 @@ cdef class HLLC(RiemannBase):
         sl[0] = s_l
         sc[0] = s_c
         sr[0] = s_r
+
+cdef class HLLC(HLL):
+
+    cdef _solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
+            double t, double dt, int iteration_count):
+
+        # left state primitive variables
+        cdef DoubleArray dl = left_faces.get_carray("density")
+        cdef DoubleArray ul = left_faces.get_carray("velocity-x")
+        cdef DoubleArray vl = left_faces.get_carray("velocity-y")
+        cdef DoubleArray pl = left_faces.get_carray("pressure")
+
+        # left state primitive variables
+        cdef DoubleArray dr = right_faces.get_carray("density")
+        cdef DoubleArray ur = right_faces.get_carray("velocity-x")
+        cdef DoubleArray vr = right_faces.get_carray("velocity-y")
+        cdef DoubleArray pr = right_faces.get_carray("pressure")
+
+        cdef DoubleArray fm  = fluxes.get_carray("mass")
+        cdef DoubleArray fmu = fluxes.get_carray("momentum-x")
+        cdef DoubleArray fmv = fluxes.get_carray("momentum-y")
+        cdef DoubleArray fe  = fluxes.get_carray("energy")
+
+        cdef DoubleArray nx = faces.get_carray("normal-x")
+        cdef DoubleArray ny = faces.get_carray("normal-y")
+        cdef DoubleArray wx = faces.get_carray("velocity-x")
+        cdef DoubleArray wy = faces.get_carray("velocity-y")
+
+        # local variables
+        cdef int i
+        cdef double _nx, _ny
+        cdef double factor_1, factor_2
+        cdef double _dl, _ul, _vl, _pl, _el
+        cdef double _dr, _ur, _vr, _pr, _er
+        cdef double _wn, _Vnl, _Vnr, _sl, _sr, s_contact
+
+        cdef double gamma = self.gamma
+        cdef int num_faces = faces.get_number_of_items()
+
+        for i in range(num_faces):
+
+            # left state
+            _dl = dl.data[i]
+            _ul = ul.data[i]
+            _vl = vl.data[i]
+            _pl = pl.data[i]
+
+            # right state
+            _dr = dr.data[i]
+            _ur = ur.data[i]
+            _vr = vr.data[i]
+            _pr = pr.data[i]
+
+            # face normal
+            _nx = nx.data[i]
+            _ny = ny.data[i]
+
+            # project velocity onto face normal
+            _Vnl = _ul*_nx + _vl*_ny
+            _Vnr = _ur*_nx + _vr*_ny
+
+            self.get_waves(_dl, _Vnl, _pl, _dr, _Vnr, _pr, gamma,
+                    &_sl, &s_contact, &_sr)
+
+            # velocity of face projected onto face normal
+            _wn = wx.data[i]*_nx + wy.data[i]*_ny
+
+            # calculate interface flux - eq. 10.71
+            if(_wn <= _sl):
+
+                # left state
+                fm.data[i]  = _dl*(_Vnl - _wn)
+                fmu.data[i] = _dl*_ul*(_Vnl - _wn) + _pl*_nx
+                fmv.data[i] = _dl*_vl*(_Vnl - _wn) + _pl*_ny
+                fe.data[i]  = (0.5*_dl*(_ul*_ul + _vl*_vl) + _pl/(gamma - 1.0))*(_Vnl - _wn) + _pl*_Vnl
+
+            elif((_sl < _wn) and (_wn <= _sr)):
+
+                # intermediate state
+                if(_wn <= s_contact):
+
+                    # left star state
+                    factor_1 = _dl*(_sl - _Vnl)/(_sl - s_contact)
+                    factor_2 = factor_1*(_sl - _wn)*(s_contact - _Vnl) + _pl
+
+                    # density flux
+                    frho = _dl*(_Vnl - _sl) + factor_1*(_sl - _wn)
+
+                    fm.data[i]  = frho
+                    fmu.data[i] = frho*_ul + factor_2*_nx
+                    fmv.data[i] = frho*_vl + factor_2*_ny
+
+                    # total energy
+                    _el = 0.5*_dl*(_ul*_ul + _vl*_vl) + _pl/(gamma-1.0)
+
+                    fe.data[i] = (_el + _pl)*_Vnl - _el*_sl +\
+                            (_sl - _wn)*factor_1*(_el/_pl + (s_contact - _Vnl)*\
+                            (s_contact + _pl/(_dl*(_sl - _Vnl))))
+
+                else:
+
+                    # right star state
+                    factor_1 = _dr*(_sr - _Vnr)/(_sr - s_contact)
+                    factor_2 = factor_1*(_sr - _wn) *(s_contact - _Vnr) + _pr
+
+                    # density flux
+                    frho = _dr*(_Vnr - _sr) + factor_1*(_sr - _wn)
+
+                    fm.data[i]  = frho
+                    fmu.data[i] = frho*_ur + factor_2*_nx
+                    fmv.data[i] = frho*_vr + factor_2*_ny
+
+                    # total energy
+                    _er = 0.5*_dr*(_ur*_ur + _vr*_vr) + _pr*gamma/(gamma-1.0)
+
+                    fe.data[i] = (_er + _pr)*_Vnr - _er*_sr +\
+                            (_sr - _wn)*factor_1*(_er/_pr + (s_contact - _Vnr)*\
+                            (s_contact + _pr/(_dr*(_sr - _Vnr))))
+
+            else:
+
+                # right state
+                fm.data[i]  = _dr*(_Vnr - _wn)
+                fmu.data[i] = _dr*_ur*(_Vnr - _wn) + _pr*_nx
+                fmv.data[i] = _dr*_vr*(_Vnr - _wn) + _pr*_ny
+                fe.data[i]  = (0.5*_dr*(_ur*_ur + _vr*_vr) + _pr/(gamma - 1.0))*(_Vnr - _wn) + _pr*_Vnr
