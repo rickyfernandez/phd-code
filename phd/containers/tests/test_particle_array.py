@@ -167,7 +167,7 @@ class TestParticleArray(unittest.TestCase):
         self.assertEqual(check_array(pc2['tag'],
                                      [0, 0, 0, 1, 5]), True)
 
-    def test_append_parray(self):
+    def test_append_container(self):
         """
         Tests the append parray function.
         """

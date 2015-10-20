@@ -198,8 +198,6 @@ cdef class CarrayContainer:
             dtype = self.carray_info[prop]
             result_array.register_property(size, prop, dtype)
 
-        result_array.resize(index_array.size)
-
         # copy the required indices for each property
         for prop in prop_names:
             src_prop_array = self.get_carray(prop)
@@ -272,8 +270,11 @@ cdef class ParticleContainer(CarrayContainer):
 
             self.register_property(num_real_parts, "key", "longlong")
             self.register_property(num_real_parts, "tag", "int")
+            self.register_property(num_real_parts, "type", "int")
             self.register_property(num_real_parts, "process", "long")
 
+            self.register_property(num_real_parts, "w-x", "double")
+            self.register_property(num_real_parts, "w-y", "double")
             self.register_property(num_real_parts, "com-x", "double")
             self.register_property(num_real_parts, "com-y", "double")
             self.register_property(num_real_parts, "volume", "double")
