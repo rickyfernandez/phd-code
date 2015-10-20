@@ -8,6 +8,8 @@ cdef class IntegrateBase:
     cdef public CarrayContainer right_state
     cdef public CarrayContainer flux
 
+    cdef public double gamma
+
     cdef public RiemannBase riemann
     cdef public object mesh
 

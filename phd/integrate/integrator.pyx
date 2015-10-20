@@ -12,13 +12,14 @@ cdef int Real = ParticleTAGS.Real
 cdef int Boundary = ParticleTAGS.Boundary
 
 cdef class IntegrateBase:
-    def __init__(self, RiemannBase riemann):
+    def __init__(self, object mesh, RiemannBase riemann):
         """Constructor for the Integrator"""
-        self.riemann = riemann
 
-        # properties inherited from the function
-        self.mesh = riemann.mesh
-        self.particles = riemann.mesh.particles
+        self.mesh = mesh
+        self.riemann = riemann
+        self.particles = mesh.particles
+
+        self.gamma = riemann.gamma
 
         # create flux data array
         flux_vars = {
@@ -56,10 +57,10 @@ cdef class IntegrateBase:
 
 
 cdef class MovingMesh(IntegrateBase):
-    def __init__(self, RiemannBase riemann, int regularize, double eta = 0.25):
+    def __init__(self, object mesh, RiemannBase riemann, int regularize = 1, double eta = 0.25):
         """Constructor for the Integrator"""
 
-        IntegrateBase.__init__(riemann)
+        IntegrateBase.__init__(self, mesh, riemann)
 
         self.regularize = regularize
         self.eta = eta
@@ -97,12 +98,12 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i, j, k
         cdef double a
 
-        cdef long num_faces = self.mesh.faces.get_number_of_items()
-        cdef long npart = self.particles.get_number_of_particles()
+        cdef int num_faces = self.mesh.faces.get_number_of_items()
+        cdef int npart = self.particles.get_number_of_particles()
 
 
         # compute particle and face velocities
-        self.compute_face_velocities()
+        self._compute_face_velocities()
 
         # resize face/states arrays
         self.left_state.resize(num_faces)
@@ -110,8 +111,8 @@ cdef class MovingMesh(IntegrateBase):
         self.flux.resize(num_faces)
 
         # reconstruct left\right states at each face
-        self.riemann.interpolation.compute(self.particles, self.mesh.faces, self.left_state, self.right_state,
-                t, dt, iteration_count)
+        self.riemann.reconstruction.compute(self.particles, self.mesh.faces, self.left_state, self.right_state,
+                self.gamma, dt)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
         self.riemann.solve(self.flux, self.left_state, self.right_state, self.mesh.faces,
@@ -126,7 +127,7 @@ cdef class MovingMesh(IntegrateBase):
             a = area.data[k]
 
             # flux entering cell defined by particle i
-            if tags.data[j] == Real:
+            if tags.data[i] == Real:
                 m.data[i]  -= dt*a*f_m.data[k]
                 mu.data[i] -= dt*a*f_mu.data[k]
                 mv.data[i] -= dt*a*f_mv.data[k]
@@ -138,12 +139,12 @@ cdef class MovingMesh(IntegrateBase):
                 mu.data[j] += dt*a*f_mu.data[k]
                 mv.data[j] += dt*a*f_mv.data[k]
                 E.data[j]  += dt*a*f_E.data[k]
-
-        # move particles
-        for i in range(npart):
-            if tags.data[i] == Real:
-                x.data[i] += dt*wx.data[i]
-                y.data[i] += dt*wy.data[i]
+#
+#        # move particles
+#        for i in range(npart):
+#            if tags.data[i] == Real:
+#                x.data[i] += dt*wx.data[i]
+#                y.data[i] += dt*wy.data[i]
 
     cdef double _compute_time_step(self):
 
@@ -180,8 +181,28 @@ cdef class MovingMesh(IntegrateBase):
         return dt
 
     cdef _compute_face_velocities(self):
-        self._assign_particle_velocities()
-        self._assign_face_velocities()
+        #self._assign_particle_velocities()
+        #self._assign_face_velocities()
+
+        # for debug delete later - forcing no movement of particles
+        cdef int i
+
+        cdef DoubleArray wx = self.particles.get_carray("w-x")
+        cdef DoubleArray wy = self.particles.get_carray("w-y")
+
+        cdef DoubleArray fu = self.mesh.faces.get_carray("velocity-x")
+        cdef DoubleArray fv = self.mesh.faces.get_carray("velocity-y")
+
+        cdef int npart = self.particles.get_number_of_particles()
+        cdef int num_faces = self.mesh.faces.get_number_of_items()
+
+        # zero out particle velocity and face velocities
+        for i in range(npart):
+            wx.data[i] = wy.data[i] = 0.0
+
+        for i in range(num_faces):
+            fu.data[i] = fv.data[i] = 0.0
+
 
     cdef _assign_particle_velocities(self):
         """
