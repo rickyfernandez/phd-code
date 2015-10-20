@@ -56,7 +56,8 @@ def number_of_faces(ParticleContainer particles, np.int32_t[:] neighbor_graph, n
     # determine the number of faces 
     for id_p in range(particles.get_number_of_particles()):
 
-        if tags.data[id_p] == Real or type.data[id_p] == Boundary:
+        if tags.data[id_p] == Real:
+        #if tags.data[id_p] == Real or type.data[id_p] == Boundary:
 
             for j in range(num_neighbors[id_p]):
 
@@ -166,26 +167,28 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
                 cx.data[id_p] += 0.25*face_area*h*_tx
                 cy.data[id_p] += 0.25*face_area*h*_ty
 
-                # store face information
-                if id_p < id_n:
+                # faces are defined by real particles
+                if tags.data[id_p] == Real:
 
-                    # store the area of the face
-                    area.data[k] = face_area
+                    if id_p < id_n:
 
-                    # store the orientation of the norm of the face
-                    nx.data[k] = _xr/h
-                    ny.data[k] = _yr/h
+                        # store the area of the face
+                        area.data[k] = face_area
 
-                    # store the center mass of the face
-                    fcx.data[k] = _fx
-                    fcy.data[k] = _fy
+                        # store the orientation of the norm of the face
+                        nx.data[k] = _xr/h
+                        ny.data[k] = _yr/h
 
-                    # store the particles that make up the face
-                    pair_i.data[k] = id_p
-                    pair_j.data[k] = id_n
+                        # store the center mass of the face
+                        fcx.data[k] = _fx
+                        fcy.data[k] = _fy
 
-                    # go to next face 
-                    k += 1
+                        # store the particles that make up the face
+                        pair_i.data[k] = id_p
+                        pair_j.data[k] = id_n
+
+                        # go to next face 
+                        k += 1
 
                 # go to next neighbor
                 ind += 1
@@ -193,3 +196,8 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
             # compelte the weighted sum for the cell - eq. 29
             cx.data[id_p] /= vol.data[id_p]
             cy.data[id_p] /= vol.data[id_p]
+
+        else:
+
+            ind += num_neighbors[id_p]
+            ind_face += num_neighbors[id_p]*2

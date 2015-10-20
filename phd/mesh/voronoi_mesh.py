@@ -3,6 +3,7 @@ import itertools
 import numpy as np
 from scipy.spatial import Voronoi
 
+from utils.particle_tags import ParticleTAGS
 from containers.containers import ParticleContainer
 
 class VoronoiMeshBase(object):
@@ -112,7 +113,28 @@ class VoronoiMesh2D(VoronoiMeshBase):
         self.graph["faces"] = face_graph
         self.graph["voronoi vertices"] = vor.vertices
 
-    def build_geometry(self):
+    def build_geometry(self, gamma):
+
+        # need to fix for boundary particles!!!!!
+        pc = self.particles
+
         self.tessellate()
         self.update_boundary_particles()
         self.compute_cell_info()
+
+        indices = np.where(
+                (pc['tag'] == ParticleTAGS.Real) | (pc['type'] == ParticleTAGS.Boundary))[0]
+
+        # now update primitive variables
+        vol  = pc['volume'][indices]
+
+        mass = pc['mass'][indices]
+        momx = pc['momentum-x'][indices]
+        momy = pc['momentum-y'][indices]
+        ener = pc['energy'][indices]
+
+        # update primitive variables
+        pc['density'][indices]    = mass/vol
+        pc['velocity-x'][indices] = momx/mass
+        pc['velocity-y'][indices] = momy/mass
+        pc['pressure'][indices]   = (ener/vol - 0.5*(mass/vol)*((momx/vol)**2 + (momy/vol)**2))*(gamma-1.0)

@@ -66,6 +66,43 @@ class TestVoronoiMesh2dBox(unittest.TestCase):
 
         self.assertAlmostEqual(tot_vol, 1.0)
 
+    def test_volume_with_boundary_particles_2D(self):
+        """Test particle volumes in square and boundary are
+        created correctly. Create grid of particles in a
+        unit box, total volume is 1.0. Create tessellation
+        and sum all particle volumes.
+        """
+        # generate voronoi mesh 
+        mesh = VoronoiMesh2D(self.particles)
+        mesh.tessellate()
+        mesh.update_boundary_particles()
+
+        # calculate voronoi volumes of all real particles 
+        mesh.compute_cell_info()
+        indices = np.where(
+                (self.particles['tag'] == ParticleTAGS.Real) | (self.particles['type'] == ParticleTAGS.Boundary))[0]
+        tot_vol = np.sum(self.particles["volume"][indices])
+
+        vol = self.dx**2
+        self.assertAlmostEqual(tot_vol, (self.n**2 + 4*self.n)*vol)
+
+    def test_face_area_2D(self):
+        """Test particle volumes in square and boundary are
+        created correctly. Create grid of particles in a
+        unit box, total volume is 1.0. Create tessellation
+        and sum all particle volumes.
+        """
+        # generate voronoi mesh 
+        mesh = VoronoiMesh2D(self.particles)
+        mesh.tessellate()
+        mesh.update_boundary_particles()
+
+        # calculate voronoi volumes of all real particles 
+        mesh.compute_cell_info()
+
+        for i in range(mesh.faces["area"].size):
+            self.assertAlmostEqual(mesh.faces["area"][i], self.dx)
+
     def test_volume_perturb_2D(self):
         """Test particle volumes in a perturb sub-square are created correctly.
         Create grid of particles in a unit box, and perturb the positions
