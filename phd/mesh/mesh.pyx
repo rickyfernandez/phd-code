@@ -57,7 +57,6 @@ def number_of_faces(ParticleContainer particles, np.int32_t[:] neighbor_graph, n
     for id_p in range(particles.get_number_of_particles()):
 
         if tags.data[id_p] == Real:
-        #if tags.data[id_p] == Real or type.data[id_p] == Boundary:
 
             for j in range(num_neighbors[id_p]):
 
