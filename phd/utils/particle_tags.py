@@ -7,3 +7,4 @@ class ParticleTAGS:
     ExportInterior = 4
     OldGhost = 5
     Undefined = 6
+    BoundarySecond = 7
