@@ -299,6 +299,18 @@ cdef class ParticleContainer(CarrayContainer):
             else:
                 return 0
 
+#    cpdef CarrayContainer extract_flagged_items(self, str flag_name, int flag_value):
+#        cdef LongArray indices = LongArray()
+#        cdef IntArray flag_array = self.properties[flag_name]
+#        cdef int *flagarrptr = flag_array.get_data_ptr()
+#        cdef int i
+#
+#        for i in range(flag_array.length):
+#            if flagarrptr[i] == flag_value:
+#                indices.append(i)
+#
+#        return self.extract_items(indices.get_npy_array())
+
     cpdef remove_tagged_particles(self, np.int8_t tag):
         """Remove particles that have the given tag.
 
