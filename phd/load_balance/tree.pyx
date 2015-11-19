@@ -1,12 +1,21 @@
 import numpy as np
 
+cimport cython
 cimport numpy as np
 cimport libc.stdlib as stdlib
-cimport cython
-
-from particles.particle_array cimport ParticleArray
+from containers.containers cimport ParticleContainer, CarrayContainer
+from utils.carray cimport BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
 
 from hilbert.hilbert import hilbert_key_2d
+from utils.particle_tags import ParticleTAGS
+
+
+#cdef int Real = ParticleTAGS.Real
+#cdef int Ghost = ParticleTAGS.Ghost
+#cdef int Ghost = ParticleTAGS.Exterior
+#cdef int Ghost = ParticleTAGS.Interior
+#cdef int Ghost = ParticleTAGS.ExportInterior
+#cdef int Ghost = ParticleTAGS.OldGhost
 
 
 cdef class QuadTree:
@@ -466,12 +475,12 @@ cdef class QuadTree:
 
         return candidate
 
-    def create_boundary_particles(self, ParticleArray part_array, int rank, np.int32_t[:] leaf_proc):
+    def create_boundary_particles(self, ParticleContainer part_array, int rank, np.int32_t[:] leaf_proc):
         """create boundary ghost particles"""
         cdef set boundary_keys = set()
         self._create_boundary_particles(self.root, part_array, &leaf_proc[0], boundary_keys, rank)
 
-    cdef void _create_boundary_particles(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
+    cdef void _create_boundary_particles(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank):
         cdef int i
         if node.children == NULL:
@@ -482,7 +491,7 @@ cdef class QuadTree:
             for i in range(4):
                 self._create_boundary_particles(&node.children[i], part_array, leaf_proc, boundary_keys, rank)
 
-    cdef void node_neighbor_search(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
+    cdef void node_neighbor_search(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank):
         """
         Loop over neighbor leafs of leaf, for each leaf that does not belong in the domain
@@ -530,15 +539,40 @@ cdef class QuadTree:
                                     part_array.make_ghost(neighbor.center[0]/self.domain_fac + self.domain_corner[0],
                                             neighbor.center[1]/self.domain_fac + self.domain_corner[1],
                                             leaf_proc[neighbor.array_index])
-
-                # domain bondary node
+                # we have bondary node
                 else:
+
+                    # non corner local domain node
                     if (i == 1 and j != 1) or (i != 1 and j == 1):
                         part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
                                 (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
 
 
-    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleArray part_array,
+                    # corner local domain node left/right
+                    elif (x <= self.xmin or self.xmax <= x) and (self.ymin <= y and y <= self.ymax):
+
+                        neighbor_node_key = hilbert_key_2d( <np.int32_t> node.center[0], y, self.order)
+                        neighbor = self._find_leaf(neighbor_node_key)
+                        if leaf_proc[neighbor.array_index] != rank:
+                            part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
+                                    (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
+
+                    # corner local domain node above/below
+                    elif (y <= self.ymin or self.ymax <= y) and (self.xmin <= x and x <= self.xmax):
+
+                        neighbor_node_key = hilbert_key_2d(x, <np.int32_t> node.center[1], self.order)
+                        neighbor = self._find_leaf(neighbor_node_key)
+                        if leaf_proc[neighbor.array_index] != rank:
+                            part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
+                                    (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
+
+                    # corner global domain node
+                    else:
+                        part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
+                                (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
+
+
+    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleContainer part_array,
             set boundary_keys, int rank, int i, int j):
         """
         Find subneighbor leafs.
@@ -587,52 +621,94 @@ cdef class QuadTree:
                                     child_cand.center[1]/self.domain_fac + self.domain_corner[1],
                                     leaf_proc[child_cand.array_index])
 
-#    def update_hilbert_keys_and_process_id(self, np.float64_t[:] x_pos, np.float64_t[:] y_pos, np.int64_t[:] keys,
-#            np.int8_t[:] tags, np.int32_t[:] proc_ids, np.int32_t[:] leaf_procs, np.float64_t[:] corner,
-#            np.float64_t box_length, int my_proc):
-#        """
-#        real particle = 0
-#        boundary ghost interior = 1
-#        boundary ghost exterior = 2
-#        ghost interior = 3
-#        ghost exterior = 4
-#        """
+    def update_particle_process(self, CarrayContainer pa, int rank, np.int32_t[:] leaf_procs):
+
+        cdef IntArray tags  = pa.get_carray("tag")
+        cdef LongArray proc = pa.get_carray("process")
+        cdef DoubleArray x  = pa.get_carray("position-x")
+        cdef DoubleArray y  = pa.get_carray("position-y")
+
+        cdef Node *node
+        cdef np.int32_t xh, yh
+        cdef np.int64_t key
+
+        cdef int i
+        for i in range(pa.get_number_of_items()):
+
+            # map particle position into hilbert space
+            xh = <np.int32_t> ((x.data[i] - self.domain_corner[0])*self.domain_fac)
+            yh = <np.int32_t> ((y.data[i] - self.domain_corner[1])*self.domain_fac)
+
+            # make sure the key is in the global domain
+            if (self.xmin <= xh and xh <= self.xmax) and (self.ymin <= yh and yh <= self.ymax):
+
+                # generate hilbert key for particle
+                key = hilbert_key_2d(xh, yh, self.order)
+
+                # use key to find which leaf the particles lives in and store process id
+                node = self._find_leaf(key)
+                proc.data[i] = leaf_procs[node.array_index]
+
+            else:
+
+                proc.data[i] = -1
+
+
+#    def update_ghost_particles(self, ParticleContainer pa, int rank, np.int32_t[:] leaf_procs)
+#
+#        cdef IntArray tags = self.pa.get_carray("tag")
+#
+#        cdef DoubleArray x = self.pa.get_carray("position-x")
+#        cdef DoubleArray y = self.pa.get_carray("position-y")
 #
 #        cdef Node *node
-#        cdef np.int32_t x, y
+#        cdef np.int32_t xh, yh
 #        cdef np.int64_t key
 #
-#        cdef int i
-#        for i in xrange(x.size): # loop over all particles, real + ghost
+#        cdef long i, npart = self.pa.get_number_of_particles()
+#        for i in range(npart):
 #
 #            # map particle position into hilbert space
-#            x = <np.int32_t> ((x_pos[i] - corner[0])*fac)
-#            y = <np.int32_t> ((y_pos[i] - corner[1])*fac)
+#            xh = <np.int32_t> ((x.data[i] - self.domain_corner[0])*self.domain_fac)
+#            yh = <np.int32_t> ((y.data[i] - self.domain_corner[1])*self.domain_fac)
 #
 #            # make sure the key is in the global domain
-#            if (self.xmin <= x and x <= self.xmax) and (self.ymin <= y and y <= self.ymax):
+#            if (self.xmin <= xh and xh <= self.xmax) and (self.ymin <= yh and yh <= self.ymax):
 #
 #                # generate hilbert key for particle
-#                key = hilbert_key_2d(x, y, self.order)
-#                keys[i] = key
+#                key = hilbert_key_2d(xh, yh, self.order)
+#                keys.data[i] = key
 #
 #                # use key to find which leaf the particles lives in and store process id
-#                node = self._find_leaf(key)
-#                procs_id[i] = leaf_procs[node.array_index]
+#                node    = self._find_leaf(key)
+#                proc_id = leaf_procs[node.array_index]
 #
-#                # check if this particle is real or it is a interior ghost 
-#                if procs_id[i] != my_proc:
-#                    tags[i] = 3
+#                # particle was real at previous time step
+#                if proc.data[i] == my_proc:
+#
+#                    # real particle remains in domain
+#                    if proc_id = my_proc:
+#                        tags.data[i] = Real
+#                        type.data[i] = Real
+#
+#                    # real particle is now a ghost particle
+#                    # and must be exported
+#                    else:
+#                        tags.data[i] = OldGhost
+#                        type.data[i] = ExportInterior
+#
+#                # previously ghost and will remain ghost
 #                else:
-#                    tags[i] = 0
+#                    tags.data[i] = OldGhost
+#                    type.data[i] = Interior
 #
 #            else:
 #
-#                # ghost particles outside the domain are assigned -1 key
-#                keys[i] = -1
-#                procs_id[i] = -1
-#                tags[i] = 4
-
+#                # ghost particles outside the domain, store it
+#                keys.data[i] = -1
+#                tags.data[i] = OldGhost
+#                type.data[i] = Exterior
+#
     # temporary function to do outputs in python
     cdef void _iterate(self, Node* node, list data_list):
 

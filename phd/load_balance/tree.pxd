@@ -1,6 +1,6 @@
 
 cimport numpy as np
-from particles.particle_array cimport ParticleArray
+from containers.containers cimport ParticleContainer
 
 # forward decleration
 cdef struct Node
@@ -56,11 +56,11 @@ cdef class QuadTree:
 
     cdef Node* _find_leaf(self, np.int64_t key)
     cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level)
-    cdef void _create_boundary_particles(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
+    cdef void _create_boundary_particles(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank)
-    cdef void node_neighbor_search(self, Node* node, ParticleArray part_array, np.int32_t* leaf_proc,
+    cdef void node_neighbor_search(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
             set boundary_keys, int rank)
-    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleArray part_array,
+    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleContainer part_array,
             set boundary_keys, int rank, int i, int j)
     cdef void _iterate(self, Node* node, list data_list)
     cdef void _free_nodes(self, Node* node)

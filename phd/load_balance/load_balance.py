@@ -5,7 +5,6 @@ from mpi4py import MPI
 from .tree import QuadTree
 from utils.particle_tags import ParticleTAGS
 from hilbert.hilbert import hilbert_key_2d
-from mesh.voronoi_mesh import VoronoiMesh2D
 from utils.exchange_particles import exchange_particles
 
 
@@ -51,12 +50,15 @@ class LoadBalance(object):
         self.sorted_keys = None
         self.global_num_real_particles = None
 
+        self.leaf_proc = None
+        self.global_tree = None
+
     def calculate_hilbert_keys(self):
         """map particle positions to hilbert space"""
         num_real_part = self.particles.num_real_particles
 
-        x = self.particles.get('position-x')
-        y = self.particles.get('position-y')
+        x = self.particles['position-x']
+        y = self.particles['position-y']
 
         # normalize coordinates to hilbert space
         fac = (1 << self.order)/ self.box_length
@@ -71,8 +73,7 @@ class LoadBalance(object):
         self.sorted_keys = np.sort(self.keys)
 
         # copy hilbert keys to particles
-        keys = self.particles.get_npy_array()
-        keys[:number_real_particles] = self.keys
+        self.particles["key"][:] = self.keys
 
 
     def decomposition(self):
@@ -106,6 +107,7 @@ class LoadBalance(object):
         ind = self.export_proc.argsort()
         self.export_proc = self.export_proc[ind]
         self.export_ids  = self.export_ids[ind]
+        #send_data = self.particles.get_sendbufs(self.export_ids)
 
         # count the number of particles to send to each process
         send_particles = np.bincount(self.export_proc,
@@ -123,7 +125,8 @@ class LoadBalance(object):
 
         # resize particle array and place incoming particles at the
         # end of the array
-        displacement = self.particles.num_real_particles
+        #displacement = self.particles.num_real_particles
+        displacement = self.particles.get_number_of_particles()
         num_incoming_particles = np.sum(recv_particles)
         self.particles.extend(num_incoming_particles)
 
@@ -137,7 +140,7 @@ class LoadBalance(object):
         # label all new particles to current process
         self.particles['process'][:] = self.rank
 
-        return global_tree
+        self.global_tree = global_tree
 
     def build_global_tree(self):
         """Build a global tree on all process. This algorithm follows springel (2005). First
@@ -226,3 +229,9 @@ class LoadBalance(object):
 
         leaves_end[-1] = self.global_work.size-1
         self.leaf_proc[j:] = self.size-1
+
+    def create_boundary_particles(self, pc, rank):
+        self.global_tree.create_boundary_particles(pc, rank, self.leaf_proc)
+
+    def update_particle_process(self, pc, rank):
+        self.global_tree.update_particle_process(pc, rank, self.leaf_proc)
