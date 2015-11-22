@@ -135,6 +135,41 @@ def export_reflect(particles, old_ghost, new_ghost, left, indices, send_particle
             send_particles[p] += reflect_axis2(particles, new_ghost, indices, gind[start:end], axis, qminmax, ghost_indices,
                 neighbors_graph, neighbors_graph_size, cumsum_neighbors, p)
 
+def export_reflect2(particles, new_ghost, left, indices, send_particles, axis, qminmax, ghost_indices,
+        neighbors_graph, neighbors_graph_size, cumsum_neighbors, load_balance, current_size, rank, size):
+
+    ghost = particles.extract_items(left.get_npy_array())
+
+    # shift particles and find which old ghost live on other process
+    ghost['position-%s' % axis][:] += 2*(qminmax - ghost['position-%s' % axis])
+
+    # update particle process to find which particles live on different process
+    load_balance.update_particle_process(ghost, rank)
+
+    # filter out local particles
+    mask = ghost['process'] != rank
+    gind = left.get_npy_array()[mask]
+    proc = ghost['process'][mask]
+
+    # put process in order
+    ind = np.argsort(proc)
+    gind = gind[ind]
+    proc = proc[ind]
+
+    # bin process
+    proc_bin = np.bincount(proc, minlength=size)
+
+    # collect the indices of particles to be export to each process
+    cumsum_proc = proc_bin.cumsum()
+    for p in range(size):
+        if proc_bin[p] != 0:
+
+            start = cumsum_proc[p] - proc_bin[p]
+            end   = cumsum_proc[p]
+
+            send_particles[p] += reflect_axis2(particles, new_ghost, indices, gind[start:end], axis, qminmax, ghost_indices,
+                neighbors_graph, neighbors_graph_size, cumsum_neighbors, p)
+
 
 def create_reflect_ghost(parray, boundary_indices, domain, exterior_ghost_indices,
         ghost_indices, neighbors_graph, neighbors_graph_size, cumsum_neighbors, rank):
@@ -460,7 +495,6 @@ class MultiCoreBoundary(object):
 #            domain, comm):
 #    def update_ghost_particles(self, particles, mesh, load_balance, domain, comm):
 #
-#        # not tested yet!!!!
 #        rank = comm.Get_rank()
 #        size = comm.Get_size()
 #
@@ -471,10 +505,9 @@ class MultiCoreBoundary(object):
 #        send_particles = np.zeros(size, dtype=np.int32)
 #        recv_particles = np.zeros(size, dtype=np.int32)
 #
-#        # we are putting new ghost at the end of the array
+#        # we are puting new ghost at the end of the array
 #        current_size = particles.get_number_of_particles()
 #
-#        # sides
 #        boundary_indices = {
 #                "left"   : LongArray(),
 #                "right"  : LongArray(),
@@ -487,17 +520,17 @@ class MultiCoreBoundary(object):
 #                }
 #
 #        # relabel all particles
-##        global_tree.update_boundary_particles(particles, rank, leaf_proc)
-#        load_balance.update_boundary_particles(particles, rank, leaf_proc)
+###        global_tree.update_boundary_particles(particles, rank, leaf_proc)
+##        load_balance.update_boundary_particles(particles, rank, leaf_proc)
 #        ghost_indices = np.where(particles["tag"] == ParticleTAGS.OldGhost)[0]
 #
 #        # find indices of interior/exterior ghost particles 
 #        cumsum_neighbors = mesh["number of neighbors"].cumsum()
 #        exterior_ghost_indices = np.where(particles["type"] == ParticleTAGS.Exterior)[0]
-#        interior_ghost_indices = np.where(particles["type"] == ParticleTAGS.Interior)[0]
+#        interior_ghost_indices = np.where(particles["type"] == ParticleTAGS.Interior)[0] # have to add Import Interior
 #
 #        #---------- create exterior ghost particles ----------#
-#
+##
 #        # we need to hold on old ghost particles for domain corners
 #        # this line might not be needed
 #        old_ghost = particles.extract_items(exterior_ghost_indices)
@@ -549,28 +582,28 @@ class MultiCoreBoundary(object):
 #        exchange_particles(particles, send_data, send_particles, recv_particles,
 #                current_size + num_exterior_ghost, comm)
 #
-#        #---------- create exterior corner ghost particles ----------#
-#        indices.reset()
+##        #---------- create exterior corner ghost particles ----------#
+##        indices.reset()
 #        send_particles[:] = 0
 #        recv_particles[:] = 0
 #
-#        # clear out corner ghost
-#        corner_ghost.resize(0)
+##        # clear out corner ghost
+##        corner_ghost.resize(0)
 #
 #        if boundary_indices['left'].length > 0:
-#            export_reflect(particles, old_ghost, corner_ghost, boundary_indices["left"], indices, send_particles, 'x', domain.xmin, ghost_indices,
+#            export_reflect2(particles, corner_ghost, boundary_indices["left"], indices, send_particles, 'x', domain.xmin, ghost_indices,
 #                    mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, global_tree, leaf_proc, current_size, rank, size)
 #
 #        if boundary_indices['right'].length > 0:
-#            export_reflect(particles, old_ghost, corner_ghost, boundary_indices["right"], indices, send_particles, 'x', domain.xmax, ghost_indices,
+#            export_reflect2(particles, corner_ghost, boundary_indices["right"], indices, send_particles, 'x', domain.xmax, ghost_indices,
 #                    mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, global_tree, leaf_proc, current_size, rank, size)
 #
 #        if boundary_indices['bottom'].length > 0:
-#            export_reflect(particles, old_ghost, corner_ghost, boundary_indices["bottom"], indices, send_particles, 'y', domain.ymin, ghost_indices,
+#            export_reflect2(particles, corner_ghost, boundary_indices["bottom"], indices, send_particles, 'y', domain.ymin, ghost_indices,
 #                    mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, global_tree, leaf_proc, current_size, rank, size)
 #
 #        if boundary_indices['top'].length > 0:
-#            export_reflect(particles, old_ghost, corner_ghost, boundary_indices["top"], indices, send_particles, 'y', domain.ymax, ghost_indices,
+#            export_reflect2(particles, corner_ghost, boundary_indices["top"], indices, send_particles, 'y', domain.ymax, ghost_indices,
 #                    mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, global_tree, leaf_proc, current_size, rank, size)
 #
 #        #print rank, current_size, particles.get_number_of_particles(), current_size + num_exterior_ghost + num_interior_ghost
