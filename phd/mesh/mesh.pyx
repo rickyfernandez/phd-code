@@ -11,6 +11,7 @@ cimport cython
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
 cdef int Boundary = ParticleTAGS.Boundary
+cdef int BoundarySecond = ParticleTAGS.BoundarySecond
 
 def flag_boundary_particles(ParticleContainer particles, np.int32_t[:] neighbor_graph,
         np.int32_t[:] num_neighbors, np.int32_t[:] cumsum_neighbors):
@@ -39,6 +40,32 @@ def flag_boundary_particles(ParticleContainer particles, np.int32_t[:] neighbor_
                     # ghost is a boundary particle
                     type.data[i] = Boundary; break
 
+def flag_second_boundary_particles(ParticleContainer particles, np.int32_t[:] neighbor_graph,
+        np.int32_t[:] num_neighbors, np.int32_t[:] cumsum_neighbors):
+
+    cdef IntArray tags = particles.get_carray("tag")
+    cdef IntArray type = particles.get_carray("type")
+
+    cdef int i, j
+    cdef np.int32_t size, start, id_n
+
+    # determine the number of faces 
+    for i in range(particles.get_number_of_particles()):
+        if tags.data[i] == Ghost and type.data[i] != Boundary:
+
+            size  = num_neighbors[i]
+            start = cumsum_neighbors[i] - size
+
+            # loop over its neighbors
+            for j in range(size):
+
+                # index of neighbor
+                id_n = neighbor_graph[start + j]
+
+                # check if ghost has a real neighbor
+                if tags.data[id_n] == Ghost and type.data[id_n] == Boundary:
+                    # ghost is a boundary particle
+                    type.data[i] = BoundarySecond; break
 
 
 def number_of_faces(ParticleContainer particles, np.int32_t[:] neighbor_graph, np.int32_t[:] num_neighbors):
@@ -53,20 +80,27 @@ def number_of_faces(ParticleContainer particles, np.int32_t[:] neighbor_graph, n
     ind = 0
     num_faces = 0
 
-    # determine the number of faces 
     for id_p in range(particles.get_number_of_particles()):
 
-        if tags.data[id_p] == Real:
+        if tags.data[id_p] == Real or type.data[id_p] == Boundary:
 
             for j in range(num_neighbors[id_p]):
 
                 # index of neighbor
                 id_n = neighbor_graph[ind]
-                if id_n > id_p:
+
+                # account the face only once
+                if ( ((tags.data[id_p] == Real) and (id_n > id_p)) or
+                        ((type.data[id_p] == Boundary) and ((type.data[id_n] == Boundary) and (id_n > id_p))) or
+                        ((type.data[id_p] == Boundary) and (type.data[id_n] == BoundarySecond)) ):
+
                     num_faces += 1
 
                 # go to next neighbor
                 ind += 1
+        else:
+
+            ind += num_neighbors[id_p]
 
     return num_faces
 
@@ -110,13 +144,12 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
     # loop over real particles
     for id_p in range(particles.get_number_of_particles()):
 
-        if tags.data[id_p] == Real or type.data[id_p] == Boundary:
+        # get poistion of particle
+        _xp = x.data[id_p]
+        _yp = y.data[id_p]
 
-            # get poistion of particle
-            _xp = x.data[id_p]
-            _yp = y.data[id_p]
-
-            # loop over its neighbors
+        if tags.data[id_p] == Real or type.data[id_p] == Boundary or type.data[id_p] == BoundarySecond:
+        # loop over its neighbors
             for j in range(num_neighbors[id_p]):
 
                 # index of neighbor
@@ -166,28 +199,28 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
                 cx.data[id_p] += 0.25*face_area*h*_tx
                 cy.data[id_p] += 0.25*face_area*h*_ty
 
-                # faces are defined by real particles
-                if tags.data[id_p] == Real:
+                # faces are defined by real and boundary particles
+                if ( ((tags.data[id_p] == Real) and (id_n > id_p)) or
+                        ((type.data[id_p] == Boundary) and ((type.data[id_n] == Boundary) and (id_n > id_p))) or
+                        ((type.data[id_p] == Boundary) and (type.data[id_n] == BoundarySecond)) ):
 
-                    if id_p < id_n:
+                    # store the area of the face
+                    area.data[k] = face_area
 
-                        # store the area of the face
-                        area.data[k] = face_area
+                    # store the orientation of the norm of the face
+                    nx.data[k] = _xr/h
+                    ny.data[k] = _yr/h
 
-                        # store the orientation of the norm of the face
-                        nx.data[k] = _xr/h
-                        ny.data[k] = _yr/h
+                    # store the center mass of the face
+                    fcx.data[k] = _fx
+                    fcy.data[k] = _fy
 
-                        # store the center mass of the face
-                        fcx.data[k] = _fx
-                        fcy.data[k] = _fy
+                    # store the particles that make up the face
+                    pair_i.data[k] = id_p
+                    pair_j.data[k] = id_n
 
-                        # store the particles that make up the face
-                        pair_i.data[k] = id_p
-                        pair_j.data[k] = id_n
-
-                        # go to next face 
-                        k += 1
+                    # go to next face 
+                    k += 1
 
                 # go to next neighbor
                 ind += 1

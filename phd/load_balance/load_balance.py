@@ -235,3 +235,6 @@ class LoadBalance(object):
 
     def update_particle_process(self, pc, rank):
         self.global_tree.update_particle_process(pc, rank, self.leaf_proc)
+
+    def update_particle_domain_info(self, pc, rank):
+        self.global_tree.update_particle_domain_info(pc, rank, self.leaf_proc)

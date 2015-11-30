@@ -10,6 +10,7 @@ cimport numpy as np
 
 cdef int Real = ParticleTAGS.Real
 cdef int Boundary = ParticleTAGS.Boundary
+cdef int BoundarySecond = ParticleTAGS.BoundarySecond
 
 cdef class IntegrateBase:
     def __init__(self, object mesh, RiemannBase riemann):
@@ -57,7 +58,7 @@ cdef class IntegrateBase:
 
 
 cdef class MovingMesh(IntegrateBase):
-    def __init__(self, object mesh, RiemannBase riemann, int regularize = 1, double eta = 0.25):
+    def __init__(self, object mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
         """Constructor for the Integrator"""
 
         IntegrateBase.__init__(self, mesh, riemann)
@@ -71,6 +72,7 @@ cdef class MovingMesh(IntegrateBase):
 
         # particle flag information
         cdef IntArray tags = self.particles.get_carray("tag")
+        cdef IntArray type = self.particles.get_carray("type")
 
         # face information
         cdef LongLongArray pair_i = self.mesh.faces.get_carray("pair-i")
@@ -127,24 +129,24 @@ cdef class MovingMesh(IntegrateBase):
             a = area.data[k]
 
             # flux entering cell defined by particle i
-            if tags.data[i] == Real:
+            if tags.data[i] == Real or type.data[i] == Boundary:
                 m.data[i]  -= dt*a*f_m.data[k]
                 mu.data[i] -= dt*a*f_mu.data[k]
                 mv.data[i] -= dt*a*f_mv.data[k]
                 E.data[i]  -= dt*a*f_E.data[k]
 
             # flux leaving cell defined by particle j
-            if tags.data[j] == Real:
+            if tags.data[j] == Real or type.data[j] == Boundary:
                 m.data[j]  += dt*a*f_m.data[k]
                 mu.data[j] += dt*a*f_mu.data[k]
                 mv.data[j] += dt*a*f_mv.data[k]
                 E.data[j]  += dt*a*f_E.data[k]
-#
-#        # move particles
-#        for i in range(npart):
-#            if tags.data[i] == Real:
-#                x.data[i] += dt*wx.data[i]
-#                y.data[i] += dt*wy.data[i]
+
+        # move particles
+        for i in range(npart):
+            if tags.data[i] == Real or type.data[i] == Boundary:
+                x.data[i] += dt*wx.data[i]
+                y.data[i] += dt*wy.data[i]
 
     cdef double _compute_time_step(self):
 
@@ -158,12 +160,14 @@ cdef class MovingMesh(IntegrateBase):
         cdef DoubleArray vol = self.particles.get_carray("volume")
 
         cdef double gamma = self.gamma
-        cdef double c, R, dt, dt_x, dt_y
+        cdef double c, R, dt, _u, _v
         cdef long i, npart = self.particles.get_number_of_particles()
 
         c = sqrt(gamma*p.data[0]/r.data[0])
         R = sqrt(vol.data[0]/np.pi)
-        dt = R/(fabs(u.data[0]) + c)
+
+        _u = u.data[0]; _v = v.data[0]
+        dt = R/(c + sqrt(_u*_u + _v*_v))
 
         for i in range(npart):
             if tags.data[i] == Real:
@@ -173,36 +177,15 @@ cdef class MovingMesh(IntegrateBase):
                 # calculate approx radius of each voronoi cell
                 R = sqrt(vol.data[i]/np.pi)
 
-                dt_x = R/(fabs(u.data[i]) + c)
-                dt_y = R/(fabs(v.data[i]) + c)
+                _u = u.data[i]; _v = v.data[i]
+                dt = fmin(R/(c + sqrt(_u*_u + _v*_v)), dt)
 
-                dt = fmin(dt_x, fmin(dt_y, dt))
 
         return dt
 
     cdef _compute_face_velocities(self):
-        #self._assign_particle_velocities()
-        #self._assign_face_velocities()
-
-        # for debug delete later - forcing no movement of particles
-        cdef int i
-
-        cdef DoubleArray wx = self.particles.get_carray("w-x")
-        cdef DoubleArray wy = self.particles.get_carray("w-y")
-
-        cdef DoubleArray fu = self.mesh.faces.get_carray("velocity-x")
-        cdef DoubleArray fv = self.mesh.faces.get_carray("velocity-y")
-
-        cdef int npart = self.particles.get_number_of_particles()
-        cdef int num_faces = self.mesh.faces.get_number_of_items()
-
-        # zero out particle velocity and face velocities
-        for i in range(npart):
-            wx.data[i] = wy.data[i] = 0.0
-
-        for i in range(num_faces):
-            fu.data[i] = fv.data[i] = 0.0
-
+        self._assign_particle_velocities()
+        self._assign_face_velocities()
 
     cdef _assign_particle_velocities(self):
         """
@@ -230,14 +213,16 @@ cdef class MovingMesh(IntegrateBase):
         cdef DoubleArray u = self.particles.get_carray("velocity-x")
         cdef DoubleArray v = self.particles.get_carray("velocity-y")
 
+        cdef DoubleArray vol = self.particles.get_carray("volume")
+
         # local variables
         cdef double _x, _y, _cx, _cy, _wx, _wy, cs, d, R
         cdef double eta = self.eta
 
-        cdef long i, npart = self.particles.get_number_of_particles()
+        cdef int i
 
-        for i in range(npart):
-            if tags.data[i] == Real or type.data[i] == Boundary:
+        for i in range(self.particles.get_number_of_particles()):
+            if tags.data[i] == Real or type.data[i] == Boundary or type.data[i] == BoundarySecond:
 
                 _wx = _wy = 0.0
 
@@ -257,7 +242,7 @@ cdef class MovingMesh(IntegrateBase):
                     d = sqrt( (_cx - _x)**2 + (_cy - _y)**2 )
 
                     # approximate length of cell
-                    R = sqrt(v.data[i]/np.pi)
+                    R = sqrt(vol.data[i]/np.pi)
 
                     # regularize - eq. 63
                     if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
@@ -281,9 +266,6 @@ cdef class MovingMesh(IntegrateBase):
         the face plus a residual motion. The algorithm is
         taken from Springel (2009).
         """
-        # particle flag information
-        cdef IntArray tags = self.particles.get_carray("tags")
-        cdef IntArray type = self.particles.get_carray("type")
 
         # particle position
         cdef DoubleArray x = self.particles.get_carray("position-x")
@@ -298,66 +280,36 @@ cdef class MovingMesh(IntegrateBase):
         cdef DoubleArray fv  = self.mesh.faces.get_carray("velocity-y")
         cdef DoubleArray fcx = self.mesh.faces.get_carray("com-x")
         cdef DoubleArray fcy = self.mesh.faces.get_carray("com-y")
-
-        # neighbor arrays
-        cdef np.int32_t[:] neighbors = self.mesh["neighbors"]
-        cdef np.int32_t[:] num_neighbors = self.mesh["number of neighbors"]
+        cdef LongLongArray pair_i = self.mesh.faces.get_carray("pair-i")
+        cdef LongLongArray pair_j = self.mesh.faces.get_carray("pair-j")
 
         # local variables
         cdef double _xi, _yi, _xj, _yj
         cdef double _wxi, _wyi, _wxj, _wyj
         cdef double factor
 
-        # k is the face index and ind is the neighbor index
-        cdef int k, ind
-        cdef int n
+        # k is the face index
+        cdef int k, i, j
 
-        cdef long npart = self.particles.get_number_of_particles()
+        for k in range(self.mesh.faces.get_number_of_items()):
 
-        k = ind = 0
-        for i in range(npart):
-            if tags.data[i] == Real or type.data[i] == Boundary:
+            # particles that define face
+            i = pair_i.data[k]
+            j = pair_j.data[k]
 
-                # particle position
-                _xi = x.data[i]
-                _yi = y.data[i]
+            # particle and neighbor position
+            _xi = x.data[i]; _yi = y.data[i]
+            _xj = x.data[j]; _yj = y.data[j]
 
-                # particle velocity
-                _wxi = wx.data[i]
-                _wyi = wy.data[i]
+            # particle and neighbor velocity
+            _wxi = wx.data[i]; _wyi = wy.data[i]
+            _wxj = wx.data[j]; _wyj = wy.data[j]
 
-                # assign velocities to faces of particle i
-                # by looping over all it's neighbors
-                for n in range(num_neighbors[i]):
+            # correct face velocity due to residual motion - eq. 32
+            factor  = (_wxi - _wxj)*(fcx.data[k] - 0.5*(_xi + _xj)) +\
+                      (_wyi - _wyj)*(fcy.data[k] - 0.5*(_yi + _yj))
+            factor /= (_xj - _xi)*(_xj - _xi) + (_yj - _yi)*(_yj - _yi)
 
-                    # index of neighbor
-                    j = neighbors[ind]
-
-                    # no duplicate faces
-                    if i < j:
-
-                        # position of neighbor
-                        _xj = x.data[j]
-                        _yj = y.data[j]
-
-                        # velocity of neighbor
-                        _wxj = wx.data[j]
-                        _wyj = wy.data[j]
-
-                        # correct face velocity due to residual motion - eq. 32
-                        factor  = (_wxi - _wxj)*(fcx.data[k] - 0.5*(_xi + _xj)) +\
-                                  (_wyi - _wyj)*(fcy.data[k] - 0.5*(_yi + _yj))
-                        factor /= (_xj - _xi)*(_xj - _xi) + (_yj - _yi)*(_yj - _yi)
-
-                        # the face velocity mean of particle velocities and residual term - eq. 33
-                        fu.data[k] = 0.5*(_wxi + _wxj) + factor*(_xj - _xi)
-                        fv.data[k] = 0.5*(_wxi + _wxj) + factor*(_yj - _yi)
-
-                        # update counter
-                        k   += 1
-                        ind += 1
-
-                    else:
-
-                        # face accounted for, go to next neighbor and face
-                        ind += 1
+            # the face velocity mean of particle velocities and residual term - eq. 33
+            fu.data[k] = 0.5*(_wxi + _wxj) + factor*(_xj - _xi)
+            fv.data[k] = 0.5*(_wyi + _wyj) + factor*(_yj - _yi)

@@ -71,6 +71,10 @@ class VoronoiMesh2D(VoronoiMeshBase):
         cumsum = np.cumsum(self.graph["number of neighbors"], dtype=np.int32)
         mesh.flag_boundary_particles(self.particles, self.graph["neighbors"], self.graph["number of neighbors"], cumsum)
 
+    def update_second_boundary_particles(self):
+        cumsum = np.cumsum(self.graph["number of neighbors"], dtype=np.int32)
+        mesh.flag_second_boundary_particles(self.particles, self.graph["neighbors"], self.graph["number of neighbors"], cumsum)
+
     def tessellate(self):
         """
         create 2d voronoi tesselation from particle positions
@@ -78,7 +82,8 @@ class VoronoiMesh2D(VoronoiMeshBase):
         pos = np.array([
             self.particles["position-x"],
             self.particles["position-y"]
-            ])
+            ], dtype=np.float64
+            )
 
         # create the tesselation
         vor = Voronoi(pos.T)
@@ -115,15 +120,17 @@ class VoronoiMesh2D(VoronoiMeshBase):
 
     def build_geometry(self, gamma):
 
-        # need to fix for boundary particles!!!!!
         pc = self.particles
 
         self.tessellate()
         self.update_boundary_particles()
+        self.update_second_boundary_particles() #tmp delete
         self.compute_cell_info()
 
         indices = np.where(
-                (pc['tag'] == ParticleTAGS.Real) | (pc['type'] == ParticleTAGS.Boundary))[0]
+                (pc['tag']  == ParticleTAGS.Real) |
+                (pc['type'] == ParticleTAGS.Boundary) |
+                (pc['type'] == ParticleTAGS.BoundarySecond))[0]
 
         # now update primitive variables
         vol  = pc['volume'][indices]
@@ -137,4 +144,5 @@ class VoronoiMesh2D(VoronoiMeshBase):
         pc['density'][indices]    = mass/vol
         pc['velocity-x'][indices] = momx/mass
         pc['velocity-y'][indices] = momy/mass
-        pc['pressure'][indices]   = (ener/vol - 0.5*(mass/vol)*((momx/vol)**2 + (momy/vol)**2))*(gamma-1.0)
+        #pc['pressure'][indices]   = (ener/vol - 0.5*(mass/vol)*((momx/vol)**2 + (momy/vol)**2))*(gamma-1.0)
+        pc['pressure'][indices]   = (ener/vol - 0.5*(mass/vol)*((momx/mass)**2 + (momy/mass)**2))*(gamma-1.0)

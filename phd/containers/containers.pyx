@@ -272,6 +272,7 @@ cdef class ParticleContainer(CarrayContainer):
             self.register_property(num_real_parts, "tag", "int")
             self.register_property(num_real_parts, "type", "int")
             self.register_property(num_real_parts, "process", "long")
+            self.register_property(num_real_parts, "ids", "long")
 
             self.register_property(num_real_parts, "w-x", "double")
             self.register_property(num_real_parts, "w-y", "double")
