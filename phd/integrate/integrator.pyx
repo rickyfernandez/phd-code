@@ -129,14 +129,16 @@ cdef class MovingMesh(IntegrateBase):
             a = area.data[k]
 
             # flux entering cell defined by particle i
-            if tags.data[i] == Real or type.data[i] == Boundary:
+            #if tags.data[i] == Real or type.data[i] == Boundary:
+            if tags.data[i] == Real:
                 m.data[i]  -= dt*a*f_m.data[k]
                 mu.data[i] -= dt*a*f_mu.data[k]
                 mv.data[i] -= dt*a*f_mv.data[k]
                 E.data[i]  -= dt*a*f_E.data[k]
 
             # flux leaving cell defined by particle j
-            if tags.data[j] == Real or type.data[j] == Boundary:
+            #if tags.data[j] == Real or type.data[j] == Boundary:
+            if tags.data[j] == Real:
                 m.data[j]  += dt*a*f_m.data[k]
                 mu.data[j] += dt*a*f_mu.data[k]
                 mv.data[j] += dt*a*f_mv.data[k]
@@ -144,7 +146,8 @@ cdef class MovingMesh(IntegrateBase):
 
         # move particles
         for i in range(npart):
-            if tags.data[i] == Real or type.data[i] == Boundary:
+            #if tags.data[i] == Real or type.data[i] == Boundary:
+            if tags.data[i] == Real:
                 x.data[i] += dt*wx.data[i]
                 y.data[i] += dt*wy.data[i]
 
@@ -222,7 +225,8 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i
 
         for i in range(self.particles.get_number_of_particles()):
-            if tags.data[i] == Real or type.data[i] == Boundary or type.data[i] == BoundarySecond:
+            #if tags.data[i] == Real or type.data[i] == Boundary or type.data[i] == BoundarySecond:
+            if tags.data[i] == Real or type.data[i] == Boundary:
 
                 _wx = _wy = 0.0
 

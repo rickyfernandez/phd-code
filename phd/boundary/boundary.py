@@ -1,3 +1,4 @@
+import migrate
 import numpy as np
 
 from utils.particle_tags import ParticleTAGS
@@ -538,7 +539,59 @@ class MultiCoreBoundary(object):
         particles["tag"][:]  = ParticleTAGS.Undefined
         particles["type"][:] = ParticleTAGS.Undefined
 
-        load_balance.update_particle_domain_info(particles, rank)
+
+
+
+
+        # flag particles that have left the domain
+        load_balance.flag_migrate_particles(particles, rank)
+
+        # find particles that have left the domain
+        export_indices = np.where(particles["type"] == ParticleTAGS.ExportInterior)[0]
+
+        if export_indices.size > 0:
+
+            # extract export particles 
+            export_particles = particles.extract_items(export_indices)
+
+            # put particles in process order
+            ind = np.argsort(export_particles["process"])
+            for field in export_particles.properties.keys():
+                array = export_particles[field]
+                array[:] = array[ind]
+
+            export_particles["tag"][:]  = ParticleTAGS.Real
+            export_particles["type"][:] = ParticleTAGS.Undefined
+
+        else:
+            export_particles = ParticleContainer()
+
+        # bin particle process
+        send_particles[:] = np.bincount(export_particles["process"], minlength=size)
+
+        # how many particles are being sent from each process
+        comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
+
+        # create container for incoming particles 
+        import_particles = ParticleContainer(np.sum(recv_particles))
+
+        exchange_particles(import_particles, export_particles, send_particles, recv_particles,
+                0, comm)
+
+        # copy import particle data to ghost place holders and turn to real particles
+        migrate.transfer_migrate_particles(particles, import_particles)
+
+        # flag export back to interior ghost particles
+        particles["type"][export_indices] = ParticleTAGS.Interior
+
+
+
+
+
+
+
+
+        #load_balance.update_particle_domain_info(particles, rank)
         ghost_indices = np.where(particles["tag"] == ParticleTAGS.OldGhost)[0]
 
         # find indices of interior/exterior ghost particles 
@@ -555,6 +608,8 @@ class MultiCoreBoundary(object):
                     mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, -1)
 
         #---------- create interior ghost particles ----------#
+        send_particles[:] = 0
+        recv_particles[:] = 0
         interior_ghost_proc = particles["process"][interior_ghost_indices]
 
         # arrange particles in process order

@@ -82,7 +82,8 @@ def number_of_faces(ParticleContainer particles, np.int32_t[:] neighbor_graph, n
 
     for id_p in range(particles.get_number_of_particles()):
 
-        if tags.data[id_p] == Real or type.data[id_p] == Boundary:
+        #if tags.data[id_p] == Real or type.data[id_p] == Boundary:
+        if tags.data[id_p] == Real:
 
             for j in range(num_neighbors[id_p]):
 
@@ -90,9 +91,10 @@ def number_of_faces(ParticleContainer particles, np.int32_t[:] neighbor_graph, n
                 id_n = neighbor_graph[ind]
 
                 # account the face only once
-                if ( ((tags.data[id_p] == Real) and (id_n > id_p)) or
-                        ((type.data[id_p] == Boundary) and ((type.data[id_n] == Boundary) and (id_n > id_p))) or
-                        ((type.data[id_p] == Boundary) and (type.data[id_n] == BoundarySecond)) ):
+                #if ( ((tags.data[id_p] == Real) and (id_n > id_p)) or
+                #        ((type.data[id_p] == Boundary) and ((type.data[id_n] == Boundary) and (id_n > id_p))) or
+                #        ((type.data[id_p] == Boundary) and (type.data[id_n] == BoundarySecond)) ):
+                if id_n > id_p:
 
                     num_faces += 1
 
@@ -144,12 +146,14 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
     # loop over real particles
     for id_p in range(particles.get_number_of_particles()):
 
-        # get poistion of particle
-        _xp = x.data[id_p]
-        _yp = y.data[id_p]
+        #if tags.data[id_p] == Real or type.data[id_p] == Boundary or type.data[id_p] == BoundarySecond:
+        if tags.data[id_p] == Real or type.data[id_p] == Boundary:
 
-        if tags.data[id_p] == Real or type.data[id_p] == Boundary or type.data[id_p] == BoundarySecond:
-        # loop over its neighbors
+            # get poistion of particle
+            _xp = x.data[id_p]
+            _yp = y.data[id_p]
+
+            # loop over its neighbors
             for j in range(num_neighbors[id_p]):
 
                 # index of neighbor
@@ -200,9 +204,10 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
                 cy.data[id_p] += 0.25*face_area*h*_ty
 
                 # faces are defined by real and boundary particles
-                if ( ((tags.data[id_p] == Real) and (id_n > id_p)) or
-                        ((type.data[id_p] == Boundary) and ((type.data[id_n] == Boundary) and (id_n > id_p))) or
-                        ((type.data[id_p] == Boundary) and (type.data[id_n] == BoundarySecond)) ):
+                #if ( ((tags.data[id_p] == Real) and (id_n > id_p)) or
+                #        ((type.data[id_p] == Boundary) and ((type.data[id_n] == Boundary) and (id_n > id_p))) or
+                #        ((type.data[id_p] == Boundary) and (type.data[id_n] == BoundarySecond)) ):
+                if (tags.data[id_p] == Real) and (id_n > id_p):
 
                     # store the area of the face
                     area.data[k] = face_area
@@ -224,6 +229,9 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
 
                 # go to next neighbor
                 ind += 1
+
+            #if num_neighbors[id_p] == 0:
+            #    print 'id:', particles["ids"][id_p], 'number of neighbors:', num_neighbors[id_p]
 
             # compelte the weighted sum for the cell - eq. 29
             cx.data[id_p] /= vol.data[id_p]

@@ -118,7 +118,7 @@ def vor_plot(pc, mesh, rank):
     plt.scatter(pc['position-x'][exterior], pc['position-y'][exterior], marker=".", color='red')
     exterior = tag == 8
     plt.scatter(pc['position-x'][exterior], pc['position-y'][exterior], marker=".", color='cyan')
-#    plt.scatter(pc['position-x'][[428,625]], pc['position-y'][[428,625]], marker=".", color='red')
+
 
     plt.savefig("plot_init_proc_%d.pdf" % rank, format='pdf')
     plt.clf()
@@ -204,8 +204,6 @@ class Solver(object):
         # main solver iteration
         time_counter = dt = 0.0
         while current_time < tf:
-        #for i in range(80):
-
 
             boundary.update_ghost_particles(pc, mesh, domain)
             mesh.build_geometry(self.gamma)
@@ -369,8 +367,10 @@ class SolverParallel(object):
         # main solver iteration
         time_counter = dt = 0.0
         while current_time < tf:
-#        for i in range(80):
-#
+
+            if self.rank == 0:
+                print 'iteration:', iteration_count
+
             boundary.update_ghost_particles(pc, mesh, domain, load_balance, comm)
             mesh.build_geometry(self.gamma)
             #vor_plot(pc, mesh, self.rank)

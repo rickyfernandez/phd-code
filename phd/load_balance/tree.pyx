@@ -704,31 +704,63 @@ cdef class QuadTree:
                 tags.data[i] = OldGhost
                 type.data[i] = Exterior
 
+    def flag_migrate_particles(self, ParticleContainer pc, int my_proc, np.int32_t[:] leaf_procs):
+
+        cdef IntArray tags = pc.get_carray("tag")
+        cdef IntArray type = pc.get_carray("type")
+
+        cdef DoubleArray x = pc.get_carray("position-x")
+        cdef DoubleArray y = pc.get_carray("position-y")
+
+        cdef LongLongArray keys = pc.get_carray("key")
+        cdef LongArray proc = pc.get_carray("process")
+
+        cdef Node *node
+        cdef np.int32_t xh, yh
+        cdef np.int64_t key
+
+        cdef int i, npart = pc.get_number_of_particles()
+        for i in range(npart):
+
+            # map particle position into hilbert space
+            xh = <np.int32_t> ((x.data[i] - self.domain_corner[0])*self.domain_fac)
+            yh = <np.int32_t> ((y.data[i] - self.domain_corner[1])*self.domain_fac)
+
+            # make sure the key is in the global domain
+            if (self.xmin <= xh and xh <= self.xmax) and (self.ymin <= yh and yh <= self.ymax):
+
+                # generate hilbert key for particle
+                key = hilbert_key_2d(xh, yh, self.order)
+                keys.data[i] = key
+
+                # use key to find which leaf the particles lives in and store process id
+                node    = self._find_leaf(key)
+                proc_id = leaf_procs[node.array_index]
+
                 # particle was real at previous time step
-#                if proc.data[i] == my_proc:
-#
-#                    # real particle remains in domain
-#                    if proc_id == my_proc:
-#                        tags.data[i] = Real
-#                        type.data[i] = Real
-#
-#                    # real particle left patch must be exported
-#                    else:
-#                        proc.data[i] = proc_id
-#                        tags.data[i] = OldGhost
-#                        type.data[i] = ExportInterior
-#                        print 'rank:', my_proc, 'particles has left'
-#
-#                # previously ghost and will remain ghost
-#                else:
-#                    tags.data[i] = OldGhost
-#                    type.data[i] = Interior
-#
-#            else:
-#
-#                # ghost particles outside the domain, store it
-#                tags.data[i] = OldGhost
-#                type.data[i] = Exterior
+                if proc.data[i] == my_proc:
+
+                    # real particle remains in domain
+                    if proc_id == my_proc:
+                        tags.data[i] = Real
+                        type.data[i] = Real
+
+                    # real particle left patch must be exported
+                    else:
+                        proc.data[i] = proc_id
+                        tags.data[i] = OldGhost
+                        type.data[i] = ExportInterior
+
+                # previously ghost and will remain ghost
+                else:
+                    tags.data[i] = OldGhost
+                    type.data[i] = Interior
+
+            else:
+
+                # ghost particles outside the domain, store it
+                tags.data[i] = OldGhost
+                type.data[i] = Exterior
 
     # temporary function to do outputs in python
     cdef void _iterate(self, Node* node, list data_list):
