@@ -107,7 +107,6 @@ class LoadBalance(object):
         ind = self.export_proc.argsort()
         self.export_proc = self.export_proc[ind]
         self.export_ids  = self.export_ids[ind]
-        #send_data = self.particles.get_sendbufs(self.export_ids)
 
         # count the number of particles to send to each process
         send_particles = np.bincount(self.export_proc,
@@ -125,7 +124,6 @@ class LoadBalance(object):
 
         # resize particle array and place incoming particles at the
         # end of the array
-        #displacement = self.particles.num_real_particles
         displacement = self.particles.get_number_of_particles()
         num_incoming_particles = np.sum(recv_particles)
         self.particles.extend(num_incoming_particles)

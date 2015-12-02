@@ -108,41 +108,7 @@ def reflect_axis2(parray, ghost_pc, indices, sub_indices, axis, qminmax, ghost_i
 
     return num_new
 
-def export_reflect(particles, old_ghost, new_ghost, left, indices, send_particles, axis, qminmax, ghost_indices,
-        neighbors_graph, neighbors_graph_size, cumsum_neighbors, load_balance, current_size, rank, size):
-
-    shifted = left.get_npy_array() - current_size
-    ghost = old_ghost.extract_items(shifted)
-
-    # shift particles and find which old ghost live on other process
-    ghost['position-%s' % axis][:] += 2*(qminmax - ghost['position-%s' % axis])
-    load_balance.update_particle_process(ghost, rank)
-
-    # filter out local particles
-    mask = ghost['process'] != rank
-    gind = left.get_npy_array()[mask]
-    proc = ghost['process'][mask]
-
-    # put process in order
-    ind = np.argsort(proc)
-    gind = gind[ind]
-    proc = proc[ind]
-
-    # bin process
-    proc_bin = np.bincount(proc, minlength=size)
-
-    # collect the indices of particles to be export to each process
-    cumsum_proc = proc_bin.cumsum()
-    for p in range(size):
-        if proc_bin[p] != 0:
-
-            start = cumsum_proc[p] - proc_bin[p]
-            end   = cumsum_proc[p]
-
-            send_particles[p] += reflect_axis2(particles, new_ghost, indices, gind[start:end], axis, qminmax, ghost_indices,
-                neighbors_graph, neighbors_graph_size, cumsum_neighbors, p)
-
-def export_reflect2(particles, new_ghost, left, indices, send_particles, axis, qminmax, ghost_indices,
+def export_reflect(particles, new_ghost, left, indices, send_particles, axis, qminmax, ghost_indices,
         neighbors_graph, neighbors_graph_size, cumsum_neighbors, load_balance, current_size, rank, size):
 
     ghost = particles.extract_items(left.get_npy_array())
@@ -441,7 +407,6 @@ class MultiCoreBoundary(object):
 
             exchange_particles(particles, send_data, send_particles, recv_particles,
                     sp, comm)
-                    #current_size + num_exterior_ghost, comm)
 
             #---------- create exterior corner ghost particles ----------#
             indices.reset()
@@ -452,30 +417,25 @@ class MultiCoreBoundary(object):
             corner_ghost.resize(0)
 
             if boundary_indices['left'].length > 0:
-                #export_reflect(particles, old_ghost, corner_ghost, boundary_indices["left"], indices, send_particles, 'x', domain.xmin, ghost_indices,
-                export_reflect2(particles, corner_ghost, boundary_indices["left"], indices, send_particles, 'x', domain.xmin, ghost_indices,
+                export_reflect(particles, corner_ghost, boundary_indices["left"], indices, send_particles, 'x', domain.xmin, ghost_indices,
                         mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
             if boundary_indices['right'].length > 0:
-                #export_reflect(particles, old_ghost, corner_ghost, boundary_indices["right"], indices, send_particles, 'x', domain.xmax, ghost_indices,
-                export_reflect2(particles, corner_ghost, boundary_indices["right"], indices, send_particles, 'x', domain.xmax, ghost_indices,
+                export_reflect(particles, corner_ghost, boundary_indices["right"], indices, send_particles, 'x', domain.xmax, ghost_indices,
                         mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
             if boundary_indices['bottom'].length > 0:
-                #export_reflect(particles, old_ghost, corner_ghost, boundary_indices["bottom"], indices, send_particles, 'y', domain.ymin, ghost_indices,
-                export_reflect2(particles, corner_ghost, boundary_indices["bottom"], indices, send_particles, 'y', domain.ymin, ghost_indices,
+                export_reflect(particles, corner_ghost, boundary_indices["bottom"], indices, send_particles, 'y', domain.ymin, ghost_indices,
                         mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
             if boundary_indices['top'].length > 0:
-                #export_reflect(particles, old_ghost, corner_ghost, boundary_indices["top"], indices, send_particles, 'y', domain.ymax, ghost_indices,
-                export_reflect2(particles, corner_ghost, boundary_indices["top"], indices, send_particles, 'y', domain.ymax, ghost_indices,
+                export_reflect(particles, corner_ghost, boundary_indices["top"], indices, send_particles, 'y', domain.ymax, ghost_indices,
                         mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
             #print rank, current_size, particles.get_number_of_particles(), current_size + num_exterior_ghost + num_interior_ghost
 
             sp = particles.get_number_of_particles()
             comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
-            #particles.resize(current_size + num_exterior_ghost + num_interior_ghost + np.sum(recv_particles))
             particles.extend(np.sum(recv_particles))
 
             # to export corners have to be reorderd by process
@@ -496,7 +456,6 @@ class MultiCoreBoundary(object):
                 boundary_indices[bd].reset()
 
             particles.remove_tagged_particles(ParticleTAGS.OldGhost)
-            #particles.align_particles()
 
             # put particles in process order for next loop
             ind = np.argsort(particles["process"][current_size:])
@@ -539,11 +498,8 @@ class MultiCoreBoundary(object):
         particles["tag"][:]  = ParticleTAGS.Undefined
         particles["type"][:] = ParticleTAGS.Undefined
 
-
-
-
-
-        # flag particles that have left the domain
+        # flag particles that have left the domain and particles
+        # that remained
         load_balance.flag_migrate_particles(particles, rank)
 
         # find particles that have left the domain
@@ -581,17 +537,9 @@ class MultiCoreBoundary(object):
         # copy import particle data to ghost place holders and turn to real particles
         migrate.transfer_migrate_particles(particles, import_particles)
 
-        # flag export back to interior ghost particles
+        # flag export particles back to interior ghost particles
         particles["type"][export_indices] = ParticleTAGS.Interior
 
-
-
-
-
-
-
-
-        #load_balance.update_particle_domain_info(particles, rank)
         ghost_indices = np.where(particles["tag"] == ParticleTAGS.OldGhost)[0]
 
         # find indices of interior/exterior ghost particles 
@@ -656,19 +604,19 @@ class MultiCoreBoundary(object):
         recv_particles[:] = 0
 
         if boundary_indices['left'].length > 0:
-            export_reflect2(particles, corner_ghost, boundary_indices["left"], indices, send_particles, 'x', domain.xmin, ghost_indices,
+            export_reflect(particles, corner_ghost, boundary_indices["left"], indices, send_particles, 'x', domain.xmin, ghost_indices,
                     mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
         if boundary_indices['right'].length > 0:
-            export_reflect2(particles, corner_ghost, boundary_indices["right"], indices, send_particles, 'x', domain.xmax, ghost_indices,
+            export_reflect(particles, corner_ghost, boundary_indices["right"], indices, send_particles, 'x', domain.xmax, ghost_indices,
                     mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
         if boundary_indices['bottom'].length > 0:
-            export_reflect2(particles, corner_ghost, boundary_indices["bottom"], indices, send_particles, 'y', domain.ymin, ghost_indices,
+            export_reflect(particles, corner_ghost, boundary_indices["bottom"], indices, send_particles, 'y', domain.ymin, ghost_indices,
                     mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
         if boundary_indices['top'].length > 0:
-            export_reflect2(particles, corner_ghost, boundary_indices["top"], indices, send_particles, 'y', domain.ymax, ghost_indices,
+            export_reflect(particles, corner_ghost, boundary_indices["top"], indices, send_particles, 'y', domain.ymax, ghost_indices,
                     mesh['neighbors'], mesh['number of neighbors'], cumsum_neighbors, load_balance, current_size, rank, size)
 
         comm.Alltoall(sendbuf=send_particles, recvbuf=recv_particles)
