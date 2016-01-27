@@ -13,3 +13,4 @@
 *.f
 *.txt
 build/
+.DS_Store

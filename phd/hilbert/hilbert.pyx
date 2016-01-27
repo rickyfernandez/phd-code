@@ -6,7 +6,7 @@ cimport cython
 cdef int *key_index_2d = [0, 1, 3, 2]
 cdef int *key_index_3d = [0, 1, 7, 6, 3, 2, 4, 5]
 
-cpdef np.int64_t hilbert_key_2d(np.int32_t x, np.int32_t y, int order):
+cdef np.int64_t hilbert_key_2d(np.int32_t x, np.int32_t y, np.int32_t z, int order):
 
     cdef np.int64_t key = 0
     cdef int i, xbit, ybit
@@ -22,8 +22,10 @@ cpdef np.int64_t hilbert_key_2d(np.int32_t x, np.int32_t y, int order):
 
     return key
 
+def py_hilbert_key_2d(np.int32_t[:] pos,  order):
+    return hilbert_key_2d(pos[0], pos[1], 0, order)
 
-cpdef np.int64_t hilbert_key_3d(np.int32_t x, np.int32_t y, np.int32_t z, int order):
+cdef np.int64_t hilbert_key_3d(np.int32_t x, np.int32_t y, np.int32_t z, int order):
 
     cdef np.int64_t key = 0
     cdef int i, xbit, ybit, zbit
@@ -45,3 +47,6 @@ cpdef np.int64_t hilbert_key_3d(np.int32_t x, np.int32_t y, np.int32_t z, int or
         key = (key << 3) + key_index_3d[(xbit << 2) + (ybit << 1) + zbit]
 
     return key
+
+def py_hilbert_key_3d(np.int32_t[:] pos,  order):
+    return hilbert_key_3d(pos[0], pos[1], pos[2], order)
