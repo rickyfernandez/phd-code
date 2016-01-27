@@ -8,11 +8,11 @@ from Cython.Build import cythonize
 import numpy as np
 
 extensions = []
-#utils = Extension("phd.utils.*",
-#        ["phd/utils/*.pyx"],
-#        include_dirs=[np.get_include()]
-#        )
-#extensions.append(utils)
+utils = Extension("phd.utils.*",
+        ["phd/utils/*.pyx"],
+        include_dirs=[np.get_include()]
+        )
+extensions.append(utils)
 
 containers = Extension("phd.containers.*",
         ["phd/containers/*.pyx"],
@@ -38,15 +38,21 @@ mesh = Extension("phd.mesh.*",
         )
 extensions.append(mesh)
 
-#load_balance = Extension("phd.load_balance.*",
-#        ["phd/load_balance/*.pyx"],
-#        include_dirs=[np.get_include()]
-#        )
-#extensions.append(load_balance)
+boundary = Extension("phd.boundary.*",
+        ["phd/boundary/*.pyx"],
+        include_dirs=[np.get_include()]
+        )
+extensions.append(boundary)
+
+load_balance = Extension("phd.load_balance.*",
+        ["phd/load_balance/*.pyx"],
+        include_dirs=[np.get_include()]
+        )
+extensions.append(load_balance)
 
 reconstruction = Extension("phd.reconstruction.*",
         ["phd/reconstruction/*.pyx"],
-        include_dirs=[np.get_include()]
+        include_dirs=[np.get_include(), "m"]
         )
 extensions.append(reconstruction)
 
@@ -62,6 +68,12 @@ integrate = Extension("phd.integrate.*",
         )
 extensions.append(integrate)
 
+#ngb = Extension("phd.ngb.*",
+#        ["phd/ngb/*.pyx"],
+#        include_dirs=[np.get_include()]
+#        )
+#extensions.append(ngb)
+
 setup(
         name="phd",
         version="0.1",
@@ -70,23 +82,12 @@ setup(
         cmdclass={'build_ext':build_ext},
         ext_modules=cythonize(extensions),
         packages=["phd", "phd.utils", "phd.containers", "phd.domain", "phd.reconstruction",
-            "phd.riemann", "phd.integrate", "phd.hilbert", "phd.mesh"],
-#        packages=["phd", "phd.utils", "phd.particles", "phd.doamin", "phd.reconstruction", "phd.riemann", "phd.integrate"],#    "phd.load_balance"],
+            "phd.riemann", "phd.integrate", "phd.hilbert", "phd.mesh", "phd.load_balance", "phd.boundary"],
+            #"phd.riemann", "phd.integrate", "phd.hilbert", "phd.mesh", "phd.load_balance", "phd.boundary", "phd.ngb"],
         package_data={'phd.utils':['*.pxd'], 'phd.containers':['*.pxd'],
             'phd.domain':['*.pxd'], 'phd.reconstruction':['*.pxd'], 'phd.riemann':['*.pxd'],
-            'phd.integrate':['*.pxd'], 'phd.hilbert':['*.pxd'], 'phd.mesh':['*.pxd']
-#        package_data={'phd.utils':['*.pxd'], 'phd.particles':['*.pxd'],
-#            'phd.domain':['*.pxd'], #'phd.load_balance':['*.pxd'],
-#            'phd.reconstruction':['*.pxd'], 'phd.riemann':['*.pxd'],
-#            'phd.integrate':['*.pxd']
+            'phd.integrate':['*.pxd'], 'phd.hilbert':['*.pxd'], 'phd.mesh':['*.pxd'],
+            'phd.load_balance':['*.pxd'], 'phd.boundary':['*.pxd'],
+            #'phd.load_balance':['*.pxd'], 'phd.boundary':['*.pxd'], 'phd.ngb':['*.pxd'],
             },
         )
-#setup(
-#        #cmdclass={'build_ext':build_ext},
-#        ext_modules=cythonize([
-#            'phd/utils/carray.pyx'#,
-#            #'phd/particles/particle_array.pyx'
-#            ],
-#            include_path=[np.get_include()]
-#            )
-#        )

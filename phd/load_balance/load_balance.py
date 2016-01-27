@@ -2,9 +2,9 @@ import itertools
 import numpy as np
 from mpi4py import MPI
 
-from .tree import QuadTree
+from .tree import QuadTree, OcTree
 from utils.particle_tags import ParticleTAGS
-from hilbert.hilbert import hilbert_key_2d
+from hilbert.hilbert import py_hilbert_key_2d, py_hilbert_key_3d
 from utils.exchange_particles import exchange_particles
 
 
@@ -46,6 +46,8 @@ class LoadBalance(object):
             domain.ytranslate*0.5-0.5*self.box_length],
             dtype=np.float64)
 
+        self.Tree = QuadTree
+
         self.keys = None
         self.sorted_keys = None
         self.global_num_real_particles = None
@@ -57,24 +59,19 @@ class LoadBalance(object):
         """map particle positions to hilbert space"""
         num_real_part = self.particles.num_real_particles
 
-        x = self.particles['position-x']
-        y = self.particles['position-y']
-
         # normalize coordinates to hilbert space
         fac = (1 << self.order)/ self.box_length
+        x = (self.particles['position-x'] - self.corner[0])*fac
+        y = (self.particles['position-y'] - self.corner[1])*fac
+        pos = np.array([x, y])
 
         # create hilbert key for each particle
         # ghost particles should have been discarded
-        self.keys = np.array([hilbert_key_2d(
-            np.int64((x[i]-self.corner[0])*fac),
-            np.int64((y[i]-self.corner[1])*fac), self.order) for i in range(num_real_part)],
-            dtype = np.int64)
-
+        self.keys = np.array([py_hilbert_key_2d(vec.astype(np.int32), self.order) for vec in pos.T], dtype=np.int64)
         self.sorted_keys = np.sort(self.keys)
 
         # copy hilbert keys to particles
         self.particles["key"][:] = self.keys
-
 
     def decomposition(self):
         """Perform domain decomposition
@@ -154,7 +151,7 @@ class LoadBalance(object):
         self.global_num_real_particles = np.sum(proc_num_real_particles)
 
         # construct local tree
-        local_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
+        local_tree = self.Tree(self.global_num_real_particles, self.sorted_keys,
                 self.corner, self.box_length,
                 total_num_process=self.size, factor=self.factor, order=self.order)
         local_tree.build_tree()
@@ -183,7 +180,7 @@ class LoadBalance(object):
         global_num_part_leaves = np.ascontiguousarray(global_num_part_leaves[ind])
 
         # rebuild tree using global leaves
-        global_tree = QuadTree(self.global_num_real_particles, self.sorted_keys,
+        global_tree = self.Tree(self.global_num_real_particles, self.sorted_keys,
                 self.corner, self.box_length,
                 global_leaf_keys, global_num_part_leaves,
                 total_num_process=self.size, factor=self.factor, order=self.order)
@@ -239,3 +236,70 @@ class LoadBalance(object):
 
     def flag_migrate_particles(self, pc, rank):
         self.global_tree.flag_migrate_particles(pc, rank, self.leaf_proc)
+
+class LoadBalance3D(LoadBalance):
+
+    def __init__(self, particles, domain, comm=None, factor=0.1, order=21):
+        """Constructor for load balance
+
+        Parameters
+        ----------
+        particles : ParticleArray
+            Particle container of fluid values.
+        corner : ndarray
+            Left corner of the box simulation.
+        box_length : double
+            Size of the box simulation.
+        comm : MPI.COMM_WORLD
+            MPI communicator.
+        order : int
+            The number of bits per dimension for constructing
+                hilbert keys
+        """
+        self.comm = comm
+        self.rank = self.comm.Get_rank()
+        self.size = self.comm.Get_size()
+
+        self.factor = factor
+
+        self.order = order
+        self.number_real_particles = particles.num_real_particles
+        self.particles = particles
+
+        fudge_factor = 1.001
+        self.box_length = max(domain.xtranslate,
+                domain.ytranslate)*fudge_factor
+
+        self.corner = np.array([
+            domain.xtranslate*0.5-0.5*self.box_length,
+            domain.ytranslate*0.5-0.5*self.box_length,
+            domain.ztranslate*0.5-0.5*self.box_length],
+            dtype=np.float64)
+
+        self.Tree = OcTree
+
+        self.keys = None
+        self.sorted_keys = None
+        self.global_num_real_particles = None
+
+        self.leaf_proc = None
+        self.global_tree = None
+
+    def calculate_hilbert_keys(self):
+        """map particle positions to hilbert space"""
+        num_real_part = self.particles.num_real_particles
+
+        # normalize coordinates to hilbert space
+        fac = (1 << self.order)/ self.box_length
+        x = (self.particles['position-x'] - self.corner[0])*fac
+        y = (self.particles['position-y'] - self.corner[1])*fac
+        z = (self.particles['position-z'] - self.corner[2])*fac
+        pos = np.array([x, y, z])
+
+        # create hilbert key for each particle
+        # ghost particles should have been discarded
+        self.keys = np.array([py_hilbert_key_2d(vec.astype(np.int32), self.order) for vec in pos.T], dtype=np.int64)
+        self.sorted_keys = np.sort(self.keys)
+
+        # copy hilbert keys to particles
+        self.particles["key"][:] = self.keys
