@@ -51,7 +51,7 @@ cdef class TreeMemoryPool:
     def __dealloc_(self):
         stdlib.free(<void*>self.node_array)
 
-cdef class TreeBase:
+cdef class BaseTree:
 
     def __init__(self, int total_num_part,
             np.ndarray[np.int64_t, ndim=1] sorted_part_keys,
@@ -497,178 +497,100 @@ cdef class TreeBase:
 
         return node
 
-#    cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level):
-#        """
-#        Find node that contains given hilbert key. The node can be at most *level* down
-#        the tree.
-#
-#        Parameters
-#        ----------
-#        key : int64
-#            Hilbert key used for search.
-#        int : int
-#            The max depth the node can be in the tree
-#
-#        Returns
-#        -------
-#        node : Node
-#            Node that contains hilbert key.
-#        """
-#        cdef Node* candidate = self.root
-#        cdef int child_node_index
-#
-#        while candidate.level < level and candidate.children != NULL:
-#            child_node_index = (key - candidate.sfc_start_key)/(candidate.number_sfc_keys/4)
-#            candidate = &candidate.children[child_node_index]
-#
-#        return candidate
-#
-#    def create_boundary_particles(self, ParticleContainer part_array, int rank, np.int32_t[:] leaf_proc):
-#        """create boundary ghost particles"""
-#        cdef set boundary_keys = set()
-#        self._create_boundary_particles(self.root, part_array, &leaf_proc[0], boundary_keys, rank)
-#
-#    cdef void _create_boundary_particles(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank):
-#        cdef int i
-#        if node.children == NULL:
-#            # leaf belongs to our domain
-#            if leaf_proc[node.array_index] == rank:
-#                self.node_neighbor_search(node, part_array, leaf_proc, boundary_keys, rank)
-#        else:
-#            for i in range(4):
-#                self._create_boundary_particles(&node.children[i], part_array, leaf_proc, boundary_keys, rank)
-#
-#    cdef void node_neighbor_search(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank):
-#        """
-#        Loop over neighbor leafs of leaf, for each leaf that does not belong in the domain
-#        create a particle at the center of that leaf.
-#        """
-#        cdef Node *neighbor
-#        cdef np.int64_t neighbor_node_key
-#        cdef np.int32_t x, y
-#        cdef list node_list = list()
-#        cdef int i, j
-#
-#        cdef set node_set = set()
-#
-#        # find neighbor leaf by shifting leaf node key by half box length
-#        for i in range(3):
-#            for j in range(3):
-#
-#                x = <np.int32_t> (node.center[0] + (i-1)*node.box_length)
-#                y = <np.int32_t> (node.center[1] + (j-1)*node.box_length)
-#
-#                # exclude the leaf node from the search
-#                if i == j == 1:
-#                    continue
-#
-#                # make sure the key is in the global domain
-#                if (self.xmin <= x and x <= self.xmax) and (self.ymin <= y and y <= self.ymax):
-#
-#                    neighbor_node_key = hilbert_key_2d(x, y, self.order)
-#
-#                    # find neighbor node that is at max the same level of query node
-#                    neighbor = self._find_node_by_key_level(neighbor_node_key, node.level)
-#
-#                    # make sure we don't add duplicate neighbors
-#                    if neighbor.sfc_key not in node_set:
-#
-#                        node_set.add(neighbor.sfc_key)
-#
-#                        # check if their are sub nodes, if so collect them too
-#                        if neighbor.children != NULL:
-#                            self._subneighbor_find(neighbor, leaf_proc, part_array, boundary_keys, rank, i, j)
-#                        else:
-#                            if leaf_proc[neighbor.array_index] != rank:
-#                                if neighbor.sfc_key not in boundary_keys:
-#                                    boundary_keys.add(neighbor.sfc_key)
-#                                    part_array.make_ghost(neighbor.center[0]/self.domain_fac + self.domain_corner[0],
-#                                            neighbor.center[1]/self.domain_fac + self.domain_corner[1],
-#                                            leaf_proc[neighbor.array_index])
-#                # we have bondary node
-#                else:
-#
-#                    # non corner local domain node
-#                    if (i == 1 and j != 1) or (i != 1 and j == 1):
-#                        part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
-#                                (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
-#
-#
-#                    # corner local domain node left/right
-#                    elif (x <= self.xmin or self.xmax <= x) and (self.ymin <= y and y <= self.ymax):
-#
-#                        neighbor_node_key = hilbert_key_2d( <np.int32_t> node.center[0], y, self.order)
-#                        neighbor = self._find_leaf(neighbor_node_key)
-#                        if leaf_proc[neighbor.array_index] != rank:
-#                            part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
-#                                    (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
-#
-#                    # corner local domain node above/below
-#                    elif (y <= self.ymin or self.ymax <= y) and (self.xmin <= x and x <= self.xmax):
-#
-#                        neighbor_node_key = hilbert_key_2d(x, <np.int32_t> node.center[1], self.order)
-#                        neighbor = self._find_leaf(neighbor_node_key)
-#                        if leaf_proc[neighbor.array_index] != rank:
-#                            part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
-#                                    (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
-#
-#                    # corner global domain node
-#                    else:
-#                        part_array.make_ghost((<np.float64_t> x)/self.domain_fac + self.domain_corner[0],
-#                                (<np.float64_t> y)/self.domain_fac + self.domain_corner[1], -1)
-#
-#
-#    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleContainer part_array,
-#            set boundary_keys, int rank, int i, int j):
-#        """
-#        Find subneighbor leafs.
-#        """
-#
-#        if i == j == 1: return
-#
-#        cdef Node* child_cand
-#        cdef np.int64_t num_loop[2], index[2], off[2][2], ii, ij
-#
-#        index[0] = i
-#        index[1] = j
-#
-#        # num_steps and walk?
-#        for ii in range(2):
-#
-#            # no offset 
-#            if index[ii] == 1:
-#                num_loop[ii] = 2
-#                off[ii][0] = 0
-#                off[ii][1] = 1
-#
-#            # left offset
-#            elif index[ii] == 0:
-#                num_loop[ii] = 1
-#                off[ii][0] = 1
-#
-#            # right offset
-#            elif index[ii] == 2:
-#                num_loop[ii] = 1
-#                off[ii][0] = 0
-#
-#        for ii in range(num_loop[0]):
-#            for ij in range(num_loop[1]):
-#
-#                child_index = (off[0][ii] << 1) + off[1][ij]
-#                child_cand = &candidate.children[candidate.children_index[child_index]]
-#
-#                if child_cand.children != NULL:
-#                    self._subneighbor_find(child_cand, leaf_proc, part_array, boundary_keys, rank, i, j)
-#                else:
-#                    if leaf_proc[child_cand.array_index] != rank:
-#                        if child_cand.sfc_key not in boundary_keys:
-#                            boundary_keys.add(child_cand.sfc_key)
-#                            part_array.make_ghost(child_cand.center[0]/self.domain_fac + self.domain_corner[0],
-#                                    child_cand.center[1]/self.domain_fac + self.domain_corner[1],
-#                                    leaf_proc[child_cand.array_index])
-#
+    cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level):
+        """
+        Find node that contains given hilbert key. The node can be at most *level* down
+        the tree.
+
+        Parameters
+        ----------
+        key : int64
+            Hilbert key used for search.
+        int : int
+            The max depth the node can be in the tree
+
+        Returns
+        -------
+        node : Node
+            Node that contains hilbert key.
+        """
+        cdef Node* candidate = self.root
+        cdef int child_node_index
+        cdef int num_children = 1 << self.dim
+
+        while candidate.level < level and candidate.children_start != -1:
+            child_node_index = (key - candidate.sfc_start_key)/(candidate.number_sfc_keys/num_children)
+            candidate = candidate + candidate.children_start + child_node_index
+        return candidate
+
+    def create_boundary_particles(self, ParticleContainer part_array, np.int32_t[:] leaf_proc, int rank):
+        raise NotImplementedError, "BaseTree::create_boundary_particles"
+
+    cdef void _node_neighbor_search(self, Node* node, int index[3], ParticleContainer part_array,
+            np.int32_t* leaf_proc, set boundary_keys, set leaf_neighbors, int rank):
+        """
+        Loop over neighbor leafs of leaf, for each leaf that does not belong in the domain
+        create a particle at the center of that leaf. If leaf does not exist (meaning outside
+        the domain) create exterior ghost particles.
+        """
+        cdef int ii, interior=0, boundary=0
+        cdef np.float64_t ghost_coord[3]
+        cdef np.int32_t pos[3]
+
+        for ii in range(self.dim):
+            if index[ii] == 1: interior += 1
+            pos[ii] = <np.int32_t> (node.center[ii] + (index[ii]-1)*node.box_length)
+            bound += pos[ii] <= self.bounds[0][ii] or self.bounds[1][ii] <= pos[ii]
+
+        # make sure the key is in the global domain
+        if bound == 0:
+            # find neighbor node that is at max the same level of query node
+            neighbor = self._find_node_by_key_level(
+                    self.hilbert_func(pos[0], pos[1], pos[2], self.order),
+                    node.level)
+
+            # make sure we don't add duplicate neighbors
+            if neighbor.sfc_key not in leaf_neighbors:
+                leaf_neighbors.add(neighbor.sfc_key)
+                # check if their are sub nodes, if so collect them too
+                if neighbor.children_start != -1:
+                    self._subneighbor_find(neighbor, index, leaf_proc, part_array, boundary_keys, rank)
+
+                else:
+                    if leaf_proc[neighbor.array_index] != rank:
+                        if neighbor.sfc_key not in boundary_keys:
+                            boundary_keys.add(neighbor.sfc_key)
+                            for ii in range(self.dim):
+                                ghost_coord[ii] = neighbor.center[ii]/self.domain_fac + self.domain_corner[ii]
+                            part_array.make_ghost(&ghost_coord[0], leaf_proc[neighbor.array_index])
+
+        # we have a boundary node
+        else:
+
+            for ii in range(self.dim):
+                # map shifted coordinates back to physical domain
+                ghost_coord[ii] = <np.float64_t> (pos[ii]/self.domain_fac + self.domain_corner[ii]),
+
+            # non corner local domain node or corner global domain
+            if interior == self.dim - 1 or boundary != 1:
+                part_array.make_ghost(&ghost_coord[0], -1)
+
+            # corner local domain node
+            else:
+
+                for ii in range(self.dim):
+                    if pos[ii] <= self.bounds[0][ii] or self.bounds[1][ii] <= pos[ii]:
+                        pos[ii] = <np.int32_t> node.center[ii]
+
+                neighbor = self._find_leaf(self.hilbert_func(pos[0], pos[1], pos[2], self.order))
+                if leaf_proc[neighbor.array_index] != rank:
+                    part_array.make_ghost(&ghost_coord[0], -1)
+
+    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+            set boundary_keys, int rank):
+        pass
+
+
 #    def update_particle_process(self, CarrayContainer pa, int rank, np.int32_t[:] leaf_procs):
 #
 #        cdef IntArray tags  = pa.get_carray("tag")
@@ -826,7 +748,7 @@ cdef class TreeBase:
 
         return data_list
 
-cdef class QuadTree(TreeBase):
+cdef class QuadTree(BaseTree):
 
     def __init__(self, int total_num_part,
             np.ndarray[np.int64_t, ndim=1] sorted_part_keys,
@@ -836,7 +758,7 @@ cdef class QuadTree(TreeBase):
             np.ndarray[np.int32_t, ndim=1] num_part_leaf=None,
             int total_num_process=1, double factor=1.0, int order=21):
 
-        TreeBase.__init__(self,
+        BaseTree.__init__(self,
                 total_num_part,
                 sorted_part_keys,
                 corner,
@@ -856,7 +778,75 @@ cdef class QuadTree(TreeBase):
 
         self.mem_pool = TreeMemoryPool(100)
 
-cdef class OcTree(TreeBase):
+    def create_boundary_particles(self, ParticleContainer part_array, np.int32_t[:] leaf_proc, int rank):
+
+        cdef int ii, i, j, index[3]
+        cdef Node node
+        cdef set leaf_neighbors
+        cdef set boundary_keys = set()
+        for ii in range(self.mem_pool.used):
+            node = self.mem_pool.node_array[ii]
+            if node.children_start == -1:  # node is leaf
+                if leaf_proc[node.array_index] == rank: # leaf in proc patch
+                    leaf_neighbors = set()
+                    for i in range(3):
+                        for j in range(3):
+                            if i == j: continue
+                            index[0] = i
+                            index[1] = j
+                            self._node_neighbor_search(&node, index, part_array, &leaf_proc[0],
+                                    boundary_keys, leaf_neighbors, rank)
+
+    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+            set boundary_keys, int rank):
+        pass
+        """
+        Find subneighbor leafs.
+        """
+        cdef Node* child_cand
+        cdef int num_loop[2], off[2][2], i, j, k, ii, child_index
+        cdef np.float64_t ghost_coord[3]
+
+        # believe this should never happen
+        if index[0] == index[1] == 1: return
+
+        # num_steps and walk?
+        for i in range(2):
+
+            # no offset 
+            if index[i] == 1:
+                num_loop[i] = 2
+                off[i][0] = 0
+                off[i][1] = 1
+
+            # left offset
+            elif index[i] == 0:
+                num_loop[i] = 1
+                off[i][0] = 1
+
+            # right offset
+            elif index[i] == 2:
+                num_loop[i] = 1
+                off[i][0] = 0
+
+        for i in range(num_loop[0]):
+            for j in range(num_loop[1]):
+
+                child_index = (off[0][i] << 1) + off[1][j]
+                child_cand = candidate + candidate.children_start + child_index
+
+                if child_cand.children_start != -1:
+                    self._subneighbor_find(child_cand, index, leaf_proc, part_array, boundary_keys, rank)
+                else:
+                    if leaf_proc[child_cand.array_index] != rank:
+                        if child_cand.sfc_key not in boundary_keys:
+                            boundary_keys.add(child_cand.sfc_key)
+                            for ii in range(2):
+                                ghost_coord[ii] = child_cand.center[ii]/self.domain_fac + self.domain_corner[ii]
+                            part_array.make_ghost(ghost_coord, leaf_proc[child_cand.array_index])
+
+
+cdef class OcTree(BaseTree):
 
     def __init__(self, int total_num_part,
             np.ndarray[np.int64_t, ndim=1] sorted_part_keys,
@@ -866,7 +856,7 @@ cdef class OcTree(TreeBase):
             np.ndarray[np.int32_t, ndim=1] num_part_leaf=None,
             int total_num_process=1, double factor=1.0, int order=21):
 
-        TreeBase.__init__(self,
+        BaseTree.__init__(self,
                 total_num_part,
                 sorted_part_keys,
                 corner,
@@ -885,3 +875,73 @@ cdef class OcTree(TreeBase):
         self.xmax = self.ymax = self.zmax = 2**(order)
 
         self.mem_pool = TreeMemoryPool(100)
+
+    def create_boundary_particles(self, ParticleContainer part_array, np.int32_t[:] leaf_proc, int rank):
+
+        cdef int ii, i, j, k, index[3]
+        cdef Node node
+        cdef set boundary_keys = set()
+        cdef set leaf_neighbors
+        for ii in range(self.mem_pool.used):
+            node = self.mem_pool.node_array[ii]
+            if node.children_start == -1:  # is it a leaf
+                if leaf_proc[node.array_index] == rank: # is it a leaf in proc patch
+                    leaf_neighbors = set()
+                    for i in range(3):
+                        for j in range(3):
+                            for k in range(3):
+                                if i == j == k: continue
+                                index[0] = i
+                                index[1] = j
+                                index[2] = k
+                                self._node_neighbor_search(&node, index, part_array, &leaf_proc[0],
+                                        boundary_keys, leaf_neighbors, rank)
+
+    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+            set boundary_keys, int rank):
+        pass
+        """
+        Find subneighbor leafs.
+        """
+        cdef Node* child_cand
+        cdef int num_loop[3], off[3][3], i, j, k, ii, child_index
+        cdef np.float64_t ghost_coord[3]
+
+        # believe this should never happen
+        if index[0] == index[1] == index[3] == 1: return
+
+        # num_steps and walk?
+        for i in range(3):
+
+            # no offset 
+            if index[i] == 1:
+                num_loop[i] = 2
+                off[i][0] = 0
+                off[i][1] = 1
+
+            # left offset
+            elif index[i] == 0:
+                num_loop[i] = 1
+                off[i][0] = 1
+
+            # right offset
+            elif index[i] == 2:
+                num_loop[i] = 1
+                off[i][0] = 0
+
+        for i in range(num_loop[0]):
+            for j in range(num_loop[1]):
+                for k in range(num_loop[2]):
+
+                    child_index = (off[0][i] << 1) + off[1][j] + (off[2][k] << 2)
+                    child_cand = candidate + candidate.children_start + child_index
+
+                    if child_cand.children_start != -1:
+                        self._subneighbor_find(child_cand, index, leaf_proc, part_array, boundary_keys, rank)
+                    else:
+                        if leaf_proc[child_cand.array_index] != rank:
+                            if child_cand.sfc_key not in boundary_keys:
+                                boundary_keys.add(child_cand.sfc_key)
+                                for ii in range(3):
+                                    ghost_coord[ii] = child_cand.center[ii]/self.domain_fac + self.domain_corner[ii]
+                                part_array.make_ghost(ghost_coord, leaf_proc[child_cand.array_index])

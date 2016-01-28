@@ -39,7 +39,7 @@ cdef class TreeMemoryPool:
     cdef void resize(self, int size)    # resize array of nodes to length size
     cdef void reset(self)               # reset the pool
 
-cdef class TreeBase:
+cdef class BaseTree:
 
     cdef np.int64_t[:] sorted_part_keys    # hilbert keys of the particles/segments in order
     cdef np.int64_t[:] sorted_segm_keys    # hilbert keys of the particles/segments in order
@@ -72,36 +72,22 @@ cdef class TreeBase:
             np.int32_t *num_part_leaf, int* counter)
 
     cdef Node* _find_leaf(self, np.int64_t key)
-#    cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level)
-#    cdef void _create_boundary_particles(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank)
-#    cdef void node_neighbor_search(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank)
-#    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleContainer part_array,
-#            set boundary_keys, int rank, int i, int j)
+    cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level)
+    cdef void _node_neighbor_search(self, Node* node, int index[3], ParticleContainer part_array, np.int32_t* leaf_proc,
+            set boundary_keys, set leaf_neighbors, int rank)
+    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+            set boundary_keys, int rank)
 
-cdef class QuadTree(TreeBase):
+cdef class QuadTree(BaseTree):
 
     cdef np.float64_t xmin, xmax, ymin, ymax
 
-#    cdef Node* _find_leaf(self, np.int64_t key)
-#    cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level)
-#    cdef void _create_boundary_particles(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank)
-#    cdef void node_neighbor_search(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank)
-#    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleContainer part_array,
-#            set boundary_keys, int rank, int i, int j)
+    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+            set boundary_keys, int rank)
 
-cdef class OcTree(TreeBase):
+cdef class OcTree(BaseTree):
 
     cdef np.float64_t xmin, xmax, ymin, ymax, zmin, zmax
 
-#    cdef Node* _find_leaf(self, np.int64_t key)
-#    cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level)
-#    cdef void _create_boundary_particles(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank)
-#    cdef void node_neighbor_search(self, Node* node, ParticleContainer part_array, np.int32_t* leaf_proc,
-#            set boundary_keys, int rank)
-#    cdef void _subneighbor_find(self, Node* candidate, np.int32_t* leaf_proc, ParticleContainer part_array,
-#            set boundary_keys, int rank, int i, int j)
+    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+            set boundary_keys, int rank)
