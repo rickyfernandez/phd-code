@@ -141,7 +141,7 @@ def cell_face_info_2d(ParticleContainer particles, CarrayContainer faces, np.int
     # loop over real particles
     for id_p in range(particles.get_number_of_particles()):
 
-        if tags.data[id_p] == Real or type.data[id_p] == Boundary:
+        if tags.data[id_p] == Real or type.data[id_p] == Boundary or type.data[id_p] == BoundarySecond:
 
             # get poistion of particle
             _xp = x.data[id_p]

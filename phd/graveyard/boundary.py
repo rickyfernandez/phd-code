@@ -465,7 +465,7 @@ class MultiCoreBoundary(object):
 
             ghost_proc = np.array(particles["process"][current_size:])
 
-#        print 'rank:', rank, 'fraction of real to ghost:', (particles.get_number_of_particles()-current_size)*1.0/particles.get_number_of_particles()
+        print 'rank:', rank, 'fraction of real to ghost:', (particles.get_number_of_particles()-current_size)*1.0/particles.get_number_of_particles()
 
 
     def update_ghost_particles(self, particles, mesh, domain, load_balance, comm):

@@ -129,7 +129,8 @@ class VoronoiMesh2D(VoronoiMeshBase):
 
         indices = np.where(
                 (pc['tag']  == ParticleTAGS.Real) |
-                (pc['type'] == ParticleTAGS.Boundary) )[0]
+                (pc['type'] == ParticleTAGS.Boundary) |
+                (pc['type'] == ParticleTAGS.BoundarySecond) )[0]
 
         # now update primitive variables
         vol  = pc['volume'][indices]
@@ -143,5 +144,4 @@ class VoronoiMesh2D(VoronoiMeshBase):
         pc['density'][indices]    = mass/vol
         pc['velocity-x'][indices] = momx/mass
         pc['velocity-y'][indices] = momy/mass
-        #pc['pressure'][indices]   = (ener/vol - 0.5*(mass/vol)*((momx/vol)**2 + (momy/vol)**2))*(gamma-1.0)
         pc['pressure'][indices]   = (ener/vol - 0.5*(mass/vol)*((momx/mass)**2 + (momy/mass)**2))*(gamma-1.0)
