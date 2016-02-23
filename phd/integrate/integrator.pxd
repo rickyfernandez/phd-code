@@ -1,5 +1,6 @@
 from containers.containers cimport CarrayContainer, ParticleContainer
 from riemann.riemann cimport RiemannBase
+from mesh.mesh cimport Mesh2d
 
 cdef class IntegrateBase:
 
@@ -11,7 +12,7 @@ cdef class IntegrateBase:
     cdef public double gamma
 
     cdef public RiemannBase riemann
-    cdef public object mesh
+    cdef public Mesh2d mesh
 
     cdef double _compute_time_step(self)
     cdef _integrate(self, double dt, double t, int iteration_count)

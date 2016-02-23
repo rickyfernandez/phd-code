@@ -1,5 +1,6 @@
 from utils.particle_tags import ParticleTAGS
 
+from mesh.mesh cimport Mesh2d
 from riemann.riemann cimport RiemannBase
 from containers.containers cimport CarrayContainer
 from utils.carray cimport DoubleArray, IntArray, LongLongArray
@@ -13,7 +14,7 @@ cdef int Boundary = ParticleTAGS.Boundary
 cdef int BoundarySecond = ParticleTAGS.BoundarySecond
 
 cdef class IntegrateBase:
-    def __init__(self, object mesh, RiemannBase riemann):
+    def __init__(self, Mesh2d mesh, RiemannBase riemann):
         """Constructor for the Integrator"""
 
         self.mesh = mesh
@@ -58,7 +59,7 @@ cdef class IntegrateBase:
 
 
 cdef class MovingMesh(IntegrateBase):
-    def __init__(self, object mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
+    def __init__(self, Mesh2d mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
         """Constructor for the Integrator"""
 
         IntegrateBase.__init__(self, mesh, riemann)
@@ -114,7 +115,7 @@ cdef class MovingMesh(IntegrateBase):
 
         # reconstruct left\right states at each face
         self.riemann.reconstruction.compute(self.particles, self.mesh.faces, self.left_state, self.right_state,
-                self.gamma, dt)
+                self.mesh, self.gamma, dt)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
         self.riemann.solve(self.flux, self.left_state, self.right_state, self.mesh.faces,
