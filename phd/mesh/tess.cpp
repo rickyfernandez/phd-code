@@ -1,5 +1,4 @@
 #include "tess.h"
-#include <assert.h>
 #include <vector>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_2.h>
@@ -107,9 +106,10 @@ int Tess2d::build_initial_tess(
 
         radius[i] = 2.01*std::sqrt(radius_max_sq);
     }
+    return 0;
 }
 
-void Tess2d::update_initial_tess(
+int Tess2d::update_initial_tess(
         double *x,
         double *y,
         int up_num_particles) {
@@ -130,6 +130,7 @@ void Tess2d::update_initial_tess(
         vt = tess.insert(particles[i]);
         vt->info() = j;
     }
+    return 0;
 }
 
 int Tess2d::count_number_of_faces(void) {
@@ -182,6 +183,8 @@ int Tess2d::extract_geometry(
         double* center_of_mass_y,
         double* volume,
         double* face_area,
+        double* face_comx,
+        double* face_comy,
         double* face_nx,
         double* face_ny,
         int* pair_i,
@@ -265,11 +268,20 @@ int Tess2d::extract_geometry(
 
                 // faces are defined by real partilces
                 if (id1 < id2) {
+
                     face_area[fc] = area;
+
+                    // orientation of the face
                     face_nx[fc] = xr/h;
                     face_ny[fc] = yr/h;
+
+                    // center of mass of face
+                    face_comx[fc] = fx;
+                    face_comy[fc] = fy;
+
                     pair_i[fc] = id1;
                     pair_j[fc] = id2;
+
                     fc++;
                 }
 

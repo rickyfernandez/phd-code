@@ -2,10 +2,10 @@
 from domain.domain cimport DomainLimits
 from containers.containers cimport ParticleContainer
 
-cdef class BoundaryBase2d:
+cdef class BoundaryBase:
     cdef public DomainLimits domain
 
-    cdef int _create_ghost_particles(ParticleContainer pc)
+    cdef int _create_ghost_particles(self, ParticleContainer pc)
 
-cdef class Reflect2d(BoundaryBase2d):
+cdef class Reflect2d(BoundaryBase):
     pass

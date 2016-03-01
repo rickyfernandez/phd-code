@@ -8,16 +8,17 @@ from containers.containers cimport ParticleContainer, CarrayContainer
 
 cdef int Ghost = ParticleTAGS.Ghost
 
-cdef class BoundaryBase2d:
+cdef class BoundaryBase:
     def __init__(self, DomainLimits domain):
-        self.domain = DomainLimits
+        self.domain = domain
 
-    cdef int _create_ghost_particles(ParticleContainer pc):
-        pass
+    cdef int _create_ghost_particles(self, ParticleContainer pc):
+        msg = "BoundaryBase2d::_create_ghost_particles called!"
+        raise NotImplementedError(msg)
 
-cdef class Reflect2d(BoundaryBase2d):
+cdef class Reflect2d(BoundaryBase):
 
-    cdef int create_ghost_particles(ParticleContainer pc):
+    cdef int _create_ghost_particles(self, ParticleContainer pc):
 
         cdef CarrayContainer copy
         cdef np.ndarray npy_array
@@ -31,10 +32,10 @@ cdef class Reflect2d(BoundaryBase2d):
         cdef LongArray bottom = LongArray()
         cdef LongArray top = LongArray()
 
-        cdef double xmin = domain.xmin
-        cdef double xmax = domain.xmax
-        cdef double ymin = domain.ymin
-        cdef double ymax = domain.ymax
+        cdef double xmin = self.domain.xmin
+        cdef double xmax = self.domain.xmax
+        cdef double ymin = self.domain.ymin
+        cdef double ymax = self.domain.ymax
 
         cdef double x1i, x2i, y1i, y2i
 

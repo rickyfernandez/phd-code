@@ -270,15 +270,16 @@ cdef class ParticleContainer(CarrayContainer):
 
             self.register_property(num_real_parts, "key", "longlong")
             self.register_property(num_real_parts, "tag", "int")
-            self.register_property(num_real_parts, "type", "int")
             self.register_property(num_real_parts, "process", "long")
             self.register_property(num_real_parts, "ids", "long")
+            self.register_property(num_real_parts, "map", "long")
 
             self.register_property(num_real_parts, "w-x", "double")
             self.register_property(num_real_parts, "w-y", "double")
             self.register_property(num_real_parts, "com-x", "double")
             self.register_property(num_real_parts, "com-y", "double")
             self.register_property(num_real_parts, "volume", "double")
+            self.register_property(num_real_parts, "radius", "double")
 
             # set initial particle tags to be real
             self['tag'][:] = Real
@@ -299,18 +300,6 @@ cdef class ParticleContainer(CarrayContainer):
                 return self.properties.values()[0].length
             else:
                 return 0
-
-#    cpdef CarrayContainer extract_flagged_items(self, str flag_name, int flag_value):
-#        cdef LongArray indices = LongArray()
-#        cdef IntArray flag_array = self.properties[flag_name]
-#        cdef int *flagarrptr = flag_array.get_data_ptr()
-#        cdef int i
-#
-#        for i in range(flag_array.length):
-#            if flagarrptr[i] == flag_value:
-#                indices.append(i)
-#
-#        return self.extract_items(indices.get_npy_array())
 
     cpdef remove_tagged_particles(self, np.int8_t tag):
         """Remove particles that have the given tag.
@@ -389,34 +378,47 @@ cdef class ParticleContainer(CarrayContainer):
             arr = arrays[i]
             arr.align_array(index_array.get_npy_array())
 
-    cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc):
+#    cpdef CarrayContainer extract_flagged_items(self, str flag_name, int flag_value):
+#        cdef LongArray indices = LongArray()
+#        cdef IntArray flag_array = self.properties[flag_name]
+#        cdef int *flagarrptr = flag_array.get_data_ptr()
+#        cdef int i
+#
+#        for i in range(flag_array.length):
+#            if flagarrptr[i] == flag_value:
+#                indices.append(i)
+#
+#        return self.extract_items(indices.get_npy_array())
 
-        cdef int j, new_size
-        cdef BaseArray array
-
-        # check if adding a new particle exceeds causes the array size
-        # to be larger then the allocated memory
-        j = self.get_number_of_particles()
-        if j + 1 > self.properties["mass"].alloc:
-            # reserve memory by 10% of existing memory for all arrays
-            new_size = int(1.1*self.get_number_of_particles())
-            for array in self.properties.values():
-                array.reserve(new_size)
-                array.append(0)
-        else:
-            # makes sure that each array has added
-            # one more particle
-            for array in self.properties.values():
-                array.append(0)
-
-        # j is the next avaiable slot for a new ghost particle
-        self["position-x"][j] = x
-        self["position-y"][j] = y
-        self["process"][j] = proc
-        self["tag"][j] = Ghost
-
-        # update nubmer of ghost particle
-        self.num_ghost_particles += 1
+    #cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc):
+#    cdef void make_ghost(self, np.float64_t *pos, np.int32_t proc):
+#
+#        cdef int j, new_size
+#        cdef BaseArray array
+#
+#        # check if adding a new particle exceeds causes the array size
+#        # to be larger then the allocated memory
+#        j = self.get_number_of_particles()
+#        if j + 1 > self.properties["mass"].alloc:
+#            # reserve memory by 10% of existing memory for all arrays
+#            new_size = int(1.1*self.get_number_of_particles())
+#            for array in self.properties.values():
+#                array.reserve(new_size)
+#                array.append(0)
+#        else:
+#            # makes sure that each array has added
+#            # one more particle
+#            for array in self.properties.values():
+#                array.append(0)
+#
+#        # j is the next avaiable slot for a new ghost particle
+#        self["position-x"][j] = pos[0]
+#        self["position-y"][j] = pos[1]
+#        self["process"][j] = proc
+#        self["tag"][j] = Ghost
+#
+#        # update nubmer of ghost particle
+#        self.num_ghost_particles += 1
 
 
 

@@ -11,5 +11,9 @@
 *.dat
 *.f
 *.txt
+riemann.cpp
+reconstruction.cpp
+integrator.cpp
+mesh.cpp
 build/
 .DS_Store

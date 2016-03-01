@@ -8,9 +8,8 @@ cdef class ReconstructionBase:
             CarrayContainer right_faces, Mesh2d mesh, double gamma, double dt)
 
 cdef class PieceWiseConstant(ReconstructionBase):
+    pass
 
-    cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_faces,
-            CarrayContainer right_faces, Mesh2d mesh, double gamma, double dt)
 
 # out of comission - adding cgal library
 #cdef class PieceWiseLinear(ReconstructionBase):

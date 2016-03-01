@@ -3,15 +3,13 @@ from utils.particle_tags import ParticleTAGS
 from mesh.mesh cimport Mesh2d
 from riemann.riemann cimport RiemannBase
 from containers.containers cimport CarrayContainer
-from utils.carray cimport DoubleArray, IntArray, LongLongArray
+from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 from libc.math cimport sqrt, fabs, fmin
 
 import numpy as np
 cimport numpy as np
 
 cdef int Real = ParticleTAGS.Real
-cdef int Boundary = ParticleTAGS.Boundary
-cdef int BoundarySecond = ParticleTAGS.BoundarySecond
 
 cdef class IntegrateBase:
     def __init__(self, Mesh2d mesh, RiemannBase riemann):
@@ -73,11 +71,10 @@ cdef class MovingMesh(IntegrateBase):
 
         # particle flag information
         cdef IntArray tags = self.particles.get_carray("tag")
-        cdef IntArray type = self.particles.get_carray("type")
 
         # face information
-        cdef LongLongArray pair_i = self.mesh.faces.get_carray("pair-i")
-        cdef LongLongArray pair_j = self.mesh.faces.get_carray("pair-j")
+        cdef LongArray pair_i = self.mesh.faces.get_carray("pair-i")
+        cdef LongArray pair_j = self.mesh.faces.get_carray("pair-j")
         cdef DoubleArray area = self.mesh.faces.get_carray("area")
 
         # particle position and velocity
@@ -195,7 +192,6 @@ cdef class MovingMesh(IntegrateBase):
         term. The algorithm is taken from Springel (2009).
         """
         # particle flag information
-        cdef IntArray type = self.particles.get_carray("type")
         cdef IntArray tags = self.particles.get_carray("tag")
 
         # particle position and velocity
@@ -223,40 +219,39 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i
 
         for i in range(self.particles.get_number_of_particles()):
-            if tags.data[i] == Real or type.data[i] == Boundary:
 
-                _wx = _wy = 0.0
+            _wx = _wy = 0.0
 
-                if self.regularize == 1:
+            if self.regularize == 1:
 
-                    # sound speed 
-                    cs = sqrt(self.gamma*p.data[i]/r.data[i])
+                # sound speed 
+                cs = sqrt(self.gamma*p.data[i]/r.data[i])
 
-                    # particle positions and center of mass of real particles
-                    _x = x.data[i]
-                    _y = y.data[i]
+                # particle positions and center of mass of real particles
+                _x = x.data[i]
+                _y = y.data[i]
 
-                    _cx = cx.data[i]
-                    _cy = cy.data[i]
+                _cx = cx.data[i]
+                _cy = cy.data[i]
 
-                    # distance form cell com to particle position
-                    d = sqrt( (_cx - _x)**2 + (_cy - _y)**2 )
+                # distance form cell com to particle position
+                d = sqrt( (_cx - _x)**2 + (_cy - _y)**2 )
 
-                    # approximate length of cell
-                    R = sqrt(vol.data[i]/np.pi)
+                # approximate length of cell
+                R = sqrt(vol.data[i]/np.pi)
 
-                    # regularize - eq. 63
-                    if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
-                        _wx += cs*(_cx - _x)*(d - 0.9*eta*R)/(d*0.2*eta*R)
-                        _wy += cs*(_cy - _y)*(d - 0.9*eta*R)/(d*0.2*eta*R)
+                # regularize - eq. 63
+                if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
+                    _wx += cs*(_cx - _x)*(d - 0.9*eta*R)/(d*0.2*eta*R)
+                    _wy += cs*(_cy - _y)*(d - 0.9*eta*R)/(d*0.2*eta*R)
 
-                    elif (1.1 <= d/(eta*R)):
-                        _wx += cs*(_cx - _x)/d
-                        _wy += cs*(_cy - _y)/d
+                elif (1.1 <= d/(eta*R)):
+                    _wx += cs*(_cx - _x)/d
+                    _wy += cs*(_cy - _y)/d
 
-                # add velocity of the particle
-                wx.data[i] = _wx + u.data[i]
-                wy.data[i] = _wy + v.data[i]
+            # add velocity of the particle
+            wx.data[i] = _wx + u.data[i]
+            wy.data[i] = _wy + v.data[i]
 
 
     cdef _assign_face_velocities(self):
@@ -281,8 +276,8 @@ cdef class MovingMesh(IntegrateBase):
         cdef DoubleArray fv  = self.mesh.faces.get_carray("velocity-y")
         cdef DoubleArray fcx = self.mesh.faces.get_carray("com-x")
         cdef DoubleArray fcy = self.mesh.faces.get_carray("com-y")
-        cdef LongLongArray pair_i = self.mesh.faces.get_carray("pair-i")
-        cdef LongLongArray pair_j = self.mesh.faces.get_carray("pair-j")
+        cdef LongArray pair_i = self.mesh.faces.get_carray("pair-i")
+        cdef LongArray pair_j = self.mesh.faces.get_carray("pair-j")
 
         # local variables
         cdef double _xi, _yi, _xj, _yj

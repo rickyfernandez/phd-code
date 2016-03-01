@@ -28,4 +28,5 @@ cdef class ParticleContainer(CarrayContainer):
     cpdef int append_container(self, CarrayContainer carray)
     cpdef remove_tagged_particles(self, np.int8_t tag)
     cpdef int align_particles(self) except -1
-    cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc)
+    #cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc)
+    #cdef void make_ghost(self, np.float64_t *pos, np.int32_t proc)

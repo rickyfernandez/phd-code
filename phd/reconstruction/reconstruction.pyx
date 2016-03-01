@@ -4,7 +4,7 @@ cimport numpy as np
 from utils.particle_tags import ParticleTAGS
 
 from containers.containers cimport CarrayContainer, ParticleContainer
-from utils.carray cimport DoubleArray, IntArray, LongLongArray
+from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 from libc.math cimport sqrt, fmax, fmin
 cimport libc.stdlib as stdlib
 from mesh.mesh cimport Mesh2d
@@ -48,8 +48,10 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef DoubleArray pr = right_state.get_carray("pressure")
 
         # particle indices that make up the face
-        cdef LongLongArray pair_i = faces.get_carray("pair-i")
-        cdef LongLongArray pair_j = faces.get_carray("pair-j")
+        #cdef LongLongArray pair_i = faces.get_carray("pair-i")
+        #cdef LongLongArray pair_j = faces.get_carray("pair-j")
+        cdef LongArray pair_i = faces.get_carray("pair-i")
+        cdef LongArray pair_j = faces.get_carray("pair-j")
 
         cdef int k, i, j
         cdef int num_faces = faces.get_number_of_items()
