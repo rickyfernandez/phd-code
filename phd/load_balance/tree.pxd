@@ -60,6 +60,8 @@ cdef class BaseTree:
     cdef int dim                           # dimension of the problem
     cdef hilbert_type hilbert_func         # hilbert key generator
 
+    cdef int bounds[2][3]                  # min and max of boundary
+
     cdef TreeMemoryPool mem_pool           # pool of nodes
     cdef Node* root                        # pointer to the root of the tree
 
@@ -73,21 +75,21 @@ cdef class BaseTree:
 
     cdef Node* _find_leaf(self, np.int64_t key)
     cdef Node* _find_node_by_key_level(self, np.uint64_t key, np.uint32_t level)
-    cdef void _node_neighbor_search(self, Node* node, int index[3], ParticleContainer part_array, np.int32_t* leaf_proc,
-            set boundary_keys, set leaf_neighbors, int rank)
-    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
-            set boundary_keys, int rank)
+    #cdef void _node_neighbor_search(self, Node* node, int index[3], ParticleContainer part_array, np.int32_t* leaf_proc,
+    #        set boundary_keys, set leaf_neighbors, int rank)
+    #cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+    #        set boundary_keys, int rank)
 
 cdef class QuadTree(BaseTree):
 
     cdef np.float64_t xmin, xmax, ymin, ymax
 
-    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
-            set boundary_keys, int rank)
+    #cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+    #        set boundary_keys, int rank)
 
-cdef class OcTree(BaseTree):
-
-    cdef np.float64_t xmin, xmax, ymin, ymax, zmin, zmax
-
-    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
-            set boundary_keys, int rank)
+#cdef class OcTree(BaseTree):
+#
+#    cdef np.float64_t xmin, xmax, ymin, ymax, zmin, zmax
+#
+#    cdef void _subneighbor_find(self, Node* candidate, int index[3], np.int32_t* leaf_proc, ParticleContainer part_array,
+#            set boundary_keys, int rank)

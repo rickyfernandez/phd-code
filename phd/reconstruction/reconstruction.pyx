@@ -10,7 +10,7 @@ cimport libc.stdlib as stdlib
 from mesh.mesh cimport Mesh2d
 
 cdef int Real = ParticleTAGS.Real
-cdef int Boundary = ParticleTAGS.Boundary
+#cdef int Boundary = ParticleTAGS.Boundary
 
 cdef class ReconstructionBase:
     def __init__(self):
