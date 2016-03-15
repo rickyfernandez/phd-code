@@ -4,7 +4,7 @@ from mesh.mesh cimport Mesh2d
 from riemann.riemann cimport RiemannBase
 from containers.containers cimport CarrayContainer
 from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
-from libc.math cimport sqrt, fabs, fmin
+from libc.math cimport sqrt, fabs, fmin, pow
 
 import numpy as np
 cimport numpy as np
@@ -15,6 +15,7 @@ cdef class IntegrateBase:
     def __init__(self, Mesh2d mesh, RiemannBase riemann):
         """Constructor for the Integrator"""
 
+        self.dim = mesh.dim
         self.mesh = mesh
         self.riemann = riemann
         self.particles = mesh.particles
@@ -28,6 +29,10 @@ cdef class IntegrateBase:
                 "momentum-y": "double",
                 "energy": "double",
                 }
+
+        if self.dim == 3:
+            flux_vars["momentum-z"] = "double"
+
         self.flux = CarrayContainer(var_dict=flux_vars)
 
         # create left/right face state array 
@@ -37,6 +42,10 @@ cdef class IntegrateBase:
                 "velocity-y": "double",
                 "pressure": "double",
                 }
+
+        if self.dim == 3:
+            state_vars["velocity-z"] = "double"
+
         self.left_state  = CarrayContainer(var_dict=state_vars)
         self.right_state = CarrayContainer(var_dict=state_vars)
 
@@ -45,7 +54,6 @@ cdef class IntegrateBase:
 
     def integrate(self, double dt, double t, int iteration_count):
         self._integrate(dt, t, iteration_count)
-
 
     cdef double _compute_time_step(self):
         msg = "IntegrateBase::compute_time_step called!"
@@ -77,26 +85,20 @@ cdef class MovingMesh(IntegrateBase):
         cdef LongArray pair_j = self.mesh.faces.get_carray("pair-j")
         cdef DoubleArray area = self.mesh.faces.get_carray("area")
 
-        # particle position and velocity
-        cdef DoubleArray  x = self.particles.get_carray("position-x")
-        cdef DoubleArray  y = self.particles.get_carray("position-y")
-        cdef DoubleArray wx = self.particles.get_carray("w-x")
-        cdef DoubleArray wy = self.particles.get_carray("w-y")
-
         # particle values
         cdef DoubleArray m  = self.particles.get_carray("mass")
-        cdef DoubleArray mu = self.particles.get_carray("momentum-x")
-        cdef DoubleArray mv = self.particles.get_carray("momentum-y")
-        cdef DoubleArray E  = self.particles.get_carray("energy")
+        cdef DoubleArray e  = self.particles.get_carray("energy")
 
         # flux values
-        cdef DoubleArray f_m  = self.flux.get_carray("mass")
-        cdef DoubleArray f_mu = self.flux.get_carray("momentum-x")
-        cdef DoubleArray f_mv = self.flux.get_carray("momentum-y")
-        cdef DoubleArray f_E  = self.flux.get_carray("energy")
+        cdef DoubleArray fm  = self.flux.get_carray("mass")
+        cdef DoubleArray fe  = self.flux.get_carray("energy")
 
-        cdef int i, j, k
+        cdef int i, j, k, n
         cdef double a
+
+        cdef DoubleArray arr
+        cdef np.float64_t *x[3], *wx[3], *mv[3], *fmv[3]
+        cdef str field, axis
 
         cdef int num_faces = self.mesh.faces.get_number_of_items()
         cdef int npart = self.particles.get_number_of_particles()
@@ -116,68 +118,86 @@ cdef class MovingMesh(IntegrateBase):
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
         self.riemann.solve(self.flux, self.left_state, self.right_state, self.mesh.faces,
-                t, dt, iteration_count)
+                t, dt, iteration_count, self.mesh.dim)
+
+        self.particles.extract_field_vec_ptr(mv, "momentum")
+        self.flux.extract_field_vec_ptr(fmv, "momentum")
 
         # update conserved quantities
-        for k in range(num_faces):
+        for n in range(num_faces):
 
             # update only real particles in the domain
-            i = pair_i.data[k]
-            j = pair_j.data[k]
-            a = area.data[k]
+            i = pair_i.data[n]
+            j = pair_j.data[n]
+            a = area.data[n]
 
             # flux entering cell defined by particle i
             if tags.data[i] == Real:
-                m.data[i]  -= dt*a*f_m.data[k]
-                mu.data[i] -= dt*a*f_mu.data[k]
-                mv.data[i] -= dt*a*f_mv.data[k]
-                E.data[i]  -= dt*a*f_E.data[k]
+                m.data[i] -= dt*a*fm.data[n]
+                e.data[i] -= dt*a*fe.data[n]
+
+                for k in range(self.dim):
+                    mv[k][i] -= dt*a*fmv[k][n]
 
             # flux leaving cell defined by particle j
             if tags.data[j] == Real:
-                m.data[j]  += dt*a*f_m.data[k]
-                mu.data[j] += dt*a*f_mu.data[k]
-                mv.data[j] += dt*a*f_mv.data[k]
-                E.data[j]  += dt*a*f_E.data[k]
+                m.data[j] += dt*a*fm.data[n]
+                e.data[j] += dt*a*fe.data[n]
+
+                for k in range(self.dim):
+                    mv[k][j] += dt*a*fmv[k][n]
+
+        self.particles.extract_field_vec_ptr(x, "position")
+        self.particles.extract_field_vec_ptr(wx, "w")
 
         # move particles
         for i in range(npart):
             if tags.data[i] == Real:
-                x.data[i] += dt*wx.data[i]
-                y.data[i] += dt*wy.data[i]
+                for k in range(self.dim):
+                    x[k][i] += dt*wx[k][i]
+
 
     cdef double _compute_time_step(self):
 
         cdef IntArray tags = self.particles.get_carray("tag")
-
         cdef DoubleArray r = self.particles.get_carray("density")
         cdef DoubleArray p = self.particles.get_carray("pressure")
-        cdef DoubleArray u = self.particles.get_carray("velocity-x")
-        cdef DoubleArray v = self.particles.get_carray("velocity-y")
-
         cdef DoubleArray vol = self.particles.get_carray("volume")
 
         cdef double gamma = self.gamma
-        cdef double c, R, dt, _u, _v
-        cdef long i, npart = self.particles.get_number_of_particles()
+        cdef double c, R, dt, vi
+        cdef int i, k, npart
+        cdef np.float64_t* v[3]
+
+
+        self.particles.extract_field_vec_ptr(v, "velocity")
 
         c = sqrt(gamma*p.data[0]/r.data[0])
-        R = sqrt(vol.data[0]/np.pi)
+        if self.dim == 2:
+            R = sqrt(vol.data[0]/np.pi)
+        if self.dim == 3:
+            R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
 
-        _u = u.data[0]; _v = v.data[0]
-        dt = R/(c + sqrt(_u*_u + _v*_v))
+        vi = 0.0
+        for k in range(self.dim):
+            vi += v[k][0]*v[k][0]
+        dt = R/(c + sqrt(vi))
 
-        for i in range(npart):
+        for i in range(self.particles.get_number_of_particles()):
             if tags.data[i] == Real:
 
                 c = sqrt(gamma*p.data[i]/r.data[i])
 
                 # calculate approx radius of each voronoi cell
-                R = sqrt(vol.data[i]/np.pi)
+                if self.dim == 2:
+                    R = sqrt(vol.data[i]/np.pi)
+                if self.dim == 3:
+                    R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
 
-                _u = u.data[i]; _v = v.data[i]
-                dt = fmin(R/(c + sqrt(_u*_u + _v*_v)), dt)
-
+                vi = 0.0
+                for k in range(self.dim):
+                    vi += v[k][i]*v[k][i]
+                dt = fmin(R/(c + sqrt(vi)), dt)
 
         return dt
 
@@ -194,64 +214,53 @@ cdef class MovingMesh(IntegrateBase):
         # particle flag information
         cdef IntArray tags = self.particles.get_carray("tag")
 
-        # particle position and velocity
-        cdef DoubleArray x = self.particles.get_carray("position-x")
-        cdef DoubleArray y = self.particles.get_carray("position-y")
-        cdef DoubleArray wx = self.particles.get_carray("w-x")
-        cdef DoubleArray wy = self.particles.get_carray("w-y")
-
-        # center of mass of particle cell
-        cdef DoubleArray cx = self.particles.get_carray("com-x")
-        cdef DoubleArray cy = self.particles.get_carray("com-y")
-
         # particle values
         cdef DoubleArray r = self.particles.get_carray("density")
         cdef DoubleArray p = self.particles.get_carray("pressure")
-        cdef DoubleArray u = self.particles.get_carray("velocity-x")
-        cdef DoubleArray v = self.particles.get_carray("velocity-y")
-
         cdef DoubleArray vol = self.particles.get_carray("volume")
 
         # local variables
-        cdef double _x, _y, _cx, _cy, _wx, _wy, cs, d, R
+        cdef np.float64_t *x[3], *v[3], *wx[3], *cx[3]
+        cdef double cs, d, R
         cdef double eta = self.eta
+        cdef int i, k
 
-        cdef int i
+
+        self.particles.extract_field_vec_ptr(x, "position")
+        self.particles.extract_field_vec_ptr(v, "velocity")
+        self.particles.extract_field_vec_ptr(wx, "w")
+        self.particles.extract_field_vec_ptr(cx, "com")
 
         for i in range(self.particles.get_number_of_particles()):
 
-            _wx = _wy = 0.0
+            for k in range(self.dim):
+                wx[k][i] = v[k][i]
 
             if self.regularize == 1:
 
                 # sound speed 
                 cs = sqrt(self.gamma*p.data[i]/r.data[i])
 
-                # particle positions and center of mass of real particles
-                _x = x.data[i]
-                _y = y.data[i]
-
-                _cx = cx.data[i]
-                _cy = cy.data[i]
-
                 # distance form cell com to particle position
-                d = sqrt( (_cx - _x)**2 + (_cy - _y)**2 )
+                d = 0.0
+                for k in range(self.dim):
+                    d += (cx[k][i] - x[k][i])**2
+                d = sqrt(d)
 
                 # approximate length of cell
-                R = sqrt(vol.data[i]/np.pi)
+                if self.dim == 2:
+                    R = sqrt(vol.data[i]/np.pi)
+                if self.dim == 3:
+                    R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
 
                 # regularize - eq. 63
                 if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
-                    _wx += cs*(_cx - _x)*(d - 0.9*eta*R)/(d*0.2*eta*R)
-                    _wy += cs*(_cy - _y)*(d - 0.9*eta*R)/(d*0.2*eta*R)
+                    for k in range(self.dim):
+                        wx[k][i] += cs*(cx[k][i] - x[k][i])*(d - 0.9*eta*R)/(d*0.2*eta*R)
 
                 elif (1.1 <= d/(eta*R)):
-                    _wx += cs*(_cx - _x)/d
-                    _wy += cs*(_cy - _y)/d
-
-            # add velocity of the particle
-            wx.data[i] = _wx + u.data[i]
-            wy.data[i] = _wy + v.data[i]
+                    for k in range(self.dim):
+                        wx[k][i] += cs*(cx[k][i] - x[k][i])/d
 
 
     cdef _assign_face_velocities(self):
@@ -263,49 +272,34 @@ cdef class MovingMesh(IntegrateBase):
         taken from Springel (2009).
         """
 
-        # particle position
-        cdef DoubleArray x = self.particles.get_carray("position-x")
-        cdef DoubleArray y = self.particles.get_carray("position-y")
-
-        # particle velocity
-        cdef DoubleArray wx = self.particles.get_carray("w-x")
-        cdef DoubleArray wy = self.particles.get_carray("w-y")
-
         # face information
-        cdef DoubleArray fu  = self.mesh.faces.get_carray("velocity-x")
-        cdef DoubleArray fv  = self.mesh.faces.get_carray("velocity-y")
-        cdef DoubleArray fcx = self.mesh.faces.get_carray("com-x")
-        cdef DoubleArray fcy = self.mesh.faces.get_carray("com-y")
         cdef LongArray pair_i = self.mesh.faces.get_carray("pair-i")
         cdef LongArray pair_j = self.mesh.faces.get_carray("pair-j")
 
         # local variables
-        cdef double _xi, _yi, _xj, _yj
-        cdef double _wxi, _wyi, _wxj, _wyj
         cdef double factor
+        cdef int i, j, k, n
+        cdef np.float64_t *x[3], *wx[3], *fv[3], *fcx[3]
 
-        # k is the face index
-        cdef int k, i, j
+        self.particles.extract_field_vec_ptr(x, "position")
+        self.particles.extract_field_vec_ptr(wx, "w")
 
-        for k in range(self.mesh.faces.get_number_of_items()):
+        self.mesh.faces.extract_field_vec_ptr(fv, "velocity")
+        self.mesh.faces.extract_field_vec_ptr(fcx, "com")
+
+        for n in range(self.mesh.faces.get_number_of_items()):
 
             # particles that define face
-            i = pair_i.data[k]
-            j = pair_j.data[k]
-
-            # particle and neighbor position
-            _xi = x.data[i]; _yi = y.data[i]
-            _xj = x.data[j]; _yj = y.data[j]
-
-            # particle and neighbor velocity
-            _wxi = wx.data[i]; _wyi = wy.data[i]
-            _wxj = wx.data[j]; _wyj = wy.data[j]
+            i = pair_i.data[n]
+            j = pair_j.data[n]
 
             # correct face velocity due to residual motion - eq. 32
-            factor  = (_wxi - _wxj)*(fcx.data[k] - 0.5*(_xi + _xj)) +\
-                      (_wyi - _wyj)*(fcy.data[k] - 0.5*(_yi + _yj))
-            factor /= (_xj - _xi)*(_xj - _xi) + (_yj - _yi)*(_yj - _yi)
+            factor = denom = 0.0
+            for k in range(self.dim):
+                factor += (wx[k][i] - wx[k][j])*(fcx[k][n] - 0.5*(x[k][i] + x[k][j]))
+                denom  += pow(x[k][j] - x[k][i], 2.0)
+            factor /= denom
 
             # the face velocity mean of particle velocities and residual term - eq. 33
-            fu.data[k] = 0.5*(_wxi + _wxj) + factor*(_xj - _xi)
-            fv.data[k] = 0.5*(_wyi + _wyj) + factor*(_yj - _yi)
+            for k in range(self.dim):
+                fv[k][n] = 0.5*(wx[k][i] + wx[k][j]) + factor*(x[k][j] - x[k][i])
