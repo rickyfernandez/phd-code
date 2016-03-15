@@ -9,3 +9,6 @@ cdef class BoundaryBase:
 
 cdef class Reflect2d(BoundaryBase):
     pass
+
+cdef class Reflect3d(BoundaryBase):
+    pass
