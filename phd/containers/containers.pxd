@@ -12,6 +12,7 @@ cdef class CarrayContainer:
     cpdef int get_number_of_items(self)
     cpdef remove_items(self, np.ndarray index_list)
     cpdef extend(self, int num_particles)
+    cdef void extract_field_vec_ptr(self, np.float64_t *vec[3], str field_name)
     cpdef BaseArray get_carray(self, str prop)
     cdef  _check_property(self, str prop)
     cpdef resize(self, int size)

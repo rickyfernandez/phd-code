@@ -240,6 +240,18 @@ cdef class CarrayContainer:
             prop_array = property_arrays[i]
             prop_array.remove(sorted_indices, 1)
 
+    cdef void extract_field_vec_ptr(self, np.float64_t *vec[3], str field_name):
+
+        cdef int i
+        cdef str axis, field
+        cdef DoubleArray arr
+
+        for i, axis in enumerate("xyz"):
+            field = field_name + "-" + axis
+            if field in self.properties.keys():
+                arr = <DoubleArray> self.get_carray(field)
+                vec[i] = arr.get_data_ptr()
+
 
 cdef class ParticleContainer(CarrayContainer):
 
@@ -377,6 +389,7 @@ cdef class ParticleContainer(CarrayContainer):
         for i in range(num_arrays):
             arr = arrays[i]
             arr.align_array(index_array.get_npy_array())
+
 
 #    cpdef CarrayContainer extract_flagged_items(self, str flag_name, int flag_value):
 #        cdef LongArray indices = LongArray()
