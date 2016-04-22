@@ -3,6 +3,8 @@
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_2.h>
 #include <CGAL/Triangulation_vertex_base_with_info_2.h> 
+#include <CGAL/Delaunay_triangulation_3.h>
+#include <CGAL/Triangulation_vertex_base_with_info_3.h> 
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 typedef CGAL::Triangulation_vertex_base_with_info_2<int, K> Vb; 
@@ -13,7 +15,6 @@ typedef Tess::Vertex_handle   Vertex_handle;
 typedef Tess::Point           Point;
 typedef Tess::Edge            Edge;
 typedef Tess::Edge_circulator Edge_circulator;
-
 
 Tess2d::Tess2d(void) {
     ptess = NULL;
@@ -97,9 +98,10 @@ int Tess2d::build_initial_tess(
                 const Point& pj = ry->source();
 
                 // calculate max radius from particle
-                radius_max_sq = std::max( radius_max_sq,
-                        (pj.x() - pos.x())*(pj.x() - pos.x()) + 
-                        (pj.y() - pos.y())*(pj.y() - pos.y()) );
+                radius_max_sq = 1.0E33;
+               // radius_max_sq = std::max( radius_max_sq,
+                //        (pj.x() - pos.x())*(pj.x() - pos.x()) + 
+                 //       (pj.y() - pos.y())*(pj.y() - pos.y()) );
             }
 
         } while (++ed != done);
@@ -195,8 +197,6 @@ int Tess2d::extract_geometry(
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
 
-    double tot_volume = 0;
-
     // only process local particle information
     for (int i=0; i<local_num_particles; i++) {
 
@@ -290,11 +290,9 @@ int Tess2d::extract_geometry(
             }
         } while (++ed != done);
 
-        tot_volume += vol;
         volume[i] = vol;
         center_of_mass_x[i] = cx/vol;
         center_of_mass_y[i] = cy/vol;
     }
-    std::cout << "Total volume form cpp: " << tot_volume << std::endl;
     return 0;
 }

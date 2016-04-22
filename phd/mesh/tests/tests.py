@@ -1,100 +1,168 @@
 import unittest
 import numpy as np
 
-from phd.mesh.mesh import Mesh2d
+from phd.mesh.mesh import Mesh2d, Mesh3d
 from phd.domain.domain import DomainLimits
-from phd.boundary.boundary import Reflect2d
+from phd.boundary.boundary import Reflect2d, Reflect3d
 from utils.particle_tags import ParticleTAGS
 from phd.containers.containers import ParticleContainer
+from hilbert.hilbert import py_hilbert_key_3d
 
 
-class TestVoronoiMesh2dBox(unittest.TestCase):
+#class TestVoronoiMesh2dBox(unittest.TestCase):
+#
+#    def setUp(self):
+#
+#        L = 1.      # box size
+#        self.n = 50 # number of points
+#        self.dx = L/self.n
+#        self.domain = DomainLimits(dim=2, xmin=0, xmax=1.)
+#        self.bound = Reflect2d(self.domain)
+#
+#        x = np.arange(self.n, dtype=np.float64)*self.dx + 0.5*self.dx
+#
+#        # generate the grid of particle positions
+#        X, Y = np.meshgrid(x,x); Y = np.flipud(Y)
+#        x = X.flatten(); y = Y.flatten()
+#
+#        # store particles
+#        self.particles = ParticleContainer(x.size)
+#        xp = self.particles["position-x"]; yp = self.particles["position-y"]
+#        xp[:] = x; yp[:] = y
+#
+#    def test_volume_2d(self):
+#        """Test particle volumes in square created correctly.
+#        Create grid of particles in a unit box, total volume
+#        is 1.0. Create tessellation and sum all particle
+#        volumes.
+#        """
+#        # generate voronoi mesh 
+#        mesh = Mesh2d(self.particles, self.bound)
+#        mesh.build_geometry()
+#
+#        # calculate voronoi volumes of all real particles 
+#        real_indices = self.particles["tag"] == ParticleTAGS.Real
+#        tot_vol = np.sum(self.particles["volume"][real_indices])
+#
+#        self.assertAlmostEqual(tot_vol, 1.0)
+#
+#    def test_volume_perturb_2d(self):
+#        """Test particle volumes in a perturb sub-square are created correctly.
+#        Create grid of particles in a unit box, and perturb the positions
+#        in a sub-square. Total volume is 1.0. Create tessellation and sum all
+#        particle volumes.
+#        """
+#
+#        # find particles in the interior box
+#        x_in = self.particles["position-x"]; y_in = self.particles["position-y"]
+#        k = ((0.25 < x_in) & (x_in < 0.75)) & ((0.25 < y_in) & (y_in < 0.75))
+#
+#        # randomly perturb their positions
+#        num_points = k.sum()
+#        x_in[k] += 0.2*self.dx*(2.0*np.random.random(num_points)-1.0)
+#        y_in[k] += 0.2*self.dx*(2.0*np.random.random(num_points)-1.0)
+#
+#        # generate voronoi mesh 
+#        mesh = Mesh2d(self.particles, self.bound)
+#        mesh.build_geometry()
+#
+#        # calculate voronoi volumes of all real particles 
+#        real_indices = self.particles["tag"] == ParticleTAGS.Real
+#        tot_vol = np.sum(self.particles["volume"][real_indices])
+#
+#        self.assertAlmostEqual(tot_vol, 1.0)
+#
+#    def test_center_of_mass_2d(self):
+#        """Test if particle center of mass positions are created correctly.
+#        Particles or in a uniform unit box. So com is just the particle
+#        positions.
+#        """
+#        pos = np.array([
+#            self.particles["position-x"],
+#            self.particles["position-y"]
+#            ])
+#
+#        # generate voronoi mesh 
+#        mesh = Mesh2d(self.particles, self.bound)
+#        mesh.build_geometry()
+#
+#        # calculate voronoi volumes of all real particles 
+#        real_indices = self.particles["tag"] == ParticleTAGS.Real
+#
+#        xcom = self.particles["com-x"][real_indices]; ycom = self.particles["com-y"][real_indices]
+#        xp = self.particles["position-x"][real_indices]; yp = self.particles["position-y"][real_indices]
+#
+#        for i in range(xp.size):
+#            self.assertAlmostEqual(xcom[i], xp[i])
+#            self.assertAlmostEqual(ycom[i], yp[i])
+
+class TestVoronoiMesh3dBox(unittest.TestCase):
 
     def setUp(self):
 
         L = 1.      # box size
         self.n = 50 # number of points
         self.dx = L/self.n
-        self.domain = DomainLimits(dim=2, xmin=0, xmax=1.)
-        self.bound = Reflect2d(self.domain)
+        self.domain = DomainLimits(dim=3, xmin=0, xmax=1.)
+        self.bound = Reflect3d(self.domain)
 
-        x = np.arange(self.n, dtype=np.float64)*self.dx + 0.5*self.dx
+        q = np.arange(self.n, dtype=np.float64)*self.dx + 0.5*self.dx
+        Nq = q.size
+        N = Nq*Nq*Nq
 
         # generate the grid of particle positions
-        X, Y = np.meshgrid(x,x); Y = np.flipud(Y)
-        x = X.flatten(); y = Y.flatten()
+        x = np.zeros(N)
+        y = np.zeros(N)
+        z = np.zeros(N)
+
+        part = 0
+        for i in xrange(Nq):
+            for j in xrange(Nq):
+                for k in xrange(Nq):
+                    x[part] = q[i]
+                    y[part] = q[j]
+                    z[part] = q[k]
+                    part += 1
+
+#        # put particles in hilbert order
+#        order = 21
+#        fac = 1 << order
+#        pos = np.array([x, y, z])*fac
+#        keys = np.array([py_hilbert_key_3d(vec.astype(np.int32), order) for vec in pos.T], dtype=np.int64)
+#        indices = np.argsort(keys)
+#
+#        x[:] = x[indices]
+#        y[:] = y[indices]
+#        z[:] = z[indices]
 
         # store particles
-        self.particles = ParticleContainer(x.size)
-        xp = self.particles["position-x"]; yp = self.particles["position-y"]
-        xp[:] = x; yp[:] = y
+        self.particles = ParticleContainer(N)
+        self.particles.register_property(N, 'position-z', 'double')
+        self.particles.register_property(N, 'velocity-z', 'double')
+        self.particles.register_property(N, 'com-z', 'double')
 
-    def test_volume_2D(self):
+        xp = self.particles["position-x"]
+        yp = self.particles["position-y"]
+        zp = self.particles["position-z"]
+        xp[:] = x; yp[:] = y; zp[:] = z
+
+    def test_volume_3d(self):
         """Test particle volumes in square created correctly.
         Create grid of particles in a unit box, total volume
         is 1.0. Create tessellation and sum all particle
         volumes.
         """
         # generate voronoi mesh 
-        mesh = Mesh2d(self.particles, self.bound)
+        mesh = Mesh3d(self.particles, self.bound)
+        print "building mesh..."
         mesh.build_geometry()
+        print "mesh complete"
 
         # calculate voronoi volumes of all real particles 
         real_indices = self.particles["tag"] == ParticleTAGS.Real
         tot_vol = np.sum(self.particles["volume"][real_indices])
 
         self.assertAlmostEqual(tot_vol, 1.0)
-
-    def test_volume_perturb_2D(self):
-        """Test particle volumes in a perturb sub-square are created correctly.
-        Create grid of particles in a unit box, and perturb the positions
-        in a sub-square. Total volume is 1.0. Create tessellation and sum all
-        particle volumes.
-        """
-
-        # find particles in the interior box
-        x_in = self.particles["position-x"]; y_in = self.particles["position-y"]
-        k = ((0.25 < x_in) & (x_in < 0.75)) & ((0.25 < y_in) & (y_in < 0.75))
-
-        # randomly perturb their positions
-        num_points = k.sum()
-        x_in[k] += 0.2*self.dx*(2.0*np.random.random(num_points)-1.0)
-        y_in[k] += 0.2*self.dx*(2.0*np.random.random(num_points)-1.0)
-
-        # generate voronoi mesh 
-        mesh = Mesh2d(self.particles, self.bound)
-        mesh.build_geometry()
-
-        # calculate voronoi volumes of all real particles 
-        real_indices = self.particles["tag"] == ParticleTAGS.Real
-        tot_vol = np.sum(self.particles["volume"][real_indices])
-
-        self.assertAlmostEqual(tot_vol, 1.0)
-
-    def test_center_of_mass_2D(self):
-        """Test if particle center of mass positions are created correctly.
-        Particles or in a uniform unit box. So com is just the particle
-        positions.
-        """
-        pos = np.array([
-            self.particles["position-x"],
-            self.particles["position-y"]
-            ])
-
-        # generate voronoi mesh 
-        mesh = Mesh2d(self.particles, self.bound)
-        mesh.build_geometry()
-
-        # calculate voronoi volumes of all real particles 
-        real_indices = self.particles["tag"] == ParticleTAGS.Real
-
-        xcom = self.particles["com-x"][real_indices]; ycom = self.particles["com-y"][real_indices]
-        xp = self.particles["position-x"][real_indices]; yp = self.particles["position-y"][real_indices]
-
-        for i in range(xp.size):
-            self.assertAlmostEqual(xcom[i], xp[i])
-            self.assertAlmostEqual(ycom[i], yp[i])
-
 
 #class TestVoronoiMesh2dRectangle(unittest.TestCase):
 #
