@@ -11,7 +11,7 @@ from utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 from containers.containers cimport ParticleContainer, CarrayContainer
 
 cdef int Ghost = ParticleTAGS.Ghost
-cdef int ExteriorGhost= ParticleTAGS.ExteriorGhost
+cdef int ExteriorGhost = ParticleTAGS.ExteriorGhost
 
 cdef _reflective(ParticleContainer pc, DomainLimits domain):
 
@@ -26,12 +26,12 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain):
     cdef vector[Particle] ghost_particle
     cdef Particle *p
 
-    cdef np.float64_t box[2][3], xp[3], vp[3]
+    cdef np.float64_t xp[3], vp[3]
     cdef np.float64_t *x[3], *v[3]
     cdef np.float64_t *xg[3], *vg[3]
 
     cdef LongArray indices = LongArray()
-    cdef int i, num_ghost = 0
+    cdef int i, j, k
 
     cdef dim = domain.dim
 
@@ -42,15 +42,9 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain):
 
         for j in range(dim):
 
-            # create bounding box for particle
-            box[0][j] = x[j][i] - r.data[i]
-            box[1][j] = x[j][i] + r.data[i]
-
-        # lower boundary
-        for j in range(dim):
-
+            # lower boundary
             # test if ghost particle should be created
-            if box[0][j] < domain.bounds[0][j]:
+            if x[j][i] - r.data[i] < domain.bounds[0][j]:
 
                 # copy particle information
                 for k in range(dim):
@@ -65,11 +59,9 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain):
                 ghost_particle.push_back(Particle(xp, vp, self.dim))
                 indices.append(i)
 
-        # upper boundary
-        for j in range(dim):
-
+            # upper boundary
             # test if ghost particle should be created
-            if domain.bounds[1][j] < box[1][j]:
+            if domain.bounds[1][j] < x[j][i] + r.data[j]:
 
                 # copy particle information
                 for k in range(dim):
@@ -124,41 +116,51 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain):
     cdef np.float64_t *xg[3]
 
     cdef LongArray indices = LongArray()
-    cdef int i, j, m, num_ghost = 0
-
+    cdef int i, j, m, check, store, index[3]
     cdef dim = domain.dim
 
     pc.extract_field_vec_ptr(x, "position")
 
     for j in range(dim):
-        vg[j] = 0
+        vp[j] = 0
 
     for i in range(pc.get_number_of_particles()):
 
         # check if particle intersects global domain box
+        check = 1
         for j in range(dim):
-            if x[j][i] + r.data[i] < domain.bounds[0][j]: continue
-            if x[j][i] - r.data[i] < domain.bounds[1][j]: continue
+            if x[j][i] + r.data[i] < domain.bounds[0][j]:
+                check = 0; break
+            if x[j][i] - r.data[i] < domain.bounds[1][j]:
+                check = 0; break
 
-        # shift particle to create ghost particle
-        for m in range(3**dim):
+        if check:
+            # shift particle to create ghost particle
+            for m in range(3**dim):
 
-            # create shift indices
-            ii = m%3; jj = m/3; kk = m/9
+                # create shift indices
+                index[0] = m%3; index[1] = (m/3)%3; index[2] = m/9
 
-            xp[0] = x[0][i] + (ii-1)*domain.translate[0]
-            xp[1] = x[1][i] + (jj-1)*domain.translate[1]
-            xp[2] = x[2][i] + (kk-1)*domain.translate[2]
+                # skip no shift
+                if (index[0] == 1 and index[1] == 1 and dim == 2) or\
+                        (index[0] == 1 and index[1] == 1 and index[2] == 1 and dim == 3):
+                            continue
 
-            store = 1
-            for j in range(dim):
-                if x[j][i] + r.data[i] < domain.bounds[0][j]: store = 0
-                if x[j][i] - r.data[i] < domain.bounds[1][j]: store = 0
+                # create shifted position
+                for j in range(dim):
+                    xp[j] = x[j][i] + (index[j]-1)*domain.translate[j]
 
-            # store new ghost particle
-            if store:
-                ghost_particle.push_back(Particle(xp, vp, self.dim))
-                indices.append(i)
+                store = 1
+                for j in range(dim):
+                    if xp[j][i] + r.data[i] < domain.bounds[0][j]:
+                        store = 0; break
+                    if xp[j][i] - r.data[i] < domain.bounds[1][j]:
+                        store = 0; break
+
+                # store new ghost particle
+                if store:
+                    ghost_particle.push_back(Particle(xp, vp, self.dim))
+                    indices.append(i)
 
     exterior_ghost = pc.extract_items(indices.get_npy_array())
     exterior_ghost.extract_field_vec_ptr(xg, "position")
@@ -180,67 +182,79 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain):
     # add periodic ghost to particle container
     pc.append_container(exterior_ghost)
 
-cdef _periodic_parallel(self, ParticleContainer pc, LongArray buffer_ids, LongArray buffer_pid):
+cdef _periodic_parallel(ParticleContainer pc, DomainLimits domain,
+        LongArray buffer_ids, LongArray buffer_pid, int rank):
 
-    cdef LongLongArray keys = pc.get_carray("key")
+    cdef LongArray nbrs = LongArray()
+    cdef np.ndarray nbrs_npy, leaf_npy
 
-    cdef DoubleArray xg = DoubleArray()
-    cdef DoubleArray yg = DoubleArray()
-    cdef DoubleArray zg = DoubleArray()
+    cdef double center[3]
+    cdef BaseTree glb_tree = self.load_bal.global_tree
 
     cdef np.float64_t* x[3]
-    cdef int i, j, current, num_neighbors
+    cdef int i, j, m, num_neighbors, check, store, index[3]
+    cdef int dim = domain.dim
 
     self.buffer_ids.reset()
     self.buffer_pid.reset()
-    self.num_export = 0
 
     pc.extract_field_vec_ptr(x, "position")
 
     for i in range(pc.get_number_of_particles()):
 
         # check if particle intersects global domain box
+        check = 1
         for j in range(dim):
-            if x[j][i] + r.data[i] < domain.bounds[0][j]: continue
-            if x[j][i] - r.data[i] < domain.bounds[1][j]: continue
+            if x[j][i] + r.data[i] < domain.bounds[0][j]:
+                check = 0; break
+            if x[j][i] - r.data[i] < domain.bounds[1][j]:
+                check = 0; break
 
-        # shift particle to create ghost particle
-        for m in range(3**dim):
+        if check:
 
-            # create shift indices
-            ii = m%3; jj = m/3; kk = m/9
+            # shift particle to create ghost particle
+            for m in range(3**dim):
 
-            center[0] = x[0][i] + (ii-1)*domain.translate[0]
-            center[1] = x[1][i] + (jj-1)*domain.translate[1]
-            center[2] = x[2][i] + (kk-1)*domain.translate[2]
+                # create shift indices
+                index[0] = m%3; index[1] = (m/3)%3; index[2] = m/9
 
-            store = 1
-            for j in range(dim):
-                if center[j][i] + r.data[i] < domain.bounds[0][j]: store = 0
-                if center[j][i] - r.data[i] < domain.bounds[1][j]: store = 0
+                # skip no shift
+                if (index[0] == 1 and index[1] == 1 and dim == 2) or\
+                        (index[0] == 1 and index[1] == 1 and index[2] == 1 and dim == 3):
+                            continue
 
-            if store == 1:
+                for j in range(dim):
+                center[j] = x[j][i] + (index[j]-1)*domain.translate[j]
 
-                # find overlaping processors
-                nbrs.reset()
-                num_neighbors = glb_tree._get_nearest_process_neighbors(
-                        center, r.data[i], leaf_npy, self.rank, nbrs)
-                nbrs_npy = nbrs.get_npy_array()
+                store = 1
+                for j in range(dim):
+                    if center[j][i] + r.data[i] < domain.bounds[0][j]:
+                        store = 0; break
+                    if center[j][i] - r.data[i] < domain.bounds[1][j]:
+                        store = 0; break
 
-                if num_neighbors != 0:
+                if store:
 
-                    # put in processors in order to avoid duplicates
-                    nbrs_npy.sort()
+                    # find overlaping processors
+                    nbrs.reset()
+                    num_neighbors = glb_tree._get_nearest_process_neighbors(
+                            center, r.data[i], leaf_npy, rank, nbrs)
+                    nbrs_npy = nbrs.get_npy_array()
 
-                    # put particles in buffer
-                    self.buffer_ids.append(i)            # store particle id
-                    self.buffer_pid.append(nbrs_npy[0])  # store export processor
+                    if num_neighbors != 0:
 
-                    for j in range(1, num_neighbors):
+                        # put in processors in order to avoid duplicates
+                        nbrs_npy.sort()
 
-                        if nbrs_npy[j] != nbrs_npy[j-1]:
-                            self.buffer_ids.append(i)            # store particle id
-                            self.buffer_pid.append(nbrs_npy[j])  # store export processor
+                        # put particles in buffer
+                        self.buffer_ids.append(i)            # store particle id
+                        self.buffer_pid.append(nbrs_npy[0])  # store export processor
+
+                        for j in range(1, num_neighbors):
+
+                            if nbrs_npy[j] != nbrs_npy[j-1]:
+                                self.buffer_ids.append(i)            # store particle id
+                                self.buffer_pid.append(nbrs_npy[j])  # store export processor
 
 cdef class Boundary:
     def __init__(self, DomainLimits domain, int boundary_type):
@@ -249,8 +263,16 @@ cdef class Boundary:
 
         if boundary_type == 0: # reflective
             self._create_exterior_ghost_particles_func = _reflective
-        if boundary_type == 1: # periodic -- not implemented yet
+        if boundary_type == 1: # periodic
             self._create_exterior_ghost_particles_func = _periodic
+
+    cdef _set_radius(self, ParticleContainer pc):
+        cdef in i
+        cdef DoubleArray r = pc.get_carray("radius")
+        cdef double box_size = np.max(self.domain.translate)
+
+        for i in range(pc.get_number_of_particles()):
+            r.data[i] = min(0.5*box_size, r.data[i])
 
    cdef _update_exterior_ghost_particles(self, ParticleContainer pc):
 
@@ -274,7 +296,8 @@ cdef class Boundary:
                     dcomx[k][i] = dcomx[k][j]
 
     cdef int _create_ghost_particles(self, ParticleContainer pc):
-        return self._create_exterior_ghost_particles_func(pc)
+        self._set_radius(pc)
+        return self._create_exterior_ghost_particles_func(pc, self.domain)
 
 cdef class BoundaryParallel(Boundary):
 
@@ -395,7 +418,9 @@ cdef class BoundaryParallel(Boundary):
         cdef int num_local = pc.get_number_of_particles()
 
         self._create_interior_ghost_particles(pc)
-        self._create_exterior_ghost_particles_func(pc)
+        self._create_exterior_ghost_particles_func(pc, self.domain,
+                self.buffer_ids, self.buffer_pid, self.rank)
         self._send_ghost_particles(pc)
 
         return pc.get_number_of_particles() - num_local
+
