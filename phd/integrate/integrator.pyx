@@ -1,6 +1,6 @@
 from utils.particle_tags import ParticleTAGS
 
-from mesh.mesh cimport Mesh2d
+from mesh.mesh cimport MeshBase
 from riemann.riemann cimport RiemannBase
 from containers.containers cimport CarrayContainer
 from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
@@ -12,7 +12,7 @@ cimport numpy as np
 cdef int Real = ParticleTAGS.Real
 
 cdef class IntegrateBase:
-    def __init__(self, Mesh2d mesh, RiemannBase riemann):
+    def __init__(self, MeshBase mesh, RiemannBase riemann):
         """Constructor for the Integrator"""
 
         self.dim = mesh.dim
@@ -65,7 +65,7 @@ cdef class IntegrateBase:
 
 
 cdef class MovingMesh(IntegrateBase):
-    def __init__(self, Mesh2d mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
+    def __init__(self, MeshBase mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
         """Constructor for the Integrator"""
 
         IntegrateBase.__init__(self, mesh, riemann)
@@ -176,7 +176,7 @@ cdef class MovingMesh(IntegrateBase):
         if self.dim == 2:
             R = sqrt(vol.data[0]/np.pi)
         if self.dim == 3:
-            R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
+           R = pow(3.0*vol.data[0]/(4.0*np.pi), 1.0/3.0)
 
         vi = 0.0
         for k in range(self.dim):
