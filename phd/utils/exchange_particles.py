@@ -1,6 +1,6 @@
 import numpy as np
 
-def exchange_particles(particles, send_data, send_particles, recv_particles, disp, comm):
+def exchange_particles(particles, send_data, send_particles, recv_particles, disp, comm, fields=None):
     """Exchange particles between processes. Note you have allocate the appropriate space for
     incoming particles in the particle container.
 
@@ -18,9 +18,16 @@ def exchange_particles(particles, send_data, send_particles, recv_particles, dis
         starting index position for incoming particles
     comm : object
         mpi controller
+    fields : list
+        List of fields to export
     """
     rank = comm.Get_rank()
     size = comm.Get_size()
+
+    if fields != None:
+        export_fields = fields
+    else:
+        export_fields = particles.properties.keys()
 
     # displacements for the send and reveive buffers
     offset_se = np.zeros(size, dtype=np.int32)
@@ -38,7 +45,7 @@ def exchange_particles(particles, send_data, send_particles, recv_particles, dis
         recvTask = rank ^ ngrp
         if recvTask < size:
             if send_particles[recvTask] > 0 or recv_particles[recvTask] > 0:
-                for prop in particles.properties.keys():
+                for prop in export_fields:
 
                     sendbuf=[send_data[prop],   (send_particles[recvTask], offset_se[recvTask])]
                     recvbuf=[particles[prop][disp:], (recv_particles[recvTask],
