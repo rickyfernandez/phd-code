@@ -16,7 +16,7 @@ cdef class CarrayContainer:
     cpdef BaseArray get_carray(self, str prop)
     cdef  _check_property(self, str prop)
     cpdef resize(self, int size)
-    cpdef CarrayContainer extract_items(self, np.ndarray index_array)
+    cpdef CarrayContainer extract_items(self, np.ndarray index_array, list fields=*)
     cpdef int append_container(self, CarrayContainer carray)
 
 cdef class ParticleContainer(CarrayContainer):

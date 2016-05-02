@@ -167,7 +167,7 @@ cdef class CarrayContainer:
                 nparr_dest = dest.get_npy_array()
                 nparr_dest[old_num_items:] = nparr_source
 
-    cpdef CarrayContainer extract_items(self, np.ndarray index_array):
+    cpdef CarrayContainer extract_items(self, np.ndarray index_array, list fields=None):
         """
         Create new carray container for item indices in index_array
 
@@ -186,15 +186,18 @@ cdef class CarrayContainer:
         cdef str prop_type, prop, dtype
         cdef int size = index_array.size
 
-        prop_names = self.properties.keys()
+        if fields != None:
+            prop_names = self.properties.keys()
+        else:
+            prop_names = fields
 
         # now we have the result array setup
         # resize it
-        if index_array.size == 0:
+        if size == 0:
             return result_array
 
         # allocate carrays
-        for prop in self.carray_info.keys():
+        for prop in prop_names:
             dtype = self.carray_info[prop]
             result_array.register_property(size, prop, dtype)
 
@@ -282,6 +285,7 @@ cdef class ParticleContainer(CarrayContainer):
 
             self.register_property(num_real_parts, "key", "longlong")
             self.register_property(num_real_parts, "tag", "int")
+            self.register_property(num_real_parts, "type", "int")
             self.register_property(num_real_parts, "process", "long")
             self.register_property(num_real_parts, "ids", "long")
             self.register_property(num_real_parts, "map", "long")
@@ -389,264 +393,3 @@ cdef class ParticleContainer(CarrayContainer):
         for i in range(num_arrays):
             arr = arrays[i]
             arr.align_array(index_array.get_npy_array())
-
-
-#    cpdef CarrayContainer extract_flagged_items(self, str flag_name, int flag_value):
-#        cdef LongArray indices = LongArray()
-#        cdef IntArray flag_array = self.properties[flag_name]
-#        cdef int *flagarrptr = flag_array.get_data_ptr()
-#        cdef int i
-#
-#        for i in range(flag_array.length):
-#            if flagarrptr[i] == flag_value:
-#                indices.append(i)
-#
-#        return self.extract_items(indices.get_npy_array())
-
-    #cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc):
-#    cdef void make_ghost(self, np.float64_t *pos, np.int32_t proc):
-#
-#        cdef int j, new_size
-#        cdef BaseArray array
-#
-#        # check if adding a new particle exceeds causes the array size
-#        # to be larger then the allocated memory
-#        j = self.get_number_of_particles()
-#        if j + 1 > self.properties["mass"].alloc:
-#            # reserve memory by 10% of existing memory for all arrays
-#            new_size = int(1.1*self.get_number_of_particles())
-#            for array in self.properties.values():
-#                array.reserve(new_size)
-#                array.append(0)
-#        else:
-#            # makes sure that each array has added
-#            # one more particle
-#            for array in self.properties.values():
-#                array.append(0)
-#
-#        # j is the next avaiable slot for a new ghost particle
-#        self["position-x"][j] = pos[0]
-#        self["position-y"][j] = pos[1]
-#        self["process"][j] = proc
-#        self["tag"][j] = Ghost
-#
-#        # update nubmer of ghost particle
-#        self.num_ghost_particles += 1
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#    def get(self, *args, only_real_particles=True):
-#        """Return the numpy array for the property names in the
-#        arguments.
-#
-#        Parameters
-#        ---------
-#        only_real_particles : bool
-#            Indicates if properties of only real particles need to be
-#            returned or all particles to be returned. By default only
-#            real particles will be returned.
-#        args : list
-#            List of property names
-#        """
-#        cdef int nargs = len(args)
-#        cdef list result = []
-#        cdef str arg
-#        cdef int i
-#        cdef BaseArray arg_array
-#
-#        if nargs == 0:
-#            return
-#
-#        if only_real_particles == True:
-#            for i in range(nargs):
-#                arg = args[i]
-#                self._check_property(arg)
-#
-#                if arg in self.properties:
-#                    arg_array = self.properties[arg]
-#                    result.append(
-#                            arg_array.get_npy_array()[:self.num_real_particles])
-#        else:
-#            for i in range(nargs):
-#                arg = args[i]
-#                self._check_property(arg)
-#
-#                if arg in self.properties:
-#                    arg_array = self.properties[arg]
-#                    result.append(arg_array.get_npy_array())
-#
-#        if nargs == 1:
-#            return result[0]
-#        else:
-#            return tuple(result)
-
-
-
-
-
-#        if index_list.size > 0:
-#            self.align_particles()
-#            self.is_dirty = True
-#            self.indices_invalid = True
-#
-#    def get_property_index(self, prop_name):
-#        """Get the index of the property in the property array."""
-#        return self.properties.get(prop_name)
-#
-#    cdef np.ndarray _get_real_particle_prop(self, str prop_name):
-#        """Get the numpy arrray of property corresponding to only real
-#        particles.
-#
-#        No checks are performed. Only call this after making sure that
-#        the property required already exists and that the real particles
-#        are placed in the beginning of the arrays.
-#        """
-#        cdef BaseArray prop_array
-#        prop_array = self.properties.get(prop_name)
-#        if prop_array is not None:
-#            return prop_array.get_npy_array()[:self.num_real_particles]
-#
-
-#    cpdef set_dirty(self, bint value):
-#        """Set the is_dirty variable to given value."""
-#        self.is_dirty = value
-#
-#    cpdef set_indices_invalid(self, bint value):
-#        """Set the indices_invalid to the given value"""
-#        self.indices_invalid = value
-#
-#    cpdef has_array(self, str arr_name):
-#        """Returns true if the array arr_name is present"""
-#        return self.properties.has_key(arr_name)
-#
-
-#    cpdef set_tag(self, str tag_value, int flag_value, LongArray indices):
-#        """Set property flag_name to flag_value for particles in indices."""
-#        cdef Intarray tag_array = self.get_carray('tag')
-#        cdef int i
-#
-#        for i in range(indices.length):
-#            tag_array.data[indices.data[i]] = tag_value
-#
-#    cpdef set_pid(self, LongArray pids):
-#        """Set property flag_name to flag_value for particles in indices."""
-#        cdef Intarray pid_array = self.get_carray('tag')
-#        cdef long i
-#
-#        cdef long np = self.get_number_of_particles()
-#        for i in range(np):
-#            pid_array.data[i] = pids[i]
-#
-#    cpdef set_to_zero(self, list props):
-#
-#        cdef long np = self.get_number_of_particles()
-#        cdef long i
-#
-#        cdef BaseArray prop_arr
-#        cdef str prop
-#
-#        for prop in props:
-#            prop_arr = self.get_carray(prop)
-#
-#            for i in range(np):
-#                prop_arr.data[a] = 0.0
-#
-#    def update_min_max(self, props=None):
-#        """Update the min, max values of all properties."""
-#        if props:
-#            for prop in props:
-#                array = self.properties[prop]
-#                array.update_min_max()
-#        else:
-#            for array in self.properties.values():
-#                array.update_min_max()
-#
-#    cdef make_ghost_from_real(int i, np.float64_t[:] x, np.float64_t[:] vel):
-#        cdef int j
-#        cdef str field
-#        cdef np.float64_t mass
-#
-#        # check if adding a new particle exceeds array size
-#        j = self.total_particles() + 1
-#        if j > self.properties["mass"].alloc:
-#            # resize all arrays by 10%
-#            self.resize(int(1.1*self.total_particles())):
-#
-#        # copy values of i particle to new ghost particle
-#        for field in self.field_names:
-#            nparr = self.properties[field].get_npy_array()
-#            nparr[j] = nparr[i]
-#
-#        # new position
-#        self["position-x"][j] = pos[0]
-#        self["position-y"][j] = pos[1]
-#
-#        # new momentum
-#        mass = self["mass"][i]
-#        self["momentum-x"][j] = mass*vel[0]
-#        self["momentum-y"][j] = mass*vel[1]
-#
-#        # ?
-#        self["key"][j] = -1
-#        self["proc"][j] = -1
-#
-#        # update nubmer of ghost particle
-#        self.num_ghost_particles += 1
-#
-#    def get(self, *args, only_real_particles=True):
-#        """Return the numpy array for the property names in the
-#        arguments.
-#
-#        Parameters
-#        ---------
-#        only_real_particles : bool
-#            Indicates if properties of only real particles need to be
-#            returned or all particles to be returned. By default only
-#            real particles will be returned.
-#        args : list
-#            List of property names
-#        """
-#        cdef int nargs = len(args)
-#        cdef list result = []
-#        cdef str arg
-#        cdef int i
-#        cdef BaseArray arg_array
-#
-#        if nargs == 0:
-#            return
-#
-#        if only_real_particles == True:
-#            for i in range(nargs):
-#                arg = args[i]
-#                self._check_property(arg)
-#
-#                if arg in self.properties:
-#                    arg_array = self.properties[arg]
-#                    result.append(
-#                            arg_array.get_npy_array()[:self.num_real_particles])
-#        else:
-#            for i in range(nargs):
-#                arg = args[i]
-#                self._check_property(arg)
-#
-#                if arg in self.properties:
-#                    arg_array = self.properties[arg]
-#                    result.append(arg_array.get_npy_array())
-#
-#        if nargs == 1:
-#            return result[0]
-#        else:
-#            return tuple(result)
