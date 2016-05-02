@@ -7,7 +7,7 @@ from containers.containers cimport CarrayContainer, ParticleContainer
 from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 from libc.math cimport sqrt, fmax, fmin
 cimport libc.stdlib as stdlib
-from mesh.mesh cimport Mesh2d
+from mesh.mesh cimport MeshBase
 
 cdef int Real = ParticleTAGS.Real
 #cdef int Boundary = ParticleTAGS.Boundary
@@ -20,61 +20,61 @@ cdef class ReconstructionBase:
         self._compute(particles, faces, left_state, right_state, mesh, gamma, dt)
 
     cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-            Mesh2d mesh, double gamma, double dt):
+            MeshBase mesh, double gamma, double dt):
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
 
 cdef class PieceWiseConstant(ReconstructionBase):
 
     cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-            Mesh2d mesh, double gamma, double dt):
+            MeshBase mesh, double gamma, double dt):
 
         # particle primitive variables
         cdef DoubleArray d = particles.get_carray("density")
-        cdef DoubleArray u = particles.get_carray("velocity-x")
-        cdef DoubleArray v = particles.get_carray("velocity-y")
         cdef DoubleArray p = particles.get_carray("pressure")
 
         # left state primitive variables
         cdef DoubleArray dl = left_state.get_carray("density")
-        cdef DoubleArray ul = left_state.get_carray("velocity-x")
-        cdef DoubleArray vl = left_state.get_carray("velocity-y")
         cdef DoubleArray pl = left_state.get_carray("pressure")
 
         # left state primitive variables
         cdef DoubleArray dr = right_state.get_carray("density")
-        cdef DoubleArray ur = right_state.get_carray("velocity-x")
-        cdef DoubleArray vr = right_state.get_carray("velocity-y")
         cdef DoubleArray pr = right_state.get_carray("pressure")
 
         # particle indices that make up the face
-        #cdef LongLongArray pair_i = faces.get_carray("pair-i")
-        #cdef LongLongArray pair_j = faces.get_carray("pair-j")
         cdef LongArray pair_i = faces.get_carray("pair-i")
         cdef LongArray pair_j = faces.get_carray("pair-j")
 
-        cdef int k, i, j
+        cdef int i, j, k, n
+        cdef int dim = mesh.dim
+        cdef np.float64_t *v[3], *vl[3], *vr[3]
         cdef int num_faces = faces.get_number_of_items()
 
+
+        particles.extract_field_vec_ptr(v, "velocity")
+        left_state.extract_field_vec_ptr(vl, "velocity")
+        right_state.extract_field_vec_ptr(vr, "velocity")
+
         # loop through each face
-        for k in range(num_faces):
+        for n in range(num_faces):
 
             # extract left and right particle that
             # make the face
-            i = pair_i.data[k]
-            j = pair_j.data[k]
+            i = pair_i.data[n]
+            j = pair_j.data[n]
 
             # left face values
-            dl.data[k] = d.data[i]
-            ul.data[k] = u.data[i]
-            vl.data[k] = v.data[i]
-            pl.data[k] = p.data[i]
+            dl.data[n] = d.data[i]
+            pl.data[n] = p.data[i]
 
             # right face values
-            dr.data[k] = d.data[j]
-            ur.data[k] = u.data[j]
-            vr.data[k] = v.data[j]
-            pr.data[k] = p.data[j]
+            dr.data[n] = d.data[j]
+            pr.data[n] = p.data[j]
+
+            # velocities
+            for k in range(dim):
+                vl[k][n] = v[k][i]
+                vr[k][n] = v[k][j]
 
 
 # out of comission - adding cgal library
