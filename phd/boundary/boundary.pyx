@@ -4,7 +4,7 @@ from libcpp.vector cimport vector
 from load_balance.tree cimport Node
 from utils.particle_tags import ParticleTAGS
 from utils.exchange_particles import exchange_particles
-from utils.carray cimport DoubleArray, LongLongArray, IntArray
+from utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 
 cdef int Ghost = ParticleTAGS.Ghost
 cdef int Exterior = ParticleTAGS.Exterior
@@ -29,7 +29,7 @@ cdef int in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], in
     for i in range(dim):
         if x[i] + r < bounds[0][i]:
             return 0
-        if x[i] - r < bounds[1][i]:
+        if x[i] - r > bounds[1][i]:
             return 0
     return 1
 
@@ -92,7 +92,7 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particl
 
             # upper boundary
             # does particle radius leave global boundary 
-            if domain.bounds[1][j] < x[j][i] + r.data[j]:
+            if domain.bounds[1][j] < x[j][i] + r.data[i]:
 
                 # copy particle information
                 for k in range(dim):
@@ -230,7 +230,7 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
     # add periodic ghost to particle container
     pc.append_container(exterior_ghost)
 
-cdef _periodic_parallel(ParticleContainer pc, ParticleContainer ghost, DomainLimits domain,
+cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimits domain,
         BaseTree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
         int num_real_particles, int rank):
     """
@@ -268,6 +268,10 @@ cdef _periodic_parallel(ParticleContainer pc, ParticleContainer ghost, DomainLim
     cdef LongArray nbrs_pid = LongArray()
 
     cdef LongArray indices = LongArray()
+
+    cdef CarrayContainer exterior_ghost
+    cdef IntArray tags
+    cdef IntArray types
 
     cdef vector[Particle] ghost_particle
     cdef Particle *p
@@ -351,7 +355,7 @@ cdef _periodic_parallel(ParticleContainer pc, ParticleContainer ghost, DomainLim
         for i in range(exterior_ghost.get_number_of_items()):
 
             tags.data[i] = Ghost
-            types.data[i] = Interior
+            types.data[i] = Exterior
 
             p = &ghost_particle[i]
             for j in range(dim):
@@ -383,7 +387,7 @@ cdef class Boundary:
         cdef double box_size = self.domain.max_length
 
         for i in range(num_real_particles):
-            r.data[i] = min(0.5*box_size, r.data[i])
+            r.data[i] = min(0.4*box_size, r.data[i])
 
     cdef int _create_ghost_particles(self, ParticleContainer pc):
         """
@@ -419,21 +423,21 @@ cdef class Boundary:
         fields : dict
             List of field strings to update
         """
-        cdef LongArray indicies = LongArray()
+        cdef LongArray indices = LongArray()
         cdef IntArray types = pc.get_carray("type")
-        cdef np.ndarray indicies_npy, map_indicies_npy
+        cdef np.ndarray indices_npy, map_indices_npy
 
         # find all ghost that need to be updated
         for i in range(pc.get_number_of_particles()):
             if types.data[i] == Exterior:
-                indicies.append(i)
+                indices.append(i)
 
-        indicies_npy = indicies.get_npy_array()
-        map_indices_npy = pc["map"][indicies_npy]
+        indices_npy = indices.get_npy_array()
+        map_indices_npy = pc["map"][indices_npy]
 
         # update ghost with their image data
         for field in fields:
-            pc[field][indicies_npy] = pc[field][map_indices_npy]
+            pc[field][indices_npy] = pc[field][map_indices_npy]
 
 cdef class BoundaryParallel(Boundary):
     def __init__(self, DomainLimits domain, int boundary_type, object load_bal, object comm):
@@ -466,6 +470,8 @@ cdef class BoundaryParallel(Boundary):
         cdef DoubleArray r = pc.get_carray("radius")
         cdef LongLongArray keys = pc.get_carray("key")
 
+        cdef CarrayContainer interior_ghost
+
         cdef Node* node
         cdef BaseTree glb_tree = self.load_bal.global_tree
 
@@ -494,7 +500,7 @@ cdef class BoundaryParallel(Boundary):
             glb_tree._get_nearest_process_neighbors(
                     xp, r.data[i], leaf_npy, self.rank, nbrs_pid)
 
-            if nbrs_pid.length != 0:
+            if nbrs_pid.length:
 
                 # put in processors in order to avoid duplicates
                 nbrs_pid_npy = nbrs_pid.get_npy_array()
@@ -510,7 +516,12 @@ cdef class BoundaryParallel(Boundary):
                         self.buffer_ids.append(i)               # store particle id
                         self.buffer_pid.append(nbrs_pid_npy[j]) # store export processor
 
-        return pc.extract_items(self.buffer_ids.get_npy_array())
+        interior_ghost = pc.extract_items(self.buffer_ids.get_npy_array())
+
+        interior_ghost["tag"][:] = Ghost
+        interior_ghost["type"][:] = Interior
+
+        return interior_ghost
 
     cdef int _create_ghost_particles(self, ParticleContainer pc):
         """
@@ -595,7 +606,6 @@ cdef class BoundaryParallel(Boundary):
         fields : dict
             List of field strings to update
         """
-
         cdef str field
         cdef CarrayContainer ghost
 

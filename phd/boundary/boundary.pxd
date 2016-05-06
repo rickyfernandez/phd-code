@@ -14,7 +14,7 @@ cdef extern from "particle.h":
 cdef int in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], int dim)
 cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particles)
 cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles)
-cdef _periodic_parallel(ParticleContainer pc, ParticleContainer ghost, DomainLimits domain,
+cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimits domain,
         BaseTree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
         int num_real_particles, int rank)
 
