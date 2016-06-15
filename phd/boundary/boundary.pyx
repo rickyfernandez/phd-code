@@ -6,9 +6,14 @@ from utils.particle_tags import ParticleTAGS
 from utils.exchange_particles import exchange_particles
 from utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 
+cdef int Real = ParticleTAGS.REal
 cdef int Ghost = ParticleTAGS.Ghost
 cdef int Exterior = ParticleTAGS.Exterior
 cdef int Interior = ParticleTAGS.Interior
+
+cdef class BoundaryType:
+    Reflective = 0
+    Periodic = 1
 
 cdef int in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], int dim):
     """
@@ -231,7 +236,7 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
     pc.append_container(exterior_ghost)
 
 cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimits domain,
-        BaseTree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
+        Tree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
         int num_real_particles, int rank):
     """
     Create periodic ghost particles in the simulation. Should only be used in
@@ -249,7 +254,7 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
         Ghost data that will be exported to other processors
     domain : DomainLimits
         Information of the domain size and coordinates
-    tree : BaseTree
+    tree : Tree
         Global tree used in load balance, used for searches
     leaf_npy : np.ndarray
         Each leaf has an index to leaf_npy, value is processor id where leaf lives in
@@ -317,7 +322,7 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
 
                     # find neighboring processors
                     nbrs_pid.reset()
-                    glb_tree._get_nearest_process_neighbors(
+                    glb_tree.get_nearest_process_neighbors(
                             xs, r.data[i], leaf_npy, rank, nbrs_pid)
 
                     if nbrs_pid.length != 0:
@@ -404,9 +409,9 @@ cdef class Boundary:
         cdef int num_real_particles = pc.get_number_of_particles()
 
         self._set_radius(pc, num_real_particles)
-        if self.boundary_type == 0: # reflective
+        if self.boundary_type == BoundaryType.Reflective:
             _reflective(pc, self.domain, num_real_particles)
-        if self.boundary_type == 1: # periodic
+        if self.boundary_type == BoundaryType.Periodic:
             _periodic(pc, self.domain, num_real_particles)
 
         # container should now have ghost particles
@@ -440,7 +445,7 @@ cdef class Boundary:
             pc[field][indices_npy] = pc[field][map_indices_npy]
 
 cdef class BoundaryParallel(Boundary):
-    def __init__(self, DomainLimits domain, int boundary_type, object load_bal, object comm):
+    def __init__(self, DomainLimits domain, int boundary_type, LoadBalance load_bal, object comm):
 
         self.comm = comm
         self.rank = comm.Get_rank()
@@ -473,7 +478,7 @@ cdef class BoundaryParallel(Boundary):
         cdef CarrayContainer interior_ghost
 
         cdef Node* node
-        cdef BaseTree glb_tree = self.load_bal.global_tree
+        cdef Tree glb_tree = self.load_bal.global_tree
 
         cdef LongArray nbrs_pid = LongArray()
         cdef np.ndarray nbrs_pid_npy, leaf_npy
@@ -489,7 +494,7 @@ cdef class BoundaryParallel(Boundary):
         for i in range(num_real_particles):
 
             # find size of leaf where particle lives in global tree
-            node = glb_tree._find_leaf(keys.data[i])
+            node = glb_tree.find_leaf(keys.data[i])
             r.data[i] = min(0.5*node.box_length/glb_tree.domain_fac, r.data[i])
 
             for j in range(dim):
@@ -497,7 +502,7 @@ cdef class BoundaryParallel(Boundary):
 
             # find overlaping processors
             nbrs_pid.reset()
-            glb_tree._get_nearest_process_neighbors(
+            glb_tree.get_nearest_process_neighbors(
                     xp, r.data[i], leaf_npy, self.rank, nbrs_pid)
 
             if nbrs_pid.length:
@@ -552,11 +557,11 @@ cdef class BoundaryParallel(Boundary):
         ghost = self._create_interior_ghost_particles(pc, num_real_particles)
 
         # create global boundary ghost 
-        if self.boundary_type == 0: # reflective
+        if self.boundary_type == BoundaryType.Reflective:
             _reflective(pc, self.domain, num_real_particles)
             # reflective ghost are appendend to pc
             self.start_ghost = pc.get_number_of_particles()
-        if self.boundary_type == 1: # periodic
+        if self.boundary_type == BoundaryType.Periodic:
             _periodic_parallel(pc, ghost, self.domain, self.load_bal.global_tree,
                     self.load_bal.leaf_proc, self.buffer_ids, self.buffer_pid,
                     num_real_particles, self.rank)
@@ -610,9 +615,114 @@ cdef class BoundaryParallel(Boundary):
         cdef CarrayContainer ghost
 
         # reflective is a special case
-        if self.boundary_type == 0:
+        if self.boundary_type == BoundaryType.Reflective:
             self.Boundary._update_ghost_particles(pc)
 
         ghost = pc.extract_items(self.buffer_ids.get_npy_array(), fields)
         exchange_particles(pc, ghost, self.send_particles, self.recv_particles,
                 self.ghost_start, self.comm, fields)
+
+    cdef migrate_boundary_particles(self, ParticleContainer pc):
+        """
+        After a simulation timestep in a parallel run, particles may have left processor patch.
+        This routine export all particles that have left.
+
+        Parameters
+        ----------
+        pc : ParticleContainer
+            Particle data
+        """
+        cdef Tree tree
+        cdef Node *node
+        cdef np.int64_t key
+
+        cdef IntArray tags
+        cdef LongLongArray keys
+        cdef CarrayContainer export_pc
+
+        cdef double fac
+        cdef np.int32_t xh[3]
+        cdef double xp[3], *x[3]
+        cdef int i, j, inside, incoming_ghost, pid
+
+        cdef np.ndarray corner, leaf_pid
+        cdef np.ndarray buf_pid, buf_ids
+
+
+        pc.remove_tagged_particles(ParticleTAGS.Ghost)
+        self.buf_ids.reset()
+        self.buf_ids.reset()
+
+        fac = self.load_bal.fac
+        corner = self.load_bal.corner
+        leaf_pid = self.load_bal.leaf_pid
+
+        glb_tree = self.load_bal.tree
+
+        tags = pc.get_carray("tag")
+        keys = pc.get_carray("key")
+        pc.extract_field_vec_ptr(x, "position")
+
+        for i in range(pc.get_number_of_particles()):
+            if tags.data[i] == Real:
+
+                # did the particle leave the domain
+                inside = 0
+                if j in range(self.dim):
+                    xp[j] = x[j][i]
+                    inside += xp[j] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= xp[j]
+
+                if inside != 0: # particle has left the domain
+
+                    if self.boundary == BoundaryType.Reflective:
+                        raise RuntimeError("particle left domain in reflective boundary condition!!")
+
+                    elif self.boundary == BoundaryType.Periodic:
+
+                        # wrap particle back in domain
+                        for j in range(self.dim):
+                            if xp[j] <= self.domain.bounds[0][j]:
+                                x[j][i] += self.domain.translate[j]
+                            if xp[j] >= self.domain.bounds[1][j]:
+                                x[j][i] -= self.domain.translate[j]
+
+                # generate new hilbert key
+                for j in range(self.dim):
+                    xh[j] = <np.int32_t> ( (x[j][i] - corner[j])*fac )
+
+                keys.data[i] = self.hilbert_func(xh[0], xh[1], xh[2], self.order)
+
+                # find which processor particle lives in
+                node = glb_tree.find_leaf(keys.data[i])
+                pid  = leaf_pid[node.array_index]
+
+                if pid != self.rank: # flag to export
+                    self.buffer_ids.append(i)
+                    self.buffer_pid.append(pid)
+
+        # use numpy arrays for convience
+        buf_pid = self.buffer_pid.get_npy_array()
+        buf_ids = self.buffer_ids.get_npy_array()
+
+        # organize particle processors
+        ind = np.argsort(buf_pid)
+        buf_ids[:] = buf_ids[ind]
+        buf_pid[:] = buf_pid[ind]
+
+        export_pc = pc.extract_items(buf_ids)
+
+        # bin the number of particles being sent to each processor
+        self.send_particles[:] = np.bincount(buf_pid,
+                minlength=self.size).astype(np.int32)
+
+        # how many particles are you receiving from each processor
+        self.recv_particles[:] = 0
+        self.comm.Alltoall(sendbuf=self.send_particles, recvbuf=self.recv_particles)
+        incoming_ghost = np.sum(self.recv_particles)
+
+        # make room for new ghost particles
+        pc.extend(incoming_ghost)
+
+        # import ghost particles and add to container
+        exchange_particles(pc, export_pc, self.send_particles, self.recv_particles,
+                pc.get_number_of_particles(), self.comm)

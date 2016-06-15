@@ -1,8 +1,9 @@
 
 cimport numpy as np
 from utils.carray cimport LongArray
-from load_balance.tree cimport BaseTree
+from load_balance.tree cimport Tree
 from domain.domain cimport DomainLimits
+from load_balance.load_balance cimport LoadBalance
 from containers.containers cimport ParticleContainer, CarrayContainer
 
 cdef extern from "particle.h":
@@ -15,7 +16,7 @@ cdef int in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], in
 cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particles)
 cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles)
 cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimits domain,
-        BaseTree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
+        Tree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
         int num_real_particles, int rank)
 
 cdef class Boundary:
@@ -32,7 +33,7 @@ cdef class Boundary:
 
 cdef class BoundaryParallel(Boundary):
 
-    cdef public object load_bal
+    cdef public LoadBalance load_bal
 
     cdef public object comm
     cdef public int rank, size, dim
@@ -41,3 +42,4 @@ cdef class BoundaryParallel(Boundary):
     cdef public LongArray buffer_pid
 
     cdef CarrayContainer _create_interior_ghost_particles(self, ParticleContainer pc, int num_real_particles)
+    cdef migrate_boundary_particles(self, ParticleContainer pc)
