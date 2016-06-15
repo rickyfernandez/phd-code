@@ -7,7 +7,7 @@ from containers.containers cimport CarrayContainer, ParticleContainer
 from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 from libc.math cimport sqrt, fmax, fmin
 cimport libc.stdlib as stdlib
-from mesh.mesh cimport MeshBase
+from mesh.mesh cimport Mesh
 
 cdef int Real = ParticleTAGS.Real
 #cdef int Boundary = ParticleTAGS.Boundary
@@ -20,14 +20,14 @@ cdef class ReconstructionBase:
         self._compute(particles, faces, left_state, right_state, mesh, gamma, dt)
 
     cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-            MeshBase mesh, double gamma, double dt):
+            Mesh mesh, double gamma, double dt):
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
 
 cdef class PieceWiseConstant(ReconstructionBase):
 
     cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-            MeshBase mesh, double gamma, double dt):
+            Mesh mesh, double gamma, double dt):
 
         # particle primitive variables
         cdef DoubleArray d = particles.get_carray("density")

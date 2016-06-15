@@ -1,11 +1,11 @@
 cimport numpy as np
-from mesh.mesh cimport MeshBase
+from mesh.mesh cimport Mesh
 from containers.containers cimport CarrayContainer, ParticleContainer
 
 cdef class ReconstructionBase:
 
     cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_faces,
-            CarrayContainer right_faces, MeshBase mesh, double gamma, double dt)
+            CarrayContainer right_faces, Mesh mesh, double gamma, double dt)
 
 cdef class PieceWiseConstant(ReconstructionBase):
     pass
