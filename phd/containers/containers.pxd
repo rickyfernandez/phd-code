@@ -25,9 +25,6 @@ cdef class ParticleContainer(CarrayContainer):
     cdef readonly int num_ghost_particles
 
     cpdef int get_number_of_particles(self, bint real=*)
-#    cpdef CarrayContainer extract_flagged_items(self, np.ndarray index_array)
     cpdef int append_container(self, CarrayContainer carray)
     cpdef remove_tagged_particles(self, np.int8_t tag)
     cpdef int align_particles(self) except -1
-    #cdef void make_ghost(self, np.float64_t x, np.float64_t y, np.int32_t proc)
-    #cdef void make_ghost(self, np.float64_t *pos, np.int32_t proc)
