@@ -20,13 +20,11 @@ import numpy as np
 
 from domain.domain import DomainLimits
 from load_balance.load_balance import LoadBalance
-#from particles.particle_array import ParticleArray
 from containers.containers import ParticleContainer
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
-
 
 if size != 4:
     if rank == 0:
@@ -75,12 +73,12 @@ if rank == 3:
 
 
 # create particle data structure
-pa = ParticleContainer(num_particles)
-pa['position-x'][:] = x
-pa['position-y'][:] = y
+pc = ParticleContainer(num_particles)
+pc['position-x'][:] = x
+pc['position-y'][:] = y
 
-pa.register_property(x.size, 'gid', 'long')
-pa['gid'][:] = gid
+pc.register_property(x.size, 'gid', 'long')
+pc['gid'][:] = gid
 
 # Gather the global data on root
 X = np.zeros(shape=25, dtype=np.float64)
@@ -101,33 +99,33 @@ comm.Bcast(buf=GID,root=0)
 # perform the load decomposition
 dom = DomainLimits(dim=2, xmin=0., xmax=4.)
 order = 3
-#box_length = 4*1.001
-#corner = np.ones(2, dtype=np.float64)*(0.5*4 - 0.5*box_length)
-#load_b = LoadBalance(pc, corner, box_length, comm, 1.0, order)
-load_b = LoadBalance(pa, dom, comm=comm, factor=1.0, order=order)
-load_b.decomposition()
-
-# make sure every key has been accounted for
-assert(load_b.keys.size == num_particles)
-
-# make sure hilbert keys are valid 
-dim = 2
-total_keys = 1 << (order*dim)
-for i in range(num_particles):
-    assert(load_b.keys[i] >= 0 and load_b.keys[i] < total_keys)
-
-# make sure that all particles are accounted in building the
-# global tree
-assert(load_b.global_num_real_particles == 25)
-
-# the work is just the number of particles in each leaf
-# so the sum of each leaf should be the total number of particles
-assert(np.sum(load_b.global_work) == 25)
-
-# the particle array should only have real particles
-assert(pa.num_real_particles == pa.get_number_of_particles())
-
-for i in xrange(pa.get_number_of_particles()):
-    assert(abs(X[pa['gid'][i]] - pa['position-x'][i]) < 1e-15)
-    assert(abs(Y[pa['gid'][i]] - pa['position-y'][i]) < 1e-15)
-    assert(GID[pa['gid'][i]] == pa['gid'][i])
+##box_length = 4*1.001
+##corner = np.ones(2, dtype=np.float64)*(0.5*4 - 0.5*box_length)
+##load_b = LoadBalance(pc, corner, box_length, comm, 1.0, order)
+#load_b = LoadBalance(pa, dom, comm=comm, factor=1.0, order=order)
+#load_b.decomposition()
+#
+## make sure every key has been accounted for
+#assert(load_b.keys.size == num_particles)
+#
+## make sure hilbert keys are valid 
+#dim = 2
+#total_keys = 1 << (order*dim)
+#for i in range(num_particles):
+#    assert(load_b.keys[i] >= 0 and load_b.keys[i] < total_keys)
+#
+## make sure that all particles are accounted in building the
+## global tree
+#assert(load_b.global_num_real_particles == 25)
+#
+## the work is just the number of particles in each leaf
+## so the sum of each leaf should be the total number of particles
+#assert(np.sum(load_b.global_work) == 25)
+#
+## the particle array should only have real particles
+#assert(pa.num_real_particles == pa.get_number_of_particles())
+#
+#for i in xrange(pa.get_number_of_particles()):
+#    assert(abs(X[pa['gid'][i]] - pa['position-x'][i]) < 1e-15)
+#    assert(abs(Y[pa['gid'][i]] - pa['position-y'][i]) < 1e-15)
+#    assert(GID[pa['gid'][i]] == pa['gid'][i])

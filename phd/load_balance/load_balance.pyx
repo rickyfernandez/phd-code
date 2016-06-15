@@ -123,7 +123,7 @@ cdef class LoadBalance:
             node = self.tree.find_leaf(keys.data[i])
             work[node.array_index] += 1
 
-    cdef void _find_split_in_work(self, np.ndarray global_work, int size):
+    cdef void _find_split_in_work(self, np.ndarray global_work):
         """Partition the global leaves amongst the process such that each process
         has roughly equal work load.
         """
@@ -132,7 +132,7 @@ cdef class LoadBalance:
 
         #self.leaf_pid = np.zeros(global_work.size, dtype=np.int32)
         self.leaf_pid.resize(global_work.size)
-        part_per_proc = global_work.sum()/size
+        part_per_proc = global_work.sum()/self.size
 
         j = 1
         cum_sum = 0
