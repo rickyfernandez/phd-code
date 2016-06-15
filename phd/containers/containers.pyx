@@ -186,7 +186,7 @@ cdef class CarrayContainer:
         cdef str prop_type, prop, dtype
         cdef int size = index_array.size
 
-        if fields != None:
+        if fields is None:
             prop_names = self.properties.keys()
         else:
             prop_names = fields
@@ -292,8 +292,8 @@ cdef class ParticleContainer(CarrayContainer):
 
             self.register_property(num_real_parts, "w-x", "double")
             self.register_property(num_real_parts, "w-y", "double")
-            self.register_property(num_real_parts, "com-x", "double")
-            self.register_property(num_real_parts, "com-y", "double")
+            self.register_property(num_real_parts, "dcom-x", "double")
+            self.register_property(num_real_parts, "dcom-y", "double")
             self.register_property(num_real_parts, "volume", "double")
             self.register_property(num_real_parts, "radius", "double")
 
