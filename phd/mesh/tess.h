@@ -58,11 +58,11 @@ class Tess2d {
     public:
         Tess2d(void);
         void reset_tess(void);
-        int build_initial_tess(double *x, double *y, double *radius_sq, int num_particles); 
-        int update_initial_tess(double *x, double *y, int up_num_particles);
+        int build_initial_tess(double *x[3], double *radius_sq, int num_particles, double huge); 
+        int update_initial_tess(double *x[3], int up_num_particles);
         int count_number_of_faces(void);
-        int extract_geometry(double* x, double* y, double* center_of_mass_x, double* center_of_mass_y, double* volume,
-                double* face_area, double* face_comx, double* face_comy, double* face_nx, double* face_ny, int* pair_i, int* pair_j);
+        int extract_geometry(double* x[3], double* dcom[3], double* volume,
+                double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j);
 };
 
 class Tess3d {
@@ -76,14 +76,18 @@ class Tess3d {
     public:
         Tess3d(void);
         void reset_tess(void);
-        int build_initial_tess(double *x, double *y, double *z, double *radius_sq, int num_particles, double huge); 
-        int update_initial_tess(double *x, double *y, double *z, int up_num_particles);
+        int build_initial_tess(double *x[3], double *radius_sq, int num_particles, double huge); 
+        //int build_initial_tess(double *x, double *y, double *z, double *radius_sq, int num_particles, double huge); 
+        int update_initial_tess(double *x[3], int up_num_particles);
+        //int update_initial_tess(double *x, double *y, double *z, int up_num_particles);
         int count_number_of_faces(void);
-        int extract_geometry(double* x, double* y, double* z, double* center_of_mass_x, double* center_of_mass_y, double* center_of_mass_z,
-                double* volume,
-                double* face_area, double* face_comx, double* face_comy, double* face_comz,
-                double* face_nx, double* face_ny, double* face_nz,
-                int* pair_i, int* pair_j);
+        int extract_geometry(double* x[3], double* dcom[3], double* volume,
+                double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j);
+        //int extract_geometry(double* x, double* y, double* z, double* center_of_mass_x, double* center_of_mass_y, double* center_of_mass_z,
+        //        double* volume,
+        //        double* face_area, double* face_comx, double* face_comy, double* face_comz,
+        //        double* face_nx, double* face_ny, double* face_nz,
+        //        int* pair_i, int* pair_j);
 };
 
 #endif

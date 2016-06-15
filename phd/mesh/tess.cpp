@@ -29,17 +29,17 @@ void Tess2d::reset_tess(void) {
 }
 
 int Tess2d::build_initial_tess(
-        double *x,
-        double *y,
+        double *x[3],
         double *radius,
-        int num_particles) {
+        int num_particles,
+        double huge) {
     
     local_num_particles = num_particles;
 
     // gernerating vertices for the tesselation 
     std::vector<Point> particles;
     for (int i=0; i<local_num_particles; i++)
-        particles.push_back(Point(x[i], y[i]));
+        particles.push_back(Point(x[0][i], x[1][i]));
 
     // create tessellation
     ptess = (void*) new Tess;
@@ -90,18 +90,11 @@ int Tess2d::build_initial_tess(
                             (pj.y() - pos.y())*(pj.y() - pos.y()) );
                 }
 
-            // infinite face
-            // this case is considered because a particle can have all faces
-            // that are rays
-            } else if (const K::Ray_2 *ry = CGAL::object_cast<K::Ray_2>(&o)) {
+            // infinite face case is considered because a particle can
+            // have all faces that are rays
+            } else if (CGAL::object_cast<K::Ray_2>(&o)) {
 
-                const Point& pj = ry->source();
-
-                // calculate max radius from particle
-                radius_max_sq = 1.0E33;
-               // radius_max_sq = std::max( radius_max_sq,
-                //        (pj.x() - pos.x())*(pj.x() - pos.x()) + 
-                 //       (pj.y() - pos.y())*(pj.y() - pos.y()) );
+                radius_max_sq = huge;
             }
 
         } while (++ed != done);
@@ -112,8 +105,7 @@ int Tess2d::build_initial_tess(
 }
 
 int Tess2d::update_initial_tess(
-        double *x,
-        double *y,
+        double *x[3],
         int up_num_particles) {
 
     int start_num = local_num_particles;
@@ -124,7 +116,7 @@ int Tess2d::update_initial_tess(
     // create points for ghost particles 
     std::vector<Point> particles;
     for (int i=start_num; i<tot_num_particles; i++)
-        particles.push_back(Point(x[i], y[i]));
+        particles.push_back(Point(x[0][i], x[1][i]));
 
     // add ghost particles to the tess
     Vertex_handle vt;
@@ -179,16 +171,12 @@ int Tess2d::count_number_of_faces(void) {
 }
 
 int Tess2d::extract_geometry(
-        double* x,
-        double* y,
-        double* center_of_mass_x,
-        double* center_of_mass_y,
+        double* x[3],
+        double* dcom[3],
         double* volume,
         double* face_area,
-        double* face_comx,
-        double* face_comy,
-        double* face_nx,
-        double* face_ny,
+        double* face_com[3],
+        double* face_n[3],
         int* pair_i,
         int* pair_j) {
 
@@ -201,7 +189,7 @@ int Tess2d::extract_geometry(
     for (int i=0; i<local_num_particles; i++) {
 
         const Vertex_handle &vi = vt_list[i];
-        double xp = x[i], yp = y[i];
+        double xp = x[0][i], yp = x[1][i];
         double cx = 0.0, cy = 0.0, vol = 0.0;
 
         // find all edges that are incident with particle vertex
@@ -226,15 +214,12 @@ int Tess2d::extract_geometry(
 
                 const int id1 = e.first->vertex( (e.second+2)%3 )->info();
                 const int id2 = e.first->vertex( (e.second+1)%3 )->info();
-                //const int ll = e.second;
-                //const int id1 = e.first->vertex( e.first->cw(ll))->info();
-                //const int id2 = e.first->vertex( e.first->ccw(ll))->info();
 
                 const Point& p1 = sg->point(0);
                 const Point& p2 = sg->point(1);
 
-                double xn = x[id2], x1 = p1.x(), x2 = p2.x();
-                double yn = y[id2], y1 = p1.y(), y2 = p2.y();
+                double xn = x[0][id2], x1 = p1.x(), x2 = p2.x();
+                double yn = x[1][id2], y1 = p1.y(), y2 = p2.y();
 
                 // difference vector between particles
                 double xr = xn - xp;
@@ -272,12 +257,12 @@ int Tess2d::extract_geometry(
                     face_area[fc] = area;
 
                     // orientation of the face
-                    face_nx[fc] = xr/h;
-                    face_ny[fc] = yr/h;
+                    face_n[0][fc] = xr/h;
+                    face_n[1][fc] = yr/h;
 
                     // center of mass of face
-                    face_comx[fc] = fx;
-                    face_comy[fc] = fy;
+                    face_com[0][fc] = fx;
+                    face_com[1][fc] = fy;
 
                     pair_i[fc] = id1;
                     pair_j[fc] = id2;
@@ -290,9 +275,11 @@ int Tess2d::extract_geometry(
             }
         } while (++ed != done);
 
-        volume[i] = vol;
-        center_of_mass_x[i] = cx/vol;
-        center_of_mass_y[i] = cy/vol;
+        // store volume and delta com
+        volume[i] = vol;          
+        dcom[0][i] = cx/vol - xp;
+        dcom[1][i] = cy/vol - yp;
+
     }
     return 0;
 }

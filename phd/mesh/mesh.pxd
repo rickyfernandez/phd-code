@@ -1,42 +1,51 @@
 from containers.containers cimport ParticleContainer, CarrayContainer
-from boundary.boundary cimport BoundaryParallelBase
+from boundary.boundary cimport Boundary
 
 cdef extern from "tess.h":
     cdef cppclass Tess2d:
         Tess2d() except +
         void reset_tess()
-        int build_initial_tess(double *x, double *y, double *radius_sq, int num_particles)
-        int update_initial_tess(double *x, double *y, int up_num_particles)
+        int build_initial_tess(double *x[3], double *radius_sq, int num_particles, double huge)
+        int update_initial_tess(double *x[3], int up_num_particles)
         int count_number_of_faces()
-        int extract_geometry(double* x, double* y, double* center_of_mass_x, double* center_of_mass_y, double* volume,
-                double* face_area, double* face_comx, double* face_comy, double* face_nx, double* face_ny,
+        int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
+                double* face_area, double* face_com[3], double* face_n[3],
                 int* pair_i, int* pair_j)
 
     cdef cppclass Tess3d:
-        Tess3d()
+        Tess3d() except +
         void reset_tess()
-        int build_initial_tess(double *x, double *y, double *z, double *radius_sq, int num_particles, double huge)
-        int update_initial_tess(double *x, double *y, double *z, int up_num_particles)
+        int build_initial_tess(double *x[3], double *radius_sq, int num_particles, double huge)
+        int update_initial_tess(double *x[3], int up_num_particles)
         int count_number_of_faces()
-        int extract_geometry(double* x, double* y, double* z, double* center_of_mass_x, double* center_of_mass_y, double* center_of_mass_z,
-                double* volume,
-                double* face_area, double* face_comx, double* face_comy, double* face_comz,
-                double* face_nx, double* face_ny, double* face_nz,
+        int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
+                double* face_area, double* face_com[3], double* face_n[3],
                 int* pair_i, int* pair_j)
 
-cdef class MeshBase:
+cdef class PyTess:
 
-    cdef public ParticleContainer particles
-    cdef public BoundaryParallelBase boundary
+    cdef void reset_tess(self)
+    cdef int build_initial_tess(self, double *x[3], double *radius_sq, int num_particles, double huge)
+    cdef int update_initial_tess(self, double *x[3], int up_num_particles)
+    cdef int count_number_of_faces(self)
+    cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
+                double* face_area, double* face_com[3], double* face_n[3],
+                int* pair_i, int* pair_j)
+
+cdef class PyTess2d(PyTess):
+    cdef Tess2d *thisptr
+
+cdef class PyTess3d(PyTess):
+    cdef Tess3d *thisptr
+
+cdef class Mesh:
+
+    cdef public Boundary boundary
     cdef public CarrayContainer faces
     cdef public int dim
 
-    cdef _tessellate(self)
-    cdef _build_geometry(self)
+    cdef PyTess tess
 
-cdef class Mesh2d(MeshBase):
-    cdef Tess2d tess
-
-cdef class Mesh3d(MeshBase):
-    cdef Tess3d tess
-
+    cdef _tessellate(self, ParticleContainer pc)
+    cdef _build_geometry(self, ParticleContainer pc)
+    cdef _reset_mesh(self)
