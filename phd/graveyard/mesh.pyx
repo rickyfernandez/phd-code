@@ -1,8 +1,8 @@
-from utils.particle_tags import ParticleTAGS
+from ..utils.particle_tags import ParticleTAGS
 import numpy as np
 
-from containers.containers cimport CarrayContainer, ParticleContainer
-from utils.carray cimport DoubleArray, IntArray, LongLongArray
+from ..containers.containers cimport CarrayContainer, ParticleContainer
+from ..utils.carray cimport DoubleArray, IntArray, LongLongArray
 from libc.math cimport sqrt, atan2, sin, cos
 cimport numpy as np
 cimport cython

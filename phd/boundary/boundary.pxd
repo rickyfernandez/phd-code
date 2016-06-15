@@ -1,10 +1,12 @@
 
 cimport numpy as np
-from utils.carray cimport LongArray
-from load_balance.tree cimport Tree
-from domain.domain cimport DomainLimits
-from load_balance.load_balance cimport LoadBalance
-from containers.containers cimport ParticleContainer, CarrayContainer
+from ..utils.particle_tags import ParticleTAGS
+from ..utils.exchange_particles import exchange_particles
+from ..utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
+from ..load_balance.tree cimport Tree, Node
+from ..domain.domain cimport DomainLimits
+from ..load_balance.load_balance cimport LoadBalance
+from ..containers.containers cimport ParticleContainer, CarrayContainer
 
 cdef extern from "particle.h":
     cdef cppclass Particle:

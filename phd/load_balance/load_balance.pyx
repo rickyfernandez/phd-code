@@ -1,11 +1,11 @@
 import numpy as np
 from mpi4py import MPI
-from utils.particle_tags import ParticleTAGS
-from utils.exchange_particles import exchange_particles
+from ..utils.particle_tags import ParticleTAGS
+from ..utils.exchange_particles import exchange_particles
 
 from .tree cimport Node
-from domain.domain cimport DomainLimits
-from hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
+from ..domain.domain cimport DomainLimits
+from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 
 
 cdef class LoadBalance:

@@ -1,9 +1,9 @@
-from utils.particle_tags import ParticleTAGS
+from ..utils.particle_tags import ParticleTAGS
 
-from mesh.mesh cimport Mesh
-from riemann.riemann cimport RiemannBase
-from containers.containers cimport CarrayContainer
-from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
+from ..mesh.mesh cimport Mesh
+from ..riemann.riemann cimport RiemannBase
+from ..containers.containers cimport CarrayContainer
+from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 from libc.math cimport sqrt, fabs, fmin, pow
 
 import numpy as np

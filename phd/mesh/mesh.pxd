@@ -1,5 +1,5 @@
-from containers.containers cimport ParticleContainer, CarrayContainer
-from boundary.boundary cimport Boundary
+from ..containers.containers cimport ParticleContainer, CarrayContainer
+from ..boundary.boundary cimport Boundary
 
 cdef extern from "tess.h":
     cdef cppclass Tess2d:

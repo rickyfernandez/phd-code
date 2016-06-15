@@ -1,6 +1,6 @@
 cimport numpy as np
-from containers.containers cimport ParticleContainer
-from utils.carray cimport LongArray
+from ..containers.containers cimport ParticleContainer
+from ..utils.carray cimport LongArray
 
 ctypedef np.int64_t (*hilbert_type)(np.int32_t, np.int32_t, np.int32_t, int)
 

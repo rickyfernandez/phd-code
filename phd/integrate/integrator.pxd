@@ -1,6 +1,6 @@
-from containers.containers cimport CarrayContainer, ParticleContainer
-from riemann.riemann cimport RiemannBase
-from mesh.mesh cimport Mesh
+from ..containers.containers cimport CarrayContainer, ParticleContainer
+from ..riemann.riemann cimport RiemannBase
+from ..mesh.mesh cimport Mesh
 
 cdef class IntegrateBase:
 

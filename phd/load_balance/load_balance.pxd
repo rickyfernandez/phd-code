@@ -2,8 +2,8 @@ import numpy as np
 cimport numpy as np
 
 from .tree cimport Tree, hilbert_type
-from utils.carray cimport LongArray, LongLongArray
-from containers.containers cimport ParticleContainer
+from ..utils.carray cimport LongArray, LongLongArray
+from ..containers.containers cimport ParticleContainer
 
 
 cdef class LoadBalance:
