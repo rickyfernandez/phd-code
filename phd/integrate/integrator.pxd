@@ -1,6 +1,6 @@
 from containers.containers cimport CarrayContainer, ParticleContainer
 from riemann.riemann cimport RiemannBase
-from mesh.mesh cimport MeshBase
+from mesh.mesh cimport Mesh
 
 cdef class IntegrateBase:
 
@@ -12,7 +12,7 @@ cdef class IntegrateBase:
     cdef public double gamma
 
     cdef public RiemannBase riemann
-    cdef public MeshBase mesh
+    cdef public Mesh mesh
     cdef public int dim
 
     cdef double _compute_time_step(self)
