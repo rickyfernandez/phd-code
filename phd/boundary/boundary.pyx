@@ -415,7 +415,7 @@ cdef class Boundary:
         # container should now have ghost particles
         return pc.get_number_of_particles() - num_real_particles
 
-    cdef _update_ghost_particles(self, ParticleContainer pc, dict fields):
+    cdef _update_ghost_particles(self, ParticleContainer pc, list fields):
         """
         Transfer data from image particle to ghost particle.
 
@@ -423,7 +423,7 @@ cdef class Boundary:
         ----------
         pc : ParticleContainer
             Particle data
-        fields : dict
+        fields : list
             List of field strings to update
         """
         cdef LongArray indices = LongArray()
@@ -597,7 +597,7 @@ cdef class BoundaryParallel(Boundary):
 
         return pc.get_number_of_particles() - num_real_particles
 
-    cdef _update_ghost_particles(self, ParticleContainer pc, dict fields):
+    cdef _update_ghost_particles(self, ParticleContainer pc, list fields):
         """
         Transfer data from image particle to ghost particle. Works only in
         parallel.

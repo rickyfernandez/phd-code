@@ -29,7 +29,7 @@ cdef class Boundary:
 
     cdef _set_radius(self, ParticleContainer pc, int num_real_particles)
     cdef int _create_ghost_particles(self, ParticleContainer pc)
-    cdef _update_ghost_particles(self, ParticleContainer pc, dict fields)
+    cdef _update_ghost_particles(self, ParticleContainer pc, list fields)
 
 cdef class BoundaryParallel(Boundary):
 

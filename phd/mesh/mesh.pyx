@@ -92,7 +92,9 @@ cdef class Mesh:
                 "pair-j": "long"
                 }
 
+        self.fields = ["volume"]
         for axis in "xyz"[:dim]:
+            self.fields.append("dcom-" + axis)
             face_vars["velocity-" + axis] = "double"
             face_vars["normal-" + axis] = "double"
             face_vars["com-" + axis] = "double"
@@ -151,8 +153,6 @@ cdef class Mesh:
         cdef np.float64_t *area, *nx[3], *com[3]
         cdef np.int32_t *pair_i, *pair_j
 
-        cdef list fields = ["volume"]
-        #cdef int num_faces, i, j, fail, dim = self.boundary.domain.dim
         cdef int num_faces, i, j, fail, dim = self.dim
 
         # release memory used in the tessellation
@@ -180,11 +180,9 @@ cdef class Mesh:
         fail = self.tess.extract_geometry(x, dcom, vol,
                 area, com, nx, <int*>pair_i, <int*>pair_j)
         assert(fail != -1)
-#
-#        # transfer particle information to ghost particles
-#        for axis in "xyz"[:dim]:
-#            fields.append("dcom-" + axis)
-#        self.boundary._update_ghost_particles(pc, fields)
+
+        # transfer particle information to ghost particles
+        self.boundary._update_ghost_particles(pc, self.fields)
 
     def reset_mesh(self):
         self.tess._reset_tess()

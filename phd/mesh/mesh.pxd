@@ -43,6 +43,7 @@ cdef class Mesh:
     cdef public Boundary boundary
     cdef public CarrayContainer faces
     cdef public int dim
+    cdef public list fields
 
     cdef PyTess tess
 
