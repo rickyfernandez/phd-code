@@ -136,7 +136,6 @@ cdef class LoadBalance:
         cdef int total_work, part_per_proc
 
         self.leaf_pid.resize(global_work.size)
-        print 'number of global leaves', global_work.size
 
         total_work = global_work.sum()
         if total_work%self.size == 0:
@@ -151,10 +150,6 @@ cdef class LoadBalance:
             if cum_sum > j*part_per_proc:
                 j += 1
             self.leaf_pid.data[i] = j - 1
-
-        print self.leaf_pid.get_npy_array()
-        print 'part_per:', part_per_proc
-        print 'total work:', global_work 
 
     cdef void _collect_particles_export(self, ParticleContainer pc, LongArray part_ids,
         LongArray part_pid, LongArray leaf_pid, int my_pid):
