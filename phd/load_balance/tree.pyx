@@ -1,9 +1,9 @@
 import numpy as np
 from mpi4py import MPI
-from utils.particle_tags import ParticleTAGS
+from ..utils.particle_tags import ParticleTAGS
 
 cimport libc.stdlib as stdlib
-from hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
+from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost

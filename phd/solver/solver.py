@@ -3,7 +3,7 @@ import numpy as np
 from mpi4py import MPI
 import os
 
-from utils.particle_tags import ParticleTAGS
+from ..utils.particle_tags import ParticleTAGS
 
 # for debug plotting 
 from matplotlib.collections import LineCollection, PolyCollection, PatchCollection

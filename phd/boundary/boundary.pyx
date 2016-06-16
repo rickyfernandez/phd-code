@@ -1,10 +1,8 @@
 import numpy as np
 
+from ..utils.particle_tags import ParticleTAGS
+from ..utils.exchange_particles import exchange_particles
 from libcpp.vector cimport vector
-from load_balance.tree cimport Node
-from utils.particle_tags import ParticleTAGS
-from utils.exchange_particles import exchange_particles
-from utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost

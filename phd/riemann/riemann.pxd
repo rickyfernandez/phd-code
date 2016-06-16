@@ -1,5 +1,5 @@
-from containers.containers cimport CarrayContainer
-from reconstruction.reconstruction cimport ReconstructionBase
+from ..containers.containers cimport CarrayContainer
+from ..reconstruction.reconstruction cimport ReconstructionBase
 
 
 cdef class RiemannBase:

@@ -1,6 +1,6 @@
 cimport numpy as np
-from mesh.mesh cimport Mesh
-from containers.containers cimport CarrayContainer, ParticleContainer
+from ..mesh.mesh cimport Mesh
+from ..containers.containers cimport CarrayContainer, ParticleContainer
 
 cdef class ReconstructionBase:
 

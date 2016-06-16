@@ -1,13 +1,13 @@
 import numpy as np
 cimport numpy as np
 
-from utils.particle_tags import ParticleTAGS
+from ..utils.particle_tags import ParticleTAGS
 
-from containers.containers cimport CarrayContainer, ParticleContainer
-from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
+from ..containers.containers cimport CarrayContainer, ParticleContainer
+from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 from libc.math cimport sqrt, fmax, fmin
 cimport libc.stdlib as stdlib
-from mesh.mesh cimport Mesh
+from ..mesh.mesh cimport Mesh
 
 cdef int Real = ParticleTAGS.Real
 #cdef int Boundary = ParticleTAGS.Boundary

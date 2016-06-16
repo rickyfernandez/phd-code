@@ -3,11 +3,11 @@ cimport numpy as np
 
 cimport libc.stdlib as stdlib
 
-from utils.particle_tags import ParticleTAGS
+from ..utils.particle_tags import ParticleTAGS
 
-from boundary.boundary cimport Boundary
-from utils.carray cimport DoubleArray, LongArray, IntArray
-from containers.containers cimport ParticleContainer, CarrayContainer
+from ..boundary.boundary cimport Boundary
+from ..utils.carray cimport DoubleArray, LongArray, IntArray
+from ..containers.containers cimport ParticleContainer, CarrayContainer
 
 cdef class PyTess:
     cdef void reset_tess(self):

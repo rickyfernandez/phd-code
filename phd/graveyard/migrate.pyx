@@ -1,8 +1,8 @@
 import numpy as np
 cimport numpy as np
 
-from containers.containers cimport CarrayContainer, ParticleContainer
-from utils.carray cimport BaseArray, IntArray, LongArray
+from ..containers.containers cimport CarrayContainer, ParticleContainer
+from ..utils.carray cimport BaseArray, IntArray, LongArray
 from cpython cimport PyDict_Contains, PyDict_GetItem
 
 def transfer_migrate_particles(ParticleContainer particles, ParticleContainer import_particles):
