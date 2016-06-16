@@ -16,7 +16,7 @@ cdef int in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], in
 cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particles)
 cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles)
 cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimits domain,
-        Tree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
+        Tree glb_tree, LongArray leaf_pid, LongArray buffer_ids, LongArray buffer_pid,
         int num_real_particles, int rank)
 
 cdef class Boundary:

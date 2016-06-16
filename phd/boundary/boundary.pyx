@@ -234,7 +234,7 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
     pc.append_container(exterior_ghost)
 
 cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimits domain,
-        Tree glb_tree, np.ndarray leaf_npy, LongArray buffer_ids, LongArray buffer_pid,
+        Tree glb_tree, LongArray leaf_pid, LongArray buffer_ids, LongArray buffer_pid,
         int num_real_particles, int rank):
     """
     Create periodic ghost particles in the simulation. Should only be used in
@@ -254,8 +254,8 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
         Information of the domain size and coordinates
     tree : Tree
         Global tree used in load balance, used for searches
-    leaf_npy : np.ndarray
-        Each leaf has an index to leaf_npy, value is processor id where leaf lives in
+    leaf_pid : LongArray
+        Each leaf has an index to leaf_pid, value is processor id where leaf lives in
     buffer_ids : LongArray
         The local id used to create the ghost particle
     buffer_pids : LongArray
@@ -321,7 +321,7 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
                     # find neighboring processors
                     nbrs_pid.reset()
                     glb_tree.get_nearest_process_neighbors(
-                            xs, r.data[i], leaf_npy, rank, nbrs_pid)
+                            xs, r.data[i], leaf_pid, rank, nbrs_pid)
 
                     if nbrs_pid.length != 0:
 
@@ -478,8 +478,9 @@ cdef class BoundaryParallel(Boundary):
         cdef Node* node
         cdef Tree glb_tree = self.load_bal.tree
 
+        cdef LongArray leaf_pid = self.load_bal.leaf_pid
         cdef LongArray nbrs_pid = LongArray()
-        cdef np.ndarray nbrs_pid_npy, leaf_npy
+        cdef np.ndarray nbrs_pid_npy
 
         cdef np.float64_t *x[3]
         cdef double xp[3]
@@ -487,7 +488,6 @@ cdef class BoundaryParallel(Boundary):
         cdef int i, j, dim = self.domain.dim
 
         pc.extract_field_vec_ptr(x, "position")
-        leaf_npy = self.load_bal.leaf_proc
 
         for i in range(num_real_particles):
 
@@ -501,7 +501,7 @@ cdef class BoundaryParallel(Boundary):
             # find overlaping processors
             nbrs_pid.reset()
             glb_tree.get_nearest_process_neighbors(
-                    xp, r.data[i], leaf_npy, self.rank, nbrs_pid)
+                    xp, r.data[i], leaf_pid, self.rank, nbrs_pid)
 
             if nbrs_pid.length:
 
@@ -561,7 +561,7 @@ cdef class BoundaryParallel(Boundary):
             self.start_ghost = pc.get_number_of_particles()
         if self.boundary_type == BoundaryType.Periodic:
             _periodic_parallel(pc, ghost, self.domain, self.load_bal.tree,
-                    self.load_bal.leaf_proc, self.buffer_ids, self.buffer_pid,
+                    self.load_bal.leaf_pid, self.buffer_ids, self.buffer_pid,
                     num_real_particles, self.rank)
             # periodic ghost are not appendend to pc
             self.start_ghost = num_real_particles
@@ -614,11 +614,11 @@ cdef class BoundaryParallel(Boundary):
 
         # reflective is a special case
         if self.boundary_type == BoundaryType.Reflective:
-            self.Boundary._update_ghost_particles(pc)
+            Boundary._update_ghost_particles(self, pc, fields)
 
         ghost = pc.extract_items(self.buffer_ids.get_npy_array(), fields)
         exchange_particles(pc, ghost, self.send_particles, self.recv_particles,
-                self.ghost_start, self.comm, fields)
+                self.start_ghost, self.comm, fields)
 
     cdef migrate_boundary_particles(self, ParticleContainer pc):
         """
