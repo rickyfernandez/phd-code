@@ -1,11 +1,31 @@
+import os
+import glob
 
 from distutils.core import setup
 from distutils.extension import Extension
+#from setuptools.extension import Extension
+#from setuptools import find_packages
 
 from Cython.Distutils import build_ext
 from Cython.Build import cythonize
 
 import numpy as np
+
+#packages = find_packages()
+#package_data = dict((pkg, ['*.pxd']) for pkg in packages)
+#
+#extensions = []
+#for package in packages:
+#    subdir = package.replace(".", os.path.sep)
+#    if len(glob.glob(os.path.join(subdir, '*.pyx'))) == 0: continue
+#    extensions.append(
+#            Extension(package + ".*",
+#                [os.path.join(subdir, "*.pyx")],
+#                include_dirs=[np.get_include()]
+#                )
+
+
+#print os.getcwd(), type(os.getcwd())
 
 extensions = []
 utils = Extension("phd.utils.*",
@@ -54,32 +74,26 @@ load_balance = Extension("phd.load_balance.*",
         )
 extensions.append(load_balance)
 
-#reconstruction = Extension("phd.reconstruction.*",
-#        ["phd/reconstruction/*.pyx"],
-#        include_dirs=[np.get_include(), "m", "/Users/Ricky/repo/moving-mesh/phd/mesh/", "/Users/Ricky/repo/moving-mesh/phd/boundary/"],
-#        language="c++"
-#        )
-#extensions.append(reconstruction)
+reconstruction = Extension("phd.reconstruction.*",
+        ["phd/reconstruction/*.pyx"],
+        include_dirs=[np.get_include(), "m", "/Users/Ricky/repo/moving-mesh/phd/mesh/", "/Users/Ricky/repo/moving-mesh/phd/boundary/"],
+        language="c++"
+        )
+extensions.append(reconstruction)
 
-#riemann = Extension("phd.riemann.*",
-#        ["phd/riemann/*.pyx"],
-#        include_dirs=[np.get_include(), "m", "/Users/Ricky/repo/moving-mesh/phd/mesh/", "/Users/Ricky/repo/moving-mesh/phd/boundary/"],
-#        language="c++"
-#        )
-#extensions.append(riemann)
+riemann = Extension("phd.riemann.*",
+        ["phd/riemann/*.pyx"],
+        include_dirs=[np.get_include(), "m", "/Users/Ricky/repo/moving-mesh/phd/mesh/", "/Users/Ricky/repo/moving-mesh/phd/boundary/"],
+        language="c++"
+        )
+extensions.append(riemann)
 
-#integrate = Extension("phd.integrate.*",
-#        ["phd/integrate/*.pyx"],
-#        include_dirs=[np.get_include(), "m", "/Users/Ricky/repo/moving-mesh/phd/mesh/", "/Users/Ricky/repo/moving-mesh/phd/boundary"],
-#        language="c++"
-#        )
-#extensions.append(integrate)
-
-#ngb = Extension("phd.ngb.*",
-#        ["phd/ngb/*.pyx"],
-#        include_dirs=[np.get_include()]
-#        )
-#extensions.append(ngb)
+integrate = Extension("phd.integrate.*",
+        ["phd/integrate/*.pyx"],
+        include_dirs=[np.get_include(), "m", "/Users/Ricky/repo/moving-mesh/phd/mesh/", "/Users/Ricky/repo/moving-mesh/phd/boundary"],
+        language="c++"
+        )
+extensions.append(integrate)
 
 setup(
         name="phd",
@@ -88,18 +102,10 @@ setup(
         license="MIT",
         cmdclass={'build_ext':build_ext},
         ext_modules=cythonize(extensions),
-        packages=["phd", "phd.utils", "phd.containers", "phd.domain", "phd.hilbert", "phd.load_balance", "phd.boundary",
-             "phd.mesh"],
-        #packages=["phd", "phd.utils", "phd.containers", "phd.domain", "phd.reconstruction",
-        #    "phd.riemann", "phd.integrate", "phd.hilbert", "phd.mesh", "phd.load_balance", "phd.boundary"],
-        #    #"phd.riemann", "phd.integrate", "phd.hilbert", "phd.mesh", "phd.load_balance", "phd.boundary", "phd.ngb"],
-        package_data={'phd.utils':['*.pxd'], 'phd.containers':['*.pxd'],
+        packages=["phd", "phd.utils", "phd.containers", "phd.domain", "phd.reconstruction", "phd.riemann",
+            "phd.hilbert", "phd.load_balance", "phd.boundary", "phd.mesh", "phd.integrate"],
+        package_data={'phd.utils':['*.pxd'], 'phd.containers':['*.pxd'], 'phd.integrate':['*.pxd'],
             'phd.domain':['*.pxd'], 'phd.hilbert':['*.pxd'], 'phd.load_balance':['*.pxd'], 'phd.boundary':['*.pxd'],
-            'phd.mesh':['*.pxd']
-        #package_data={'phd.utils':['*.pxd'], 'phd.containers':['*.pxd'],
-        #    'phd.domain':['*.pxd'], 'phd.reconstruction':['*.pxd'], 'phd.riemann':['*.pxd'],
-        #    'phd.integrate':['*.pxd'], 'phd.hilbert':['*.pxd'], 'phd.mesh':['*.pxd'],
-        #    'phd.load_balance':['*.pxd'], 'phd.boundary':['*.pxd'],
-        #    #'phd.load_balance':['*.pxd'], 'phd.boundary':['*.pxd'], 'phd.ngb':['*.pxd'],
+            'phd.mesh':['*.pxd'], 'phd.load_balance':['*.pxd'],
             },
         )
