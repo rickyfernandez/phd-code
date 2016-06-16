@@ -74,5 +74,5 @@ cdef class Tree:
 
     cdef Node* find_leaf(self, np.int64_t key)
     cdef int get_nearest_process_neighbors(self, double center[3], double h,
-            np.ndarray[np.int32_t, ndim=1] leaf_proc, int rank, LongArray nbrs)
+            LongArray leaf_pid, int rank, LongArray nbrs)
     cdef void _neighbors(self, Node* node, double smin[3], double smax[3], np.int32_t* leaf_proc, int rank, LongArray nbrs)

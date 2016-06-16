@@ -37,9 +37,11 @@ cdef class LoadBalance:
 
         self.corner = np.zeros(3, dtype=np.float64)
         for i in range(domain.dim):
-            self.corner[i] = (domain[0,i] + domain[1,i])*0.5 - 0.5*self.box_length
+            self.corner[i] = (domain.bounds[0][i] + domain.bounds[1][i])*0.5 - 0.5*self.box_length
 
         self.leaf_pid = LongArray()
+        self.export_ids = LongArray()
+        self.export_pid = LongArray()
 
         if domain.dim == 2:
             self.hilbert_func = hilbert_key_2d
@@ -58,6 +60,8 @@ cdef class LoadBalance:
         cdef sendbuf, recvbuf
         cdef np.ndarray export_ids_npy, export_pid_npy
         cdef np.ndarray local_work, global_work
+
+        cdef int temp
 
         # remove current (if any) ghost particles
         pc.remove_tagged_particles(ParticleTAGS.Ghost)
@@ -78,36 +82,37 @@ cdef class LoadBalance:
         # collect particle for export
         self.export_ids.reset()
         self.export_pid.reset()
-#        self.collect_particles_export(pc, self.export_ids, self.export_pid,
-#                self.leaf_pid, self.rank)
-#
-#        # arrange particles in process order
-#        export_ids_npy = self.export_ids.get_npy_array()
-#        export_pid_npy = self.export_pid.get_npy_array()
-#
-#        ind = export_pid_npy.argsort()
-#        export_ids_npy[:] = export_ids_npy[ind]
-#        export_pid_npy[:] = export_pid_npy[ind]
-#
-#        # count number of particles to send to each process
-#        recvbuf = np.zeros(self.size, dtype=np.int32)
-#        sendbuf = np.bincount(export_pid_npy,
-#                minlength=self.size).astype(np.int32)
-#
-#        # how many particles are being sent from each process
-#        self.comm.Alltoall(sendbuf=sendbuf, recvbuf=recvbuf)
-#
-#        # extract particles to send 
-#        send_data = pc.get_sendbufs(export_ids_npy)
-#        pc.remove_items(export_ids_npy)
-#
-#        # exchange load balance particles
-#        self.particles.extend(np.sum(recvbuf))
-#        exchange_particles(pc, send_data, sendbuf, recvbuf,
-#                pc.get_number_of_particles(), self.comm)
-#
-#        pc.align_particles()
-#        pc['process'][:] = self.rank
+        self._collect_particles_export(pc, self.export_ids, self.export_pid,
+                self.leaf_pid, self.rank)
+
+        # arrange particles in process order
+        export_ids_npy = self.export_ids.get_npy_array()
+        export_pid_npy = self.export_pid.get_npy_array()
+
+        ind = export_pid_npy.argsort()
+        export_ids_npy[:] = export_ids_npy[ind]
+        export_pid_npy[:] = export_pid_npy[ind]
+
+        # count number of particles to send to each process
+        recvbuf = np.zeros(self.size, dtype=np.int32)
+        sendbuf = np.bincount(export_pid_npy,
+                minlength=self.size).astype(np.int32)
+
+        # how many particles are being sent from each process
+        self.comm.Alltoall(sendbuf=sendbuf, recvbuf=recvbuf)
+
+        # extract particles to send 
+        send_data = pc.get_sendbufs(export_ids_npy)
+        pc.remove_items(export_ids_npy)
+        temp = pc.get_number_of_particles()
+
+        # exchange load balance particles
+        pc.extend(np.sum(recvbuf))
+        exchange_particles(pc, send_data, sendbuf, recvbuf,
+                temp, self.comm)
+
+        pc.align_particles()
+        pc['process'][:] = self.rank
 
     cdef void _calculate_local_work(self, ParticleContainer pc, np.ndarray work):
         """Calculate global work by calculating local work in each leaf. Then sum
@@ -128,11 +133,16 @@ cdef class LoadBalance:
         has roughly equal work load.
         """
         cdef int i, j, cum_sum
-        cdef double part_per_proc
+        cdef int total_work, part_per_proc
 
-        #self.leaf_pid = np.zeros(global_work.size, dtype=np.int32)
         self.leaf_pid.resize(global_work.size)
-        part_per_proc = global_work.sum()/self.size
+        print 'number of global leaves', global_work.size
+
+        total_work = global_work.sum()
+        if total_work%self.size == 0:
+            part_per_proc = total_work/self.size
+        else:
+            part_per_proc = total_work/self.size + 1
 
         j = 1
         cum_sum = 0
@@ -141,6 +151,10 @@ cdef class LoadBalance:
             if cum_sum > j*part_per_proc:
                 j += 1
             self.leaf_pid.data[i] = j - 1
+
+        print self.leaf_pid.get_npy_array()
+        print 'part_per:', part_per_proc
+        print 'total work:', global_work 
 
     cdef void _collect_particles_export(self, ParticleContainer pc, LongArray part_ids,
         LongArray part_pid, LongArray leaf_pid, int my_pid):
