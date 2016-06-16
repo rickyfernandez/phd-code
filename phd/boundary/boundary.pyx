@@ -1,5 +1,7 @@
 import numpy as np
 
+from ..utils.particle_tags import ParticleTAGS
+from ..utils.exchange_particles import exchange_particles
 from libcpp.vector cimport vector
 
 cdef int Real = ParticleTAGS.Real

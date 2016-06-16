@@ -1,7 +1,5 @@
 
 cimport numpy as np
-from ..utils.particle_tags import ParticleTAGS
-from ..utils.exchange_particles import exchange_particles
 from ..utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 from ..load_balance.tree cimport Tree, Node
 from ..domain.domain cimport DomainLimits
