@@ -19,6 +19,9 @@ cdef class LoadBalance:
     cdef public np.float64_t factor
     cdef public np.float64_t box_length
 
+    cdef public export_ids
+    cdef public export_pid
+
     cdef public Tree tree
     cdef public LongArray leaf_pid
 

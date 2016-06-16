@@ -476,7 +476,7 @@ cdef class Tree:
         return node
 
     cdef int get_nearest_process_neighbors(self, double center[3], double h,
-            np.ndarray[np.int32_t, ndim=1] leaf_proc, int rank, LongArray nbrs):
+            LongArray leaf_pid, int rank, LongArray nbrs):
         """
         Gather all processors enclosed in square.
 
@@ -486,7 +486,7 @@ cdef class Tree:
             Center of search square in physical space.
         h : double
             Box length of search square in physical space.
-        leaf_proc : np.ndarray
+        leaf_pid : LongArray
             Array of processors ids, index corresponds to a leaf in global tree.
         rank : int
             Current processor.
@@ -502,19 +502,19 @@ cdef class Tree:
             smin[i] = ((center[i] - h) - self.domain_corner[i])*self.domain_fac
             smax[i] = ((center[i] + h) - self.domain_corner[i])*self.domain_fac
 
-        self._neighbors(self.root, smin, smax, &leaf_proc[0], rank, nbrs)
+        self._neighbors(self.root, smin, smax, leaf_pid.data, rank, nbrs)
 
         # return number of processors found
         return nbrs.length
 
-    cdef void _neighbors(self, Node* node, double smin[3], double smax[3], np.int32_t* leaf_proc, int rank, LongArray nbrs):
+    cdef void _neighbors(self, Node* node, double smin[3], double smax[3], np.int32_t* leaf_pid, int rank, LongArray nbrs):
         cdef int i
 
         # is node a leaf
         if node.children_start == -1:
             # dont count nodes on our process
-            if rank != leaf_proc[node.array_index]:
-                nbrs.append(leaf_proc[node.array_index])
+            if rank != leaf_pid[node.array_index]:
+                nbrs.append(leaf_pid[node.array_index])
 
         else:
             # does search box overlap with node
@@ -524,7 +524,7 @@ cdef class Tree:
 
             # node overlaps open sub nodes
             for i in range(1 << self.dim):
-                self._neighbors(node + node.children_start + i, smin, smax, leaf_proc, rank, nbrs)
+                self._neighbors(node + node.children_start + i, smin, smax, leaf_pid, rank, nbrs)
 
     # temporary function to do outputs in python
     def dump_data(self):

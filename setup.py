@@ -1,6 +1,10 @@
 import os
+import glob
+
 from distutils.core import setup
-from distutils.extension import Extension
+#from distutils.extension import Extension
+from setuptools.extension import Extension
+from setuptools import find_packages
 
 from Cython.Distutils import build_ext
 from Cython.Build import cythonize
@@ -12,11 +16,11 @@ subdirs = [
         "phd/containers/",
         "phd/domain/",
         "phd/hilbert/",
-        "phd/mesh/",
         "phd/boundary/",
         "phd/load_balance/",
-        "phd/reconstruction/",
         "phd/riemann/",
+        "phd/mesh/",
+        "phd/reconstruction/",
         "phd/integrate/",
 ]
 
@@ -24,10 +28,14 @@ cpp = ("mesh", "boundary", "reconstruction", "riemann", "integrate")
 
 extensions = []
 for subdir in subdirs:
+    sources = [os.path.join(subdir, "*.pyx")]
+    if "mesh" in subdir:
+        sources += ["phd/mesh/tess.cpp", "phd/mesh/tess3.cpp"]
     extensions.append(
             Extension(subdir.replace("/", ".") + ".*",
-                [os.path.join(subdir, "*.pyx")],
-                include_dirs = [np.get_include()] + subdirs,
+                sources, include_dirs = [np.get_include()] + subdirs,
+                libraries=["CGAL", "gmp", "m"],
+                define_macros=[("CGAL_NDEBUG",1)],
             )
     )
     if any(_ in subdir for _ in cpp):
@@ -40,7 +48,6 @@ setup(
         license="MIT",
         cmdclass={'build_ext':build_ext},
         ext_modules=cythonize(extensions),
-        packages=["phd", "phd.utils", "phd.containers", "phd.domain", "phd.hilbert", "phd.load_balance", "phd.boundary",
-             "phd.mesh"],
+        packages=find_packages(),
         package_data={'':['*.pxd']},
 )

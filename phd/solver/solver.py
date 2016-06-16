@@ -12,123 +12,12 @@ from matplotlib.patches import Rectangle
 import matplotlib.pyplot as plt
 import matplotlib
 
-#def vor_plot2(pc, mesh, iteration_count):
-#
-#    # debugging plot --- turn to a routine later ---
-#    l = []
-#    ii = 0; jj = 0
-#    for i in range(pc.get_number_of_particles()):
-#
-#        jj += mesh['number of neighbors'][i]*2
-#
-#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary:
-#
-#            verts_indices = np.unique(mesh['faces'][ii:jj])
-#            verts = mesh['voronoi vertices'][verts_indices]
-#
-#            # coordinates of neighbors relative to particle p
-#            xc = verts[:,0] - pc['position-x'][i]
-#            yc = verts[:,1] - pc['position-y'][i]
-#
-#            # sort in counter clock wise order
-#            sorted_vertices = np.argsort(np.angle(xc+1j*yc))
-#            verts = verts[sorted_vertices]
-#
-#            l.append(Polygon(verts, True))
-#
-#        ii = jj
-#
-#    dens = pc['density']
-#
-#    # add colormap
-#    colors = []
-#    for i in range(pc.get_number_of_particles()):
-#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary:
-#            colors.append(dens[i])
-#
-#    fig, ax = plt.subplots()
-#    p = PatchCollection(l, alpha=0.4)
-#    p.set_array(np.array(colors))
-#    p.set_clim([0, 4])
-#
-#    ax.set_xlim(0,1)
-#    ax.set_ylim(0,1)
-#    ax.add_collection(p)
-#    ax.set_aspect('equal')
-#
-#    plt.colorbar(p)
-#    plt.savefig('test_'+ `iteration_count`.zfill(4) + '.pdf', format='pdf')
-#
-#    plt.cla()
-#    plt.clf()
-#
-###def vor_plot(pc, mesh, rank, load_balance):
-#def vor_plot(pc, mesh, rank):
-#
-#    # debugging plot --- turn to a routine later ---
-#    l = []
-#    ii = 0; jj = 0
-#    for i in range(pc.get_number_of_particles()):
-#
-#        jj += mesh['number of neighbors'][i]*2
-#
-#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary or pc['type'][i] == ParticleTAGS.BoundarySecond:
-#
-#            verts_indices = np.unique(mesh['faces'][ii:jj])
-#            verts = mesh['voronoi vertices'][verts_indices]
-#
-#            # coordinates of neighbors relative to particle p
-#            xc = verts[:,0] - pc['position-x'][i]
-#            yc = verts[:,1] - pc['position-y'][i]
-#
-#            # sort in counter clock wise order
-#            sorted_vertices = np.argsort(np.angle(xc+1j*yc))
-#            verts = verts[sorted_vertices]
-#
-#            l.append(Polygon(verts, True))
-#
-#        ii = jj
-#
-#    colors = []
-#    for i in range(pc.get_number_of_particles()):
-#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary or pc['type'][i] == ParticleTAGS.BoundarySecond:
-#            colors.append(pc["density"][i])
-#
-#    fig, ax = plt.subplots()
-#    p = PatchCollection(l, alpha=0.4)
-#    p.set_array(np.array(colors))
-#    p.set_clim([0, 4])
-#
-#    ax.set_xlim(-.1,1.1)
-#    ax.set_ylim(-.1,1.1)
-#    ax.add_collection(p)
-#    ax.set_aspect('equal')
-#
-##    current_axis = plt.gca()
-##    for node in load_balance.global_tree.dump_data():
-##        x = node[0]/2.0**load_balance.order
-##        y = node[1]/2.0**load_balance.order
-##        w = node[2]/2.0**load_balance.order
-##        current_axis.add_patch(Rectangle((x-.5*w, y-.5*w), w, w, fill=None))
-#
-#    tag = pc['type']
-##    ghost = tag == 0
-##    plt.scatter(pc['position-x'][ghost], pc['position-y'][ghost], marker=".", color='lightsteelblue')
-#    exterior = tag == 2
-#    plt.scatter(pc['position-x'][exterior], pc['position-y'][exterior], marker=".", color='red')
-#    exterior = tag == 8
-#    plt.scatter(pc['position-x'][exterior], pc['position-y'][exterior], marker=".", color='cyan')
-#
-#
-#    plt.savefig("plot_init_proc_%d.pdf" % rank, format='pdf')
-#    plt.clf()
 
 class Solver(object):
     """Solver object that marshalls the simulation."""
     def __init__(
-        #self, mesh, integrator, boundary, domain, tf=1.0, dt=1e-3, cfl=0.5, pfreq=100, tfreq=100., fname='simulation',
-        self, integrator, tf=1.0, dt=1e-3, cfl=0.5, pfreq=100, tfreq=100., fname='simulation',
-        outdir=None, iteration_count=0, current_time=0.):
+        self, integrator, tf=1.0, dt=1e-3, cfl=0.5, pfreq=100, tfreq=100., relax_num_iterations=0, output_relax=False,
+        fname='simulation', outdir=None, iteration_count=0, current_time=0.):
         """Constructor
 
         Parameters:
@@ -156,19 +45,22 @@ class Solver(object):
             Solver time. Initialize with non-zero for a restart
         """
         self.mesh = integrator.mesh
-        self.pc = integrator.mesh.particles
+        self.pc = integrator.particles
         self.boundary = integrator.mesh.boundary
         self.domain = integrator.mesh.boundary.domain
 
-        self.cfl = cfl
+        self.dimensions = 'xyz'[:self.mesh.dim]
 
+        self.cfl = cfl
         self.pfreq = pfreq
         self.tfreq = tfreq
         self.tf = tf
 
         self.output = 0
+        self.output_relax = output_relax
 
         # iteration iteration_counter and time
+        self.relax_num_iterations = relax_num_iterations
         self.iteration_count = iteration_count
         self.current_time = current_time
 
@@ -193,11 +85,11 @@ class Solver(object):
         current_time = self.current_time; iteration_count = self.iteration_count
         domain = self.domain; pc = self.pc
 
+        if self.relax_num_iterations != 0:
+            self._relax_geometry(self.relax_num_iterations)
+
         # create initial tessellation - including ghost particles
-        mesh.build_geometry()
-        #mesh.update_boundary_particles()
-        #mesh.update_second_boundary_particles()
-        #mesh.compute_cell_info()
+        mesh.build_geometry(pc)
 
         # convert primitive values to conserative
         self._set_initial_state_from_primitive()
@@ -205,11 +97,8 @@ class Solver(object):
         # main solver iteration
         time_counter = dt = 0.0
         while current_time < tf:
-        #for ii in range(10):
 
-            #boundary.update_ghost_particles(pc, mesh, domain)
-            #mesh.build_geometry(self.gamma)
-            mesh.build_geometry()
+            mesh.build_geometry(pc)
             self.compute_primitives()
 
             # I/O
@@ -235,10 +124,7 @@ class Solver(object):
             iteration_count += 1; current_time += dt
             time_counter += dt
 
-        #boundary.update_ghost_particles(pc, mesh, domain)
-        #mesh.build_geometry(self.gamma)
-        #vor_plot2(pc, mesh, iteration_count)
-        mesh.build_geometry()
+        mesh.build_geometry(pc)
         self.compute_primitives()
 
         # final output
@@ -261,30 +147,63 @@ class Solver(object):
     def compute_primitives(self):
         pc = self.pc
 
-        vol = self.pc['volume']
-
+        vol  = pc['volume']
         mass = pc['mass']
-        momx = pc['momentum-x']
-        momy = pc['momentum-y']
         ener = pc['energy']
 
         # update primitive variables
+        velocity_sq = 0
         pc['density'][:] = mass/vol
-        pc['velocity-x'][:] = momx/mass
-        pc['velocity-y'][:] = momy/mass
-        pc['pressure'][:] = (ener/vol - 0.5*pc['density']*(pc['velocity-x']**2 + pc['velocity-y']**2))*(self.gamma-1.0)
+        for axis in self.dimensions:
+            pc['velocity-' + axis][:] = pc['momentum-' + axis]/mass
+            velocity_sq += pc['velocity-' + axis]**2
+
+        pc['pressure'][:] = (ener/vol - 0.5*pc['density']*velocity_sq)*(self.gamma-1.0)
+
 
     def _set_initial_state_from_primitive(self):
+        pc = self.pc
 
-        vol  = self.pc['volume']
-        mass = self.pc['density']*vol
+        vol  = pc['volume']
+        mass = pc['density']*vol
 
-        self.pc['mass'][:] = mass
-        self.pc['momentum-x'][:] = self.pc['velocity-x']*mass
-        self.pc['momentum-y'][:] = self.pc['velocity-y']*mass
+        velocity_sq = 0
+        pc['mass'][:] = mass
+        for axis in self.dimensions:
+            pc['momentum-' + axis][:] = pc['velocity-' + axis]*mass
+            velocity_sq += pc['velocity-' + axis]**2
 
-        self.pc['energy'][:] = (0.5*self.pc['density']*(self.pc['velocity-x']**2 + self.pc['velocity-y']**2) +\
-                self.pc['pressure']/(self.gamma-1.0))*vol
+        pc['energy'][:] = (0.5*pc['density']*velocity_sq + pc['pressure']/(self.gamma-1.0))*vol
+
+
+    def _relax_geometry(self, num_iterations):
+
+        #lo = self.domain.xmin
+        #hi = self.domain.xmax
+        lo = self.domain[0,0]
+        hi = self.domain[1,0]
+
+        for i in range(num_iterations):
+
+            self.mesh.build_geometry(self.pc)
+
+            # move real particles towards center of mass
+            real = self.pc['tag'] == ParticleTAGS.Real
+            for axis in self.dimensions:
+                #self.pc['position-' + axis][real] = self.pc['com-' + axis][real]
+                self.pc['position-' + axis][real] += self.pc['dcom-' + axis][real]
+
+            # some real particles may have left the domain, need to relabel
+            indices = (((lo <= self.pc['position-x']) & (self.pc['position-x'] <= hi)) \
+                     & ((lo <= self.pc['position-y']) & (self.pc['position-y'] <= hi)))
+                     #& ((lo <= self.pc['position-z']) & (self.pc['position-z'] <= hi)))
+            self.pc['tag'][indices]  = ParticleTAGS.Real
+            self.pc['tag'][~indices] = ParticleTAGS.Ghost
+
+            # generate new ghost particles
+            self.mesh.build_geometry(self.pc)
+            if self.output_relax:
+                self.save(-1, self.current_time, 0)
 
 # out of comission
 #class SolverParallel(object):
@@ -479,3 +398,114 @@ class Solver(object):
 #        self.pc['energy'][:] = (0.5*self.pc['density']*(self.pc['velocity-x']**2 + self.pc['velocity-y']**2) +\
 #                self.pc['pressure']/(self.gamma-1.0))*vol
 #
+
+#def vor_plot2(pc, mesh, iteration_count):
+#
+#    # debugging plot --- turn to a routine later ---
+#    l = []
+#    ii = 0; jj = 0
+#    for i in range(pc.get_number_of_particles()):
+#
+#        jj += mesh['number of neighbors'][i]*2
+#
+#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary:
+#
+#            verts_indices = np.unique(mesh['faces'][ii:jj])
+#            verts = mesh['voronoi vertices'][verts_indices]
+#
+#            # coordinates of neighbors relative to particle p
+#            xc = verts[:,0] - pc['position-x'][i]
+#            yc = verts[:,1] - pc['position-y'][i]
+#
+#            # sort in counter clock wise order
+#            sorted_vertices = np.argsort(np.angle(xc+1j*yc))
+#            verts = verts[sorted_vertices]
+#
+#            l.append(Polygon(verts, True))
+#
+#        ii = jj
+#
+#    dens = pc['density']
+#
+#    # add colormap
+#    colors = []
+#    for i in range(pc.get_number_of_particles()):
+#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary:
+#            colors.append(dens[i])
+#
+#    fig, ax = plt.subplots()
+#    p = PatchCollection(l, alpha=0.4)
+#    p.set_array(np.array(colors))
+#    p.set_clim([0, 4])
+#
+#    ax.set_xlim(0,1)
+#    ax.set_ylim(0,1)
+#    ax.add_collection(p)
+#    ax.set_aspect('equal')
+#
+#    plt.colorbar(p)
+#    plt.savefig('test_'+ `iteration_count`.zfill(4) + '.pdf', format='pdf')
+#
+#    plt.cla()
+#    plt.clf()
+#
+###def vor_plot(pc, mesh, rank, load_balance):
+#def vor_plot(pc, mesh, rank):
+#
+#    # debugging plot --- turn to a routine later ---
+#    l = []
+#    ii = 0; jj = 0
+#    for i in range(pc.get_number_of_particles()):
+#
+#        jj += mesh['number of neighbors'][i]*2
+#
+#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary or pc['type'][i] == ParticleTAGS.BoundarySecond:
+#
+#            verts_indices = np.unique(mesh['faces'][ii:jj])
+#            verts = mesh['voronoi vertices'][verts_indices]
+#
+#            # coordinates of neighbors relative to particle p
+#            xc = verts[:,0] - pc['position-x'][i]
+#            yc = verts[:,1] - pc['position-y'][i]
+#
+#            # sort in counter clock wise order
+#            sorted_vertices = np.argsort(np.angle(xc+1j*yc))
+#            verts = verts[sorted_vertices]
+#
+#            l.append(Polygon(verts, True))
+#
+#        ii = jj
+#
+#    colors = []
+#    for i in range(pc.get_number_of_particles()):
+#        if pc['tag'][i] == ParticleTAGS.Real or pc['type'][i] == ParticleTAGS.Boundary or pc['type'][i] == ParticleTAGS.BoundarySecond:
+#            colors.append(pc["density"][i])
+#
+#    fig, ax = plt.subplots()
+#    p = PatchCollection(l, alpha=0.4)
+#    p.set_array(np.array(colors))
+#    p.set_clim([0, 4])
+#
+#    ax.set_xlim(-.1,1.1)
+#    ax.set_ylim(-.1,1.1)
+#    ax.add_collection(p)
+#    ax.set_aspect('equal')
+#
+##    current_axis = plt.gca()
+##    for node in load_balance.global_tree.dump_data():
+##        x = node[0]/2.0**load_balance.order
+##        y = node[1]/2.0**load_balance.order
+##        w = node[2]/2.0**load_balance.order
+##        current_axis.add_patch(Rectangle((x-.5*w, y-.5*w), w, w, fill=None))
+#
+#    tag = pc['type']
+##    ghost = tag == 0
+##    plt.scatter(pc['position-x'][ghost], pc['position-y'][ghost], marker=".", color='lightsteelblue')
+#    exterior = tag == 2
+#    plt.scatter(pc['position-x'][exterior], pc['position-y'][exterior], marker=".", color='red')
+#    exterior = tag == 8
+#    plt.scatter(pc['position-x'][exterior], pc['position-y'][exterior], marker=".", color='cyan')
+#
+#
+#    plt.savefig("plot_init_proc_%d.pdf" % rank, format='pdf')
+#    plt.clf()

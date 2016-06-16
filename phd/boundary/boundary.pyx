@@ -2,7 +2,7 @@ import numpy as np
 
 from libcpp.vector cimport vector
 
-cdef int Real = ParticleTAGS.REal
+cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
 cdef int Exterior = ParticleTAGS.Exterior
 cdef int Interior = ParticleTAGS.Interior
@@ -474,7 +474,7 @@ cdef class BoundaryParallel(Boundary):
         cdef CarrayContainer interior_ghost
 
         cdef Node* node
-        cdef Tree glb_tree = self.load_bal.global_tree
+        cdef Tree glb_tree = self.load_bal.tree
 
         cdef LongArray nbrs_pid = LongArray()
         cdef np.ndarray nbrs_pid_npy, leaf_npy
@@ -558,7 +558,7 @@ cdef class BoundaryParallel(Boundary):
             # reflective ghost are appendend to pc
             self.start_ghost = pc.get_number_of_particles()
         if self.boundary_type == BoundaryType.Periodic:
-            _periodic_parallel(pc, ghost, self.domain, self.load_bal.global_tree,
+            _periodic_parallel(pc, ghost, self.domain, self.load_bal.tree,
                     self.load_bal.leaf_proc, self.buffer_ids, self.buffer_pid,
                     num_real_particles, self.rank)
             # periodic ghost are not appendend to pc
