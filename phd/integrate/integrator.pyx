@@ -2,7 +2,7 @@ from utils.particle_tags import ParticleTAGS
 
 from mesh.mesh cimport Mesh
 from riemann.riemann cimport RiemannBase
-from containers.containers cimport CarrayContainer
+from containers.containers cimport CarrayContainer, ParticleContainer
 from utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 from libc.math cimport sqrt, fabs, fmin, pow
 
@@ -12,13 +12,13 @@ cimport numpy as np
 cdef int Real = ParticleTAGS.Real
 
 cdef class IntegrateBase:
-    def __init__(self, Mesh mesh, RiemannBase riemann):
+    def __init__(self, ParticleContainer pc, Mesh mesh, RiemannBase riemann):
         """Constructor for the Integrator"""
 
         self.dim = mesh.dim
         self.mesh = mesh
         self.riemann = riemann
-        self.particles = mesh.particles
+        self.particles = pc
 
         self.gamma = riemann.gamma
 
@@ -65,10 +65,10 @@ cdef class IntegrateBase:
 
 
 cdef class MovingMesh(IntegrateBase):
-    def __init__(self, Mesh mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
+    def __init__(self, ParticleContainer pc, Mesh mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
         """Constructor for the Integrator"""
 
-        IntegrateBase.__init__(self, mesh, riemann)
+        IntegrateBase.__init__(self, pc, mesh, riemann)
 
         self.regularize = regularize
         self.eta = eta
@@ -220,7 +220,7 @@ cdef class MovingMesh(IntegrateBase):
         cdef DoubleArray vol = self.particles.get_carray("volume")
 
         # local variables
-        cdef np.float64_t *x[3], *v[3], *wx[3], *cx[3]
+        cdef np.float64_t *x[3], *v[3], *wx[3], *dcx[3]
         cdef double cs, d, R
         cdef double eta = self.eta
         cdef int i, k
@@ -229,7 +229,7 @@ cdef class MovingMesh(IntegrateBase):
         self.particles.extract_field_vec_ptr(x, "position")
         self.particles.extract_field_vec_ptr(v, "velocity")
         self.particles.extract_field_vec_ptr(wx, "w")
-        self.particles.extract_field_vec_ptr(cx, "com")
+        self.particles.extract_field_vec_ptr(dcx, "dcom")
 
         for i in range(self.particles.get_number_of_particles()):
 
@@ -244,7 +244,7 @@ cdef class MovingMesh(IntegrateBase):
                 # distance form cell com to particle position
                 d = 0.0
                 for k in range(self.dim):
-                    d += (cx[k][i] - x[k][i])**2
+                    d += (dcx[k][i])**2
                 d = sqrt(d)
 
                 # approximate length of cell
@@ -256,11 +256,11 @@ cdef class MovingMesh(IntegrateBase):
                 # regularize - eq. 63
                 if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
                     for k in range(self.dim):
-                        wx[k][i] += cs*(cx[k][i] - x[k][i])*(d - 0.9*eta*R)/(d*0.2*eta*R)
+                        wx[k][i] += cs*(dcx[k][i])*(d - 0.9*eta*R)/(d*0.2*eta*R)
 
                 elif (1.1 <= d/(eta*R)):
                     for k in range(self.dim):
-                        wx[k][i] += cs*(cx[k][i] - x[k][i])/d
+                        wx[k][i] += cs*(dcx[k][i])/d
 
 
     cdef _assign_face_velocities(self):
