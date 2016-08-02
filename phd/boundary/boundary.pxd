@@ -1,10 +1,12 @@
 
 cimport numpy as np
+from ..load_balance.tree cimport hilbert_type
 from ..utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 from ..load_balance.tree cimport Tree, Node
 from ..domain.domain cimport DomainLimits
 from ..load_balance.load_balance cimport LoadBalance
 from ..containers.containers cimport ParticleContainer, CarrayContainer
+
 
 cdef extern from "particle.h":
     cdef cppclass Particle:
@@ -35,6 +37,8 @@ cdef class BoundaryParallel(Boundary):
 
     cdef public LoadBalance load_bal
 
+    cdef hilbert_type hilbert_func
+
     cdef public object comm
     cdef public int rank, size, dim
 
@@ -42,4 +46,4 @@ cdef class BoundaryParallel(Boundary):
     cdef public LongArray buffer_pid
 
     cdef CarrayContainer _create_interior_ghost_particles(self, ParticleContainer pc, int num_real_particles)
-    cdef migrate_boundary_particles(self, ParticleContainer pc)
+    #cdef migrate_boundary_particles(self, ParticleContainer pc)

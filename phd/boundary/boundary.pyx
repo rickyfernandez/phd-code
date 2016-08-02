@@ -1,5 +1,6 @@
 import numpy as np
 
+from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.exchange_particles import exchange_particles
 from libcpp.vector cimport vector
@@ -457,8 +458,17 @@ cdef class BoundaryParallel(Boundary):
         self.buffer_ids = LongArray()
         self.buffer_pid = LongArray()
 
+        self.hilbert_func = NULL
+
         self.domain = domain
         self.boundary_type = boundary_type
+
+        if domain.dim == 2:
+            self.hilbert_func = hilbert_key_2d
+        elif domain.dim == 3:
+            self.hilbert_func = hilbert_key_3d
+        else:
+            raise RuntimeError("Wrong dimension for tree")
 
     cdef CarrayContainer _create_interior_ghost_particles(self, ParticleContainer pc, int num_real_particles):
         """
@@ -620,7 +630,7 @@ cdef class BoundaryParallel(Boundary):
         exchange_particles(pc, ghost, self.send_particles, self.recv_particles,
                 self.start_ghost, self.comm, fields)
 
-    cdef migrate_boundary_particles(self, ParticleContainer pc):
+    def migrate_boundary_particles(self, ParticleContainer pc):
         """
         After a simulation timestep in a parallel run, particles may have left processor patch.
         This routine export all particles that have left.
@@ -632,29 +642,34 @@ cdef class BoundaryParallel(Boundary):
         """
         cdef Tree tree
         cdef Node *node
-        cdef np.int64_t key
 
         cdef IntArray tags
         cdef LongLongArray keys
         cdef CarrayContainer export_pc
+
+        cdef LongArray leaf_pid
+
+        cdef dim = self.domain.dim
 
         cdef double fac
         cdef np.int32_t xh[3]
         cdef double xp[3], *x[3]
         cdef int i, j, inside, incoming_ghost, pid
 
-        cdef np.ndarray corner, leaf_pid
+        cdef np.ndarray corner
         cdef np.ndarray buf_pid, buf_ids
 
-
+        # buffers need to be locked
         pc.remove_tagged_particles(ParticleTAGS.Ghost)
-        self.buf_ids.reset()
-        self.buf_ids.reset()
+        self.buffer_ids.reset()
+        self.buffer_pid.reset()
 
+        # information to map coordinates to hilbert space
         fac = self.load_bal.fac
         corner = self.load_bal.corner
         leaf_pid = self.load_bal.leaf_pid
 
+        # reference to global tree
         glb_tree = self.load_bal.tree
 
         tags = pc.get_carray("tag")
@@ -665,34 +680,34 @@ cdef class BoundaryParallel(Boundary):
             if tags.data[i] == Real:
 
                 # did the particle leave the domain
-                inside = 0
-                if j in range(self.dim):
-                    xp[j] = x[j][i]
-                    inside += xp[j] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= xp[j]
-
-                if inside != 0: # particle has left the domain
-
-                    if self.boundary == BoundaryType.Reflective:
-                        raise RuntimeError("particle left domain in reflective boundary condition!!")
-
-                    elif self.boundary == BoundaryType.Periodic:
-
-                        # wrap particle back in domain
-                        for j in range(self.dim):
-                            if xp[j] <= self.domain.bounds[0][j]:
-                                x[j][i] += self.domain.translate[j]
-                            if xp[j] >= self.domain.bounds[1][j]:
-                                x[j][i] -= self.domain.translate[j]
+#                outside = 0
+#                if j in range(dim):
+#                    xp[j] = x[j][i]
+#                    outside += xp[j] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= xp[j]
+#
+#                if outside: # particle has left the domain
+#
+#                    if self.boundary == BoundaryType.Reflective:
+#                        raise RuntimeError("particle left domain in reflective boundary condition!!")
+#
+#                    elif self.boundary == BoundaryType.Periodic:
+#
+#                        # wrap particle back in domain
+#                        for j in range(dim):
+#                            if xp[j] <= self.domain.bounds[0][j]:
+#                                x[j][i] += self.domain.translate[j]
+#                            if xp[j] >= self.domain.bounds[1][j]:
+#                                x[j][i] -= self.domain.translate[j]
 
                 # generate new hilbert key
-                for j in range(self.dim):
+                for j in range(dim):
                     xh[j] = <np.int32_t> ( (x[j][i] - corner[j])*fac )
 
-                keys.data[i] = self.hilbert_func(xh[0], xh[1], xh[2], self.order)
+                keys.data[i] = self.load_bal.hilbert_func(xh[0], xh[1], xh[2], self.load_bal.order)
 
                 # find which processor particle lives in
                 node = glb_tree.find_leaf(keys.data[i])
-                pid  = leaf_pid[node.array_index]
+                pid  = leaf_pid.data[node.array_index]
 
                 if pid != self.rank: # flag to export
                     self.buffer_ids.append(i)
@@ -702,16 +717,26 @@ cdef class BoundaryParallel(Boundary):
         buf_pid = self.buffer_pid.get_npy_array()
         buf_ids = self.buffer_ids.get_npy_array()
 
-        # organize particle processors
-        ind = np.argsort(buf_pid)
-        buf_ids[:] = buf_ids[ind]
-        buf_pid[:] = buf_pid[ind]
+        if buf_ids.size:
 
-        export_pc = pc.extract_items(buf_ids)
+            # organize particle processors
+            ind = np.argsort(buf_pid)
+            buf_ids[:] = buf_ids[ind]
+            buf_pid[:] = buf_pid[ind]
 
-        # bin the number of particles being sent to each processor
-        self.send_particles[:] = np.bincount(buf_pid,
-                minlength=self.size).astype(np.int32)
+            export_pc = pc.extract_items(buf_ids)
+            pc.remove_items(buf_ids)
+
+            # bin the number of particles being sent to each processor
+            self.send_particles[:] = np.bincount(buf_pid,
+                    minlength=self.size).astype(np.int32)
+
+        else:
+
+            export_pc = ParticleContainer()
+            self.send_particles[:] = 0
+
+        self.start_ghost = pc.get_number_of_particles()
 
         # how many particles are you receiving from each processor
         self.recv_particles[:] = 0
@@ -723,4 +748,4 @@ cdef class BoundaryParallel(Boundary):
 
         # import ghost particles and add to container
         exchange_particles(pc, export_pc, self.send_particles, self.recv_particles,
-                pc.get_number_of_particles(), self.comm)
+                self.start_ghost, self.comm)
