@@ -176,7 +176,7 @@ cdef class MovingMesh(IntegrateBase):
         if self.dim == 2:
             R = sqrt(vol.data[0]/np.pi)
         if self.dim == 3:
-           R = pow(3.0*vol.data[0]/(4.0*np.pi), 1.0/3.0)
+            R = pow(3.0*vol.data[0]/(4.0*np.pi), 1.0/3.0)
 
         vi = 0.0
         for k in range(self.dim):
