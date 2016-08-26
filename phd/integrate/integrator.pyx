@@ -175,7 +175,7 @@ cdef class MovingMesh(IntegrateBase):
         c = sqrt(gamma*p.data[0]/r.data[0])
         if self.dim == 2:
             R = sqrt(vol.data[0]/np.pi)
-        if self.dim == 3:
+        elif self.dim == 3:
             R = pow(3.0*vol.data[0]/(4.0*np.pi), 1.0/3.0)
 
         vi = 0.0
@@ -191,7 +191,7 @@ cdef class MovingMesh(IntegrateBase):
                 # calculate approx radius of each voronoi cell
                 if self.dim == 2:
                     R = sqrt(vol.data[i]/np.pi)
-                if self.dim == 3:
+                elif self.dim == 3:
                     R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
 
                 vi = 0.0
