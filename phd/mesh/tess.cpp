@@ -243,6 +243,18 @@ int Tess2d::extract_geometry(
                 // face area in 2d is length between voronoi vertices
                 double area = std::sqrt(xe*xe + ye*ye);
 
+                // need to work on
+                //const double SMALLDIFF1 = 1.0e-10;
+                //const double area0 = area1;
+                //const double L1 = std::sqrt(area0);
+                //const double L2 = (face_centroid - ipos).abs();
+                //const double area = (L1 < SMALLDIFF1*L2) ? 0.0 : area0;
+                //
+                // ignore face
+                //if (area == 0.0)
+                //    continue;
+
+
                 // the volume of the cell is the sum of triangle areas - eq. 27
                 vol += 0.25*area*h;
 
@@ -289,5 +301,5 @@ int Tess2d::extract_geometry(
         dcom[1][i] = cy/vol - yp;
 
     }
-    return 0;
+    return fc;
 }
