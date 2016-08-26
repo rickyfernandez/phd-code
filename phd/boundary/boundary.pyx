@@ -174,7 +174,7 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
 
     cdef int dim = domain.dim
     cdef int i, j, k, index[3]
-    cdef int num_shifts = dim**3
+    cdef int num_shifts = 3**dim
     cdef LongArray indices = LongArray()
 
     pc.extract_field_vec_ptr(x, "position")
@@ -391,7 +391,7 @@ cdef class Boundary:
         cdef double box_size = self.domain.max_length
 
         for i in range(num_real_particles):
-            r.data[i] = min(0.4*box_size, r.data[i])
+            r.data[i] = min(0.5*box_size, r.data[i])
 
     cdef int _create_ghost_particles(self, ParticleContainer pc):
         """
