@@ -181,6 +181,9 @@ cdef class Mesh:
                 area, com, nx, <int*>pair_i, <int*>pair_j)
         assert(fail != -1)
 
+        # tmp for now
+        self.faces.resize(fail)
+
         # transfer particle information to ghost particles
         self.boundary._update_ghost_particles(pc, self.fields)
 
