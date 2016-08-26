@@ -1,12 +1,13 @@
 #include "tess.h"
 #include <vector>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+//#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_2.h>
 #include <CGAL/Triangulation_vertex_base_with_info_2.h> 
-#include <CGAL/Delaunay_triangulation_3.h>
-#include <CGAL/Triangulation_vertex_base_with_info_3.h> 
+#include <CGAL/number_utils.h>
 
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
+//typedef CGAL::Exact_predicates_exact_constructions_kernel K; 
 typedef CGAL::Triangulation_vertex_base_with_info_2<int, K> Vb; 
 typedef CGAL::Triangulation_data_structure_2<Vb>            Tds; 
 typedef CGAL::Delaunay_triangulation_2<K, Tds>              Tess;
@@ -88,6 +89,11 @@ int Tess2d::build_initial_tess(
                     radius_max_sq = std::max( radius_max_sq,
                             (pj.x() - pos.x())*(pj.x() - pos.x()) + 
                             (pj.y() - pos.y())*(pj.y() - pos.y()) );
+                    //radius_max_sq = std::max( radius_max_sq,
+                    //        (CGAL::to_double(pj.x()) - CGAL::to_double(pos.x()))
+                    //       *(CGAL::to_double(pj.x()) - CGAL::to_double(pos.x())) + 
+                    //        (CGAL::to_double(pj.y()) - CGAL::to_double(pos.y()))
+                    //       *(CGAL::to_double(pj.y()) - CGAL::to_double(pos.y())) );
                 }
 
             // infinite face case is considered because a particle can
@@ -220,6 +226,8 @@ int Tess2d::extract_geometry(
 
                 double xn = x[0][id2], x1 = p1.x(), x2 = p2.x();
                 double yn = x[1][id2], y1 = p1.y(), y2 = p2.y();
+                //double xn = x[0][id2], x1 = CGAL::to_double(p1.x()), x2 = CGAL::to_double(p2.x());
+                //double yn = x[1][id2], y1 = CGAL::to_double(p1.y()), y2 = CGAL::to_double(p2.y());
 
                 // difference vector between particles
                 double xr = xn - xp;
