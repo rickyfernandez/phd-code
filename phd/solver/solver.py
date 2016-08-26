@@ -1,12 +1,9 @@
+import os
 import h5py
 import numpy as np
 from mpi4py import MPI
-import os
 
 from ..utils.particle_tags import ParticleTAGS
-
-# for debug plotting 
-import matplotlib.pyplot as plt
 
 
 class Solver(object):
@@ -81,11 +78,11 @@ class Solver(object):
         current_time = self.current_time; iteration_count = self.iteration_count
         domain = self.domain; pc = self.pc
 
-        if self.relax_num_iterations != 0:
-            self._relax_geometry(self.relax_num_iterations)
-
         # create initial tessellation - including ghost particles
         mesh.build_geometry(pc)
+
+        if self.relax_num_iterations != 0:
+            self._relax_geometry(self.relax_num_iterations)
 
         # convert primitive values to conserative
         self._set_initial_state_from_primitive()
@@ -95,11 +92,11 @@ class Solver(object):
         while current_time < tf:
 
             mesh.build_geometry(pc)
-            self.compute_primitives()
+            self._compute_primitives()
 
             # I/O
             if iteration_count % self.pfreq == 0:
-                self.save(iteration_count, current_time, dt)
+                self._save(iteration_count, current_time, dt)
 
             # calculate the time step and adjust if necessary
             dt = self.cfl*integrator.compute_time_step()
@@ -111,7 +108,7 @@ class Solver(object):
 
             if ( (time_counter + dt) > self.tfreq ):
                 dt = self.tfreq - time_counter
-                self.save(iteration_count, current_time+dt, dt)
+                self._save(iteration_count, current_time+dt, dt)
                 time_counter -= dt
 
             # integrate with the corrected time step
@@ -121,26 +118,26 @@ class Solver(object):
             time_counter += dt
 
         mesh.build_geometry(pc)
-        self.compute_primitives()
+        self._compute_primitives()
 
         # final output
-        self.save(iteration_count, current_time, dt)
+        self._save(iteration_count, current_time, dt)
         self.current_time = current_time
 
-    def save(self, iteration_count, current_time, dt):
+    def _save(self, iteration_count, current_time, dt):
 
-        f = h5py.File(self.path + "/" + self.fname + `self.output`.zfill(4) + ".hdf5", "w")
+        f = h5py.File(self.path + '/' + self.fname + '_' + `self.output`.zfill(4) + '.hdf5', 'w')
         for prop in self.pc.properties.keys():
             f["/" + prop] = self.pc[prop]
 
-        f.attrs["iteration_count"] = iteration_count
-        f.attrs["time"] = current_time
-        f.attrs["dt"] = dt
+        f.attrs['iteration_count'] = iteration_count
+        f.attrs['time'] = current_time
+        f.attrs['dt'] = dt
         f.close()
 
         self.output += 1
 
-    def compute_primitives(self):
+    def _compute_primitives(self):
         pc = self.pc
 
         vol  = pc['volume']
@@ -173,35 +170,24 @@ class Solver(object):
 
 
     def _relax_geometry(self, num_iterations):
-
-        lo = self.domain[0,0]
-        hi = self.domain[1,0]
-
         for i in range(num_iterations):
-
-            self.mesh.build_geometry(self.pc)
 
             # move real particles towards center of mass
             real = self.pc['tag'] == ParticleTAGS.Real
             for axis in self.dimensions:
                 self.pc['position-' + axis][real] += self.pc['dcom-' + axis][real]
 
-            # some real particles may have left the domain, need to relabel
-            indices = (((lo <= self.pc['position-x']) & (self.pc['position-x'] <= hi)) \
-                     & ((lo <= self.pc['position-y']) & (self.pc['position-y'] <= hi)))
-                     #& ((lo <= self.pc['position-z']) & (self.pc['position-z'] <= hi)))
-            self.pc['tag'][indices]  = ParticleTAGS.Real
-            self.pc['tag'][~indices] = ParticleTAGS.Ghost
+            # some real particles may have left domain
+            self.boundary.migrate_boundary_particles(self.pc)
 
-            # generate new ghost particles
             self.mesh.build_geometry(self.pc)
             if self.output_relax:
-                self.save(-1, self.current_time, 0)
+                self._save(-1, self.current_time, 0)
 
-class SolverParallel(object):
+class SolverParallel(Solver):
     """Solver object that marshalls the simulation in parallel."""
     def __init__(
-        self, integrator, load_balance, comm=None, tf=1.0, dt=1e-3, cfl=0.5, pfreq=100, tfreq=100,
+        self, integrator, load_balance, load_balance_freq=5, comm=None, tf=1.0, dt=1e-3, cfl=0.5, pfreq=100, tfreq=100,
         relax_num_iterations=0, output_relax=False, fname='simulation',
         outdir=None, iteration_count=0, current_time=0):
         """Constructor
@@ -270,6 +256,7 @@ class SolverParallel(object):
         self.size = comm.Get_size()
 
         self.load_balance = load_balance
+        self.load_balance_freq = load_balance_freq
 
         if self.rank == 0:
             if not os.path.isdir(self.path):
@@ -285,9 +272,6 @@ class SolverParallel(object):
         domain = self.domain; pc = self.pc; load_balance = self.load_balance
         comm = self.comm
 
-        if self.relax_num_iterations != 0:
-            self._relax_geometry(self.relax_num_iterations)
-
         local_dt  = np.zeros(1)
         global_dt = np.zeros(1)
 
@@ -297,31 +281,33 @@ class SolverParallel(object):
         # create initial tessellation - including ghost particles
         mesh.build_geometry(pc)
 
+        if self.relax_num_iterations != 0:
+            self._relax_geometry(self.relax_num_iterations)
+
         # convert primitive values to conserative
         self._set_initial_state_from_primitive()
 
         # main solver iteration
         time_counter = dt = 0.0
         while current_time < tf:
-        #for i in range(13):
 
             # check if load balance is needed
-            #if self.load_balance.check():
-            #    load_balance.decomposition()
+            if iteration_count % self.load_balance_freq == 0:
+                load_balance.decomposition(pc)
 
             mesh.build_geometry(pc)
-            self.compute_primitives()
+            self._compute_primitives()
 
             # I/O
             if iteration_count % self.pfreq == 0:
-                self.save(iteration_count, current_time, dt)
+                self._save(iteration_count, current_time, dt)
 
             # calculate the time step and adjust if necessary this has to be a mpi call
             local_dt[0] = self.cfl*integrator.compute_time_step()
             comm.Allreduce(sendbuf=local_dt, recvbuf=global_dt, op=MPI.MIN)
             dt = global_dt[0]
 
-            if (current_time + dt > tf ):
+            if (current_time + dt > tf):
                 dt =  tf - current_time
 
             if self.rank == 0:
@@ -329,7 +315,7 @@ class SolverParallel(object):
 
             if ( (time_counter + dt) > self.tfreq ):
                 dt = self.tfreq - time_counter
-                self.save(iteration_count, current_time+dt, dt)
+                self._save(iteration_count, current_time+dt, dt)
                 time_counter = -dt
 
             # integrate with the corrected time step
@@ -339,26 +325,14 @@ class SolverParallel(object):
 
             boundary.migrate_boundary_particles(pc)
 
-            if self.rank == 3:
-                plt.clf()
-                #flag = pc['tag'] == 25
-                real = pc['tag'] == 0
-                #plt.scatter(pc['position-x'][flag], pc['position-y'][flag], color='red')
-                plt.scatter(pc['position-x'][real], pc['position-y'][real], color='blue')
-                plt.axvline(x=0.5)
-                plt.xlim(-0.1,1.1)
-                plt.ylim(-0.1,1.1)
-                plt.savefig('test_scatter_' + `iteration_count`.zfill(2) + '.pdf')
-
-
         mesh.build_geometry(pc)
-        self.compute_primitives()
+        self._compute_primitives()
 
         # final output
-        self.save(iteration_count, current_time, dt)
+        self._save(iteration_count, current_time, dt)
         self.current_time = current_time
 
-    def save(self, iteration_count, current_time, dt):
+    def _save(self, iteration_count, current_time, dt):
 
         output_dir = self.path + "/" + self.fname + "_" + `self.output`.zfill(4)
 
@@ -380,62 +354,19 @@ class SolverParallel(object):
 
         self.output += 1
 
-    def compute_primitives(self):
-        pc = self.pc
-
-        vol  = pc['volume']
-        mass = pc['mass']
-        ener = pc['energy']
-
-        # update primitive variables
-        velocity_sq = 0
-        pc['density'][:] = mass/vol
-        for axis in self.dimensions:
-            pc['velocity-' + axis][:] = pc['momentum-' + axis]/mass
-            velocity_sq += pc['velocity-' + axis]**2
-
-        pc['pressure'][:] = (ener/vol - 0.5*pc['density']*velocity_sq)*(self.gamma-1.0)
-
-
-    def _set_initial_state_from_primitive(self):
-        pc = self.pc
-
-        vol  = self.pc['volume']
-        mass = self.pc['density']*vol
-
-        velocity_sq = 0
-        pc['mass'][:] = mass
-        for axis in self.dimensions:
-            pc['momentum-' + axis][:] = pc['velocity-' + axis]*mass
-            velocity_sq += pc['velocity-' + axis]**2
-
-        pc['energy'][:] = (0.5*pc['density']*velocity_sq + pc['pressure']/(self.gamma-1.0))*vol
-
-
     def _relax_geometry(self, num_iterations):
-
-        lo = self.domain[0,0]
-        hi = self.domain[1,0]
-
         for i in range(num_iterations):
-
-            self.mesh.build_geometry(self.pc)
 
             # move real particles towards center of mass
             real = self.pc['tag'] == ParticleTAGS.Real
             for axis in self.dimensions:
                 self.pc['position-' + axis][real] += self.pc['dcom-' + axis][real]
 
-            # some real particles may have left the domain, need to relabel
-            indices = (((lo <= self.pc['position-x']) & (self.pc['position-x'] <= hi)) \
-                     & ((lo <= self.pc['position-y']) & (self.pc['position-y'] <= hi)))
-                     #& ((lo <= self.pc['position-z']) & (self.pc['position-z'] <= hi)))
-            self.pc['tag'][indices]  = ParticleTAGS.Real
-            self.pc['tag'][~indices] = ParticleTAGS.Ghost
-
-            self.load_balance.migrate_boundary_particles(pc)
+            # some real particles may have left domain
+            self.boundary.migrate_boundary_particles(self.pc)
+            self.load_balance.decomposition(self.pc)
 
             # generate new ghost particles
             self.mesh.build_geometry(self.pc)
             if self.output_relax:
-                self.save(-1, self.current_time, 0)
+                self._save(-1, self.current_time, 0)
