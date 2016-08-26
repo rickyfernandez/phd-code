@@ -488,14 +488,14 @@ int Tess3d::extract_geometry(
         tot_volume += cell_volume;
 
         volume[i] = cell_volume;
-        dcenter_of_mass[0][i] = cell_centroid.x;
-        dcenter_of_mass[1][i] = cell_centroid.y;
-        dcenter_of_mass[2][i] = cell_centroid.z;
+        dcenter_of_mass[0][i] = cell_centroid.x - ipos.x;
+        dcenter_of_mass[1][i] = cell_centroid.y - ipos.y;
+        dcenter_of_mass[2][i] = cell_centroid.z - ipos.z;
         //center_of_mass_x[i] = cell_centroid.x;
         //center_of_mass_y[i] = cell_centroid.y;
         //center_of_mass_z[i] = cell_centroid.z;
     }
 
-    std::cout << " total volume: " << tot_volume << std::endl;
+    //std::cout << " total volume: " << tot_volume << std::endl;
     return fc;
 }
