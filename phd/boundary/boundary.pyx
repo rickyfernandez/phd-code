@@ -443,6 +443,69 @@ cdef class Boundary:
         for field in fields:
             pc[field][indices_npy] = pc[field][map_indices_npy]
 
+    def migrate_boundary_particles(self, ParticleContainer pc):
+        """
+        After a simulation timestep in a parallel run, particles may have left processor patch.
+        This routine export all particles that have left.
+
+        Parameters
+        ----------
+        pc : ParticleContainer
+            Particle data
+        """
+        cdef IntArray tags
+
+        cdef int dim = self.domain.dim
+        cdef double xp[3], *x[3]
+        cdef int i, j, is_outside
+
+        pc.remove_tagged_particles(ParticleTAGS.Ghost)
+        tags = pc.get_carray("tag")
+        pc.extract_field_vec_ptr(x, "position")
+
+        for i in range(pc.get_number_of_particles()):
+
+            # did particle leave domain
+            is_outside = 0
+            for j in range(dim):
+                xp[j] = x[j][i]
+                is_outside += xp[j] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= xp[j]
+
+            if is_outside: # particle left domain
+                if self.boundary_type == BoundaryType.Reflective:
+                    raise RuntimeError("particle left domain in reflective boundary condition!!")
+                elif self.boundary_type == BoundaryType.Periodic:
+
+                    # wrap particle back in domain
+                    for j in range(dim):
+                        if xp[j] <= self.domain.bounds[0][j]:
+                            x[j][i] += self.domain.translate[j]
+                        if xp[j] >= self.domain.bounds[1][j]:
+                            x[j][i] -= self.domain.translate[j]
+
+    def flag_real_and_ghost(self, ParticleContainer pc):
+
+        cdef IntArray tags
+        cdef np.float64_t *x[3]
+        cdef int i, j, is_outside
+        cdef int dim = self.domain.dim
+
+        pc.remove_tagged_particles(ParticleTAGS.Ghost)
+        tags = pc.get_carray("tag")
+        pc.extract_field_vec_ptr(x, "position")
+
+        for i in range(pc.get_number_of_particles()):
+
+            # did particle leave domain
+            is_outside = 0
+            for j in range(dim):
+                is_outside += x[j][i] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= x[j][i]
+
+            if is_outside:  # particle left domain
+                tags.data[i] = Ghost
+            else:           # particle remain domain
+                tags.data[i] = Real
+
 cdef class BoundaryParallel(Boundary):
     def __init__(self, DomainLimits domain, int boundary_type, LoadBalance load_bal, object comm):
 
@@ -649,12 +712,12 @@ cdef class BoundaryParallel(Boundary):
 
         cdef LongArray leaf_pid
 
-        cdef dim = self.domain.dim
+        cdef int dim = self.domain.dim
 
         cdef double fac
         cdef np.int32_t xh[3]
         cdef double xp[3], *x[3]
-        cdef int i, j, inside, incoming_ghost, pid
+        cdef int i, j, is_outside, incoming_ghost, pid
 
         cdef np.ndarray corner
         cdef np.ndarray buf_pid, buf_ids
@@ -679,25 +742,23 @@ cdef class BoundaryParallel(Boundary):
         for i in range(pc.get_number_of_particles()):
             if tags.data[i] == Real:
 
-                # did the particle leave the domain
-#                outside = 0
-#                if j in range(dim):
-#                    xp[j] = x[j][i]
-#                    outside += xp[j] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= xp[j]
-#
-#                if outside: # particle has left the domain
-#
-#                    if self.boundary == BoundaryType.Reflective:
-#                        raise RuntimeError("particle left domain in reflective boundary condition!!")
-#
-#                    elif self.boundary == BoundaryType.Periodic:
-#
-#                        # wrap particle back in domain
-#                        for j in range(dim):
-#                            if xp[j] <= self.domain.bounds[0][j]:
-#                                x[j][i] += self.domain.translate[j]
-#                            if xp[j] >= self.domain.bounds[1][j]:
-#                                x[j][i] -= self.domain.translate[j]
+               # did the particle leave the domain
+                is_outside = 0
+                for j in range(dim):
+                    xp[j] = x[j][i]
+                    is_outside += xp[j] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= xp[j]
+
+                if is_outside: # particle left domain
+                    if self.boundary_type == BoundaryType.Reflective:
+                        raise RuntimeError("particle left domain in reflective boundary condition!!")
+                    elif self.boundary_type == BoundaryType.Periodic:
+
+                        # wrap particle back in domain
+                        for j in range(dim):
+                            if xp[j] <= self.domain.bounds[0][j]:
+                                x[j][i] += self.domain.translate[j]
+                            if xp[j] >= self.domain.bounds[1][j]:
+                                x[j][i] -= self.domain.translate[j]
 
                 # generate new hilbert key
                 for j in range(dim):
@@ -733,7 +794,7 @@ cdef class BoundaryParallel(Boundary):
 
         else:
 
-            export_pc = ParticleContainer()
+            export_pc = ParticleContainer(var_dict=pc.carray_info)
             self.send_particles[:] = 0
 
         self.start_ghost = pc.get_number_of_particles()
