@@ -1,8 +1,8 @@
 import numpy as np
 from mpi4py import MPI
-from ..utils.particle_tags import ParticleTAGS
-
 cimport libc.stdlib as stdlib
+
+from ..utils.particle_tags import ParticleTAGS
 from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 
 cdef int Real = ParticleTAGS.Real
@@ -99,7 +99,8 @@ cdef class Tree:
 
             # hilbert space min/max
             self.bounds[0][i] = 0
-            self.bounds[1][i] = pow(2, order)
+            self.bounds[1][i] = 2**order
+            #self.bounds[1][i] = 1 << order
 
         self.order = order
         self.min_in_leaf = min_in_leaf
@@ -109,7 +110,8 @@ cdef class Tree:
 
         # original info of the particle domain
         self.domain_length = domain_length
-        self.domain_fac = (1 << order)/domain_length
+        #self.domain_fac = (1 << order)/domain_length
+        self.domain_fac = (2**order)/domain_length
 
         self.dim = dim
         if dim == 2:
@@ -131,7 +133,8 @@ cdef class Tree:
         node : Node*
             Node that will be subdivided.
         """
-        cdef int num_children = 1 << self.dim
+        cdef int num_children = 2**self.dim
+        #cdef int num_children = 1 << self.dim
 
         # create children nodes
         cdef Node* new_node = self.mem_pool.get(num_children)
@@ -209,10 +212,12 @@ cdef class Tree:
         # keys in a grid of 2^order resolution per dimension
         self.root.children_start = -1
         self.root.sfc_start_key = 0
-        self.root.number_sfc_keys = pow(2, self.dim*self.order)
+        self.root.number_sfc_keys = 2**(self.dim*self.order)
+        #self.root.number_sfc_keys = 1 << (self.dim*self.order)
         self.root.particle_index_start = 0
         self.root.level = 0
-        self.root.box_length = pow(2, self.order)
+        self.root.box_length = 2**self.order
+        #self.root.box_length = 1 << self.order
         self.root.number_particles = sorted_part_keys.size
         self.root.number_segments = 0 # not used for local tree
 
@@ -239,7 +244,8 @@ cdef class Tree:
         """
         cdef Node* child
         cdef int i, child_node_index
-        cdef int num_children = 1 << self.dim
+        cdef int num_children = 2**self.dim
+        #cdef int num_children = 1 << self.dim
 
         self._create_node_children(node)
 
@@ -289,10 +295,12 @@ cdef class Tree:
         # keys in a grid of 2^order resolution per dimension
         self.root.children_start = -1
         self.root.sfc_start_key = 0
-        self.root.number_sfc_keys = pow(2, self.dim*self.order)
+        self.root.number_sfc_keys = 2**(self.dim*self.order)
+        #self.root.number_sfc_keys = 1 << (self.dim*self.order)
         self.root.particle_index_start = 0
         self.root.level = 0
-        self.root.box_length = pow(2, self.order)
+        self.root.box_length = 2**self.order
+        #self.root.box_length = 1 << self.order
         self.root.number_particles = global_num_particles
         self.root.number_segments = sorted_segm_keys.size
 
@@ -315,7 +323,8 @@ cdef class Tree:
         max_in_leaf : int
             max number of particles in a node.
         """
-        cdef int num_children = 1 << self.dim
+        cdef int num_children = 2**self.dim
+        #cdef int num_children = 1 << self.dim
         cdef int i, child_node_index
 
         self._create_node_children(node)
@@ -389,7 +398,8 @@ cdef class Tree:
         sorted_keys = np.sort(keys)
 
         # create local tree first
-        max_in_leaf = <int> (self.factor*glb_num_part/size**2)
+        max_in_leaf = <int> (self.factor*glb_num_part/(size**2))
+        #max_in_leaf = <int> (self.factor*glb_num_part/(size<<2))
         self._build_local_tree(sorted_keys, max_in_leaf)
 
         # count local number of leaves
