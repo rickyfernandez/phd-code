@@ -26,6 +26,7 @@ cdef class Boundary:
     cdef public int boundary_type
 
     cdef int start_ghost
+    cdef double scale_factor
 
     cdef np.ndarray send_particles, recv_particles
 

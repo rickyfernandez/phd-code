@@ -1,4 +1,5 @@
 import numpy as np
+cimport numpy as np
 
 from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 from ..utils.particle_tags import ParticleTAGS
@@ -369,9 +370,10 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
         ghost.append_container(exterior_ghost)
 
 cdef class Boundary:
-    def __init__(self, DomainLimits domain, int boundary_type):
+    def __init__(self, DomainLimits domain, int boundary_type, double scale_factor=0.4):
 
         self.domain = domain
+        self.scale_factor = scale_factor
         self.boundary_type = boundary_type
 
     cdef _set_radius(self, ParticleContainer pc, int num_real_particles):
@@ -389,9 +391,10 @@ cdef class Boundary:
         cdef int i
         cdef DoubleArray r = pc.get_carray("radius")
         cdef double box_size = self.domain.max_length
+        cdef double fac = self.scale_factor
 
         for i in range(num_real_particles):
-            r.data[i] = min(0.5*box_size, r.data[i])
+            r.data[i] = min(fac*box_size, r.data[i])
 
     cdef int _create_ghost_particles(self, ParticleContainer pc):
         """
@@ -507,7 +510,7 @@ cdef class Boundary:
                 tags.data[i] = Real
 
 cdef class BoundaryParallel(Boundary):
-    def __init__(self, DomainLimits domain, int boundary_type, LoadBalance load_bal, object comm):
+    def __init__(self, DomainLimits domain, int boundary_type, LoadBalance load_bal, object comm, double scale_factor=0.4):
 
         self.comm = comm
         self.rank = comm.Get_rank()
@@ -525,6 +528,7 @@ cdef class BoundaryParallel(Boundary):
 
         self.domain = domain
         self.boundary_type = boundary_type
+        self.scale_factor = scale_factor
 
         if domain.dim == 2:
             self.hilbert_func = hilbert_key_2d
@@ -556,7 +560,7 @@ cdef class BoundaryParallel(Boundary):
         cdef np.ndarray nbrs_pid_npy
 
         cdef np.float64_t *x[3]
-        cdef double xp[3]
+        cdef double xp[3], fac = self.scale_factor
 
         cdef int i, j, dim = self.domain.dim
 
@@ -566,7 +570,7 @@ cdef class BoundaryParallel(Boundary):
 
             # find size of leaf where particle lives in global tree
             node = glb_tree.find_leaf(keys.data[i])
-            r.data[i] = min(0.5*node.box_length/glb_tree.domain_fac, r.data[i])
+            r.data[i] = min(fac*node.box_length/glb_tree.domain_fac, r.data[i])
 
             for j in range(dim):
                 xp[j] = x[j][i]
