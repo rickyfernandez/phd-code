@@ -14,6 +14,7 @@
 riemann.cpp
 reconstruction.cpp
 integrator.cpp
+boundary.cpp
 mesh.cpp
 build/
 .DS_Store
