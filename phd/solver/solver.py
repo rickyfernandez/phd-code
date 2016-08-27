@@ -117,6 +117,8 @@ class Solver(object):
             iteration_count += 1; current_time += dt
             time_counter += dt
 
+            boundary.migrate_boundary_particles(pc)
+
         mesh.build_geometry(pc)
         self._compute_primitives()
 
