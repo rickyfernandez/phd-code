@@ -24,6 +24,8 @@ cdef class ParticleContainer(CarrayContainer):
     cdef readonly int num_real_particles
     cdef readonly int num_ghost_particles
 
+    cdef int dim
+
     cpdef int get_number_of_particles(self, bint real=*)
     cpdef int append_container(self, CarrayContainer carray)
     cpdef remove_tagged_particles(self, np.int8_t tag)

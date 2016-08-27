@@ -1,0 +1,30 @@
+
+1. Add vectors of vectors to store neighbor information. Neighbor inforamtion is only needed
+   for linear reconstruction at the moment. Reason on using vectors of vectors is becuase
+   we need a data structure that can be passed to cgal which is written in c++. Vectors
+   can be used in cython. Is there a better data structure to use.
+
+2. Maybe allow all classes to only be initialized by static parameters (parameters that
+   don't change during the simulation. Classes that depend on other classes would be
+   linked inside the Solver class when initialized. I would assume this would make
+   the self documenting code easier.
+
+3. Added load balance check. Compare max load, min load, average load?
+
+4. We should design and implement some type of event hooks in the integrator class. This
+   would allow a mechanism to add grackle and gravity or any other hydro solver pre/after
+   the equations are solved. This design should also be used for reconstruction/flux since
+   the fluxes can be solved in boosted or non-boosted and rotated or non-rotated coordinates.
+
+5. Add self documentating code and restart capabilities.
+
+6. Parallel initialization.
+
+7. Create a communicator class. This class would hide all parallel implementation. You should
+   just give the class buffer arrays and particle container and the class should do the rest.
+
+8. Code gravity! Gravity can use the load balance tree since it's global. Then add particles
+   to the tree such that the tree becomes more refined. Then walk the tree to create mass and
+   center of mass for each leaf/node. Finally we can walk the tree for each particle. Particles
+   that open a leaf on another processor or put in the buffer and exported to walk the node
+   in the destination processor. Then the corresponding accelerations are sent back.

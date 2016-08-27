@@ -5,22 +5,14 @@ from ..utils.particle_tags import ParticleTAGS
 from ..utils.carray cimport BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
 from cpython cimport PyDict_Contains, PyDict_GetItem
 
+
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
-
-cdef list _base_cons_fields = ['mass', 'momentum-x', 'momentum-y', 'energy']
-cdef list _base_prim_fields = ['density', 'velocity-x', 'velocity-y', 'pressure']
-cdef list _base_coords = ['position-x', 'position-y']
-cdef list _base_tags   = ['key', 'tag', 'process']
-
-cdef list _base_fields = _base_cons_fields + _base_prim_fields
-cdef list _base_properties = _base_coords + _base_fields + _base_tags
-
 
 cdef class CarrayContainer:
 
     # add a method to add extra fields
-    def __cinit__(self, int num_items=0, dict var_dict=None):
+    def __init__(self, int num_items=0, dict var_dict=None):
         """
         Create container of carrays of size num_items
 
@@ -257,7 +249,7 @@ cdef class CarrayContainer:
 cdef class ParticleContainer(CarrayContainer):
 
     # add a method to add extra fields
-    def __cinit__(self, int num_real_parts=0, dict var_dict=None):
+    def __init__(self, int num_real_parts=0, int dim=2, dict var_dict=None):
         """
         Create a particle array with property arrays of size
         num_real_particles
@@ -267,33 +259,57 @@ cdef class ParticleContainer(CarrayContainer):
         num_real_particles : int
             number of real particles that the particle array will hold
         """
+        cdef str name, dtype
+
         self.num_real_particles = num_real_parts
         self.num_ghost_particles = 0
         self.properties = {}
+        self.dim = dim
 
-        cdef str coord, field, name, dtype
+        self.carray_info = {}
 
         if var_dict == None:
 
-            for coord in _base_coords:
-                self.register_property(num_real_parts, coord)
+            # register position
+            self.register_property(num_real_parts, "position-x", "double")
+            self.register_property(num_real_parts, "position-y", "double")
 
-            for field in _base_fields:
-                self.register_property(num_real_parts, field)
+            # register primitive fields
+            self.register_property(num_real_parts, "density", "double")
+            self.register_property(num_real_parts, "velocity-x", "double")
+            self.register_property(num_real_parts, "velocity-y", "double")
+            self.register_property(num_real_parts, "pressure", "double")
 
+            # register conservative fields
+            self.register_property(num_real_parts, "mass", "double")
+            self.register_property(num_real_parts, "momentum-x", "double")
+            self.register_property(num_real_parts, "momentum-y", "double")
+            self.register_property(num_real_parts, "energy", "double")
+
+            # information for prallel runs
             self.register_property(num_real_parts, "key", "longlong")
+            self.register_property(num_real_parts, "process", "long")
+
+            # particle labels 
             self.register_property(num_real_parts, "tag", "int")
             self.register_property(num_real_parts, "type", "int")
-            self.register_property(num_real_parts, "process", "long")
             self.register_property(num_real_parts, "ids", "long")
             self.register_property(num_real_parts, "map", "long")
 
+            # particle geometry
             self.register_property(num_real_parts, "w-x", "double")
             self.register_property(num_real_parts, "w-y", "double")
             self.register_property(num_real_parts, "dcom-x", "double")
             self.register_property(num_real_parts, "dcom-y", "double")
             self.register_property(num_real_parts, "volume", "double")
             self.register_property(num_real_parts, "radius", "double")
+
+            if dim == 3:
+                self.register_property(num_real_parts, "position-z", "double")
+                self.register_property(num_real_parts, "velocity-z", "double")
+                self.register_property(num_real_parts, "momentum-z", "double")
+                self.register_property(num_real_parts, "w-z", "double")
+                self.register_property(num_real_parts, "dcom-z", "double")
 
             # set initial particle tags to be real
             self['tag'][:] = Real
