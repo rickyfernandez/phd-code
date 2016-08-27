@@ -7,8 +7,6 @@ def create_particles(gamma):
     nx = 51    # particles per dim
     n = nx*nx  # number of points
 
-    dx = Lx/nx # spacing between particles
-
     # create particle container
     pc = phd.ParticleContainer(n)
     part = 0

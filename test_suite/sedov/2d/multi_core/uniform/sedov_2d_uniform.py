@@ -2,8 +2,8 @@ import phd
 import numpy as np
 from mpi4py import MPI
 
-#to run:
-#$ mpirun -n 4 python sedov_2d_cartesian.py
+#example to run:
+#$ mpirun -n 5 python sedov_2d_cartesian.py
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -16,8 +16,6 @@ if rank == 0:
     Lx = 1.    # domain size in x
     nx = 51    # particles per dim
     n = nx*nx  # number of particles
-
-    dx = Lx/nx # spacing between particles
 
     # create particle container
     pc_root = phd.ParticleContainer(n)

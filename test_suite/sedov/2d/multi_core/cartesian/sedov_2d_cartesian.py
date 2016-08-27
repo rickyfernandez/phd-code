@@ -2,8 +2,8 @@ import phd
 import numpy as np
 from mpi4py import MPI
 
-#to run:
-#$ mpirun -n 4 python sedov_2d_cartesian.py
+#example to run:
+#$ mpirun -n 5 python sedov_2d_cartesian.py
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
