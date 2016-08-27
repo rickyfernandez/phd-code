@@ -13,10 +13,7 @@ x = f['/position-x'][indices]
 y = f['/position-y'][indices]
 z = f['/position-z'][indices]
 r = np.sqrt((x-0.5)**2 + (y-0.5)**2 + (z-0.5)**2)
-v = np.sqrt(f['/velocity-x'][:]**2 + f['/velocity-y'][:]**2 + f['/velocity-z'][:]**2)
-
-# to many particles so sample
-part = np.random.choice(np.sum(indices), 1000, replace=False)
+v = np.sqrt(f['/velocity-x'][indices]**2 + f['/velocity-y'][indices]**2 + f['/velocity-z'][indices]**2)
 
 # get the exact solution
 exact = np.loadtxt('exact_sedov_3d.dat')
@@ -29,7 +26,7 @@ u_ex = exact[:,5]   # velocity
 
 plt.figure(figsize=(8,8))
 plt.subplot(3,1,1)
-plt.scatter(r[part], f['/density'][indices][part], color='lightsteelblue', label='phd')
+plt.scatter(r, f['/density'][indices], color='lightsteelblue', label='phd')
 plt.plot(x_ex, r_ex, 'k', label='exact')
 plt.xlim(0,0.8)
 plt.ylim(-1,7)
@@ -39,14 +36,14 @@ l = plt.legend(loc='upper left', prop={'size':12})
 l.draw_frame(False)
 
 plt.subplot(3,1,2)
-plt.scatter(r[part], v[part], color='lightsteelblue')
+plt.scatter(r, v, color='lightsteelblue')
 plt.plot(x_ex, u_ex, 'k')
 plt.xlim(0,0.8)
 plt.ylim(-0.5,2.0)
 plt.ylabel('Velocity')
 
 plt.subplot(3,1,3)
-plt.scatter(r[part], f['/pressure'][indices][part], color='lightsteelblue')
+plt.scatter(r, f['/pressure'][indices], color='lightsteelblue')
 plt.plot(x_ex, p_ex, 'k')
 plt.xlim(0,0.8)
 plt.ylim(-0.5,3.0)
@@ -54,5 +51,5 @@ plt.xlabel('Position')
 plt.ylabel('Pressure')
 
 plt.tight_layout()
-plt.savefig('sedov_3d_uniform_single_core.pdf')
+plt.savefig('sedov_3d_uniform_single_core.png')
 plt.show()
