@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 
 
 # plot cartesian or uniform run
-file_name ='../single_core/cartesian/sedov_2d_cartesian_output/sedov_2d_cartesian_0139.hdf5'
-#file_name ='../single_core/uniform/sedov_2d_uniform_output/sedov_2d_uniform_0105.hdf5'
+#file_name ='../single_core/cartesian/sedov_2d_cartesian_output/sedov_2d_cartesian_0139.hdf5'
+file_name ='../single_core/uniform/sedov_2d_uniform_output/sedov_2d_uniform_0105.hdf5'
 
 f = h5py.File(file_name, 'r')
 indices = f['/tag'][:] == phd.ParticleTAGS.Real
@@ -50,5 +50,5 @@ plt.xlabel('Position')
 plt.ylabel('Pressure')
 
 plt.tight_layout()
-plt.savefig('sedov_2d_single_core.pdf')
+plt.savefig('sedov_2d_uniform_single_core.pdf')
 plt.show()

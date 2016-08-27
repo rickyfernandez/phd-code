@@ -19,6 +19,7 @@ file_name = '../multi_core/uniform/sedov_2d_uniform_output/' +\
 sedov_mc = phd.ParticleContainer()
 
 # stitch back multi-core solution
+num_procs= 5
 for i in range(5):
 
     data_file = file_name + `i`.zfill(4) + '.hdf5'
@@ -58,6 +59,8 @@ p = PatchCollection(patch, alpha=0.4)
 p.set_array(np.array(colors))
 p.set_clim([0, 4.0])
 ax = axes[0,1]
+ax.set_xlabel("X")
+ax.set_ylabel("Y")
 ax.set_xlim(0,1)
 ax.set_ylim(0,1)
 ax.add_collection(p)
@@ -77,6 +80,8 @@ p = PatchCollection(patch, cmap=cmap, norm=norm, alpha=0.4)
 p.set_array(np.array(colors))
 
 ax = axes[0,0]
+ax.set_xlabel("X")
+ax.set_ylabel("Y")
 ax.set_xlim(0,1)
 ax.set_ylim(0,1)
 ax.add_collection(p)
@@ -147,5 +152,6 @@ ax.set_xlabel('log(Volume) (SC)')
 ax.set_ylabel('log(Volume) (MC)')
 
 plt.tight_layout()
+#plt.savefig("compare_single_multi_cartesian.pdf")
 plt.savefig("compare_single_multi_uniform.pdf")
 plt.show()

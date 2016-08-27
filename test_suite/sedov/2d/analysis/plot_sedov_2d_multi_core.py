@@ -4,8 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 file_names = []
-file_ = '../multi_core/cartesian/sedov_2d_cartesian_output/sedov_2d_cartesian_0139/data0139_cpu'
-for i in range(4):
+#file_ = '../multi_core/cartesian/sedov_2d_cartesian_output/sedov_2d_cartesian_0139/data0139_cpu'
+file_ = '../multi_core/uniform/sedov_2d_uniform_output/sedov_2d_uniform_0105/data0105_cpu'
+
+num_procs = 5
+for i in range(num_procs):
     file_names.append(file_ + `i`.zfill(4) + '.hdf5')
 
 # stitch back solution from all processors
@@ -75,5 +78,6 @@ plt.xlabel('Position')
 plt.ylabel('Volume')
 
 plt.tight_layout()
-plt.savefig('sedov_2d_multi_core.pdf')
+#plt.savefig('sedov_2d_cartesian_multi_core.pdf')
+plt.savefig('sedov_2d_uniform_multi_core.pdf')
 plt.show()
