@@ -88,7 +88,7 @@ cdef class Tree:
     def __init__(self,
             np.ndarray[np.float64_t, ndim=1] corner,
             double domain_length, int dim,
-            double factor=1.0, int min_in_leaf=32, int order=21):
+            double factor, int min_in_leaf=32, int order=21):
 
         cdef int i
 
