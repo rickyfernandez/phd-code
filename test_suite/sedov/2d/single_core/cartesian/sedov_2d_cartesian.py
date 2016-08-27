@@ -8,12 +8,10 @@ def create_particles(gamma):
     n = nx*nx  # number of points
 
     dx = Lx/nx # spacing between particles
-    pert = 1e-2*dx
 
     # create particle container
     pc = phd.ParticleContainer(n)
     part = 0
-    #np.random.seed(0)
     for i in range(nx):
         for j in range(nx):
             pc['position-x'][part] = (i+0.5)*dx
@@ -30,7 +28,7 @@ def create_particles(gamma):
     cells = ((pc['position-x']-.5)**2 + (pc['position-y']-.5)**2) <= r**2
     pc['pressure'][cells] = 1.0/(dx*dx)*(gamma-1)
 
-    # zero out the velocities and set particle type
+    # zero out velocities and set particle type
     pc['velocity-x'][:] = 0.0
     pc['velocity-y'][:] = 0.0
     pc['tag'][:] = phd.ParticleTAGS.Real
