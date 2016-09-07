@@ -21,7 +21,7 @@ from phd.reconstruction.reconstruction import \
         PieceWiseConstant
 
 from phd.riemann.riemann import \
-        HLL
+        HLL, HLLC
 
 from phd.solver.solver import \
         Solver, SolverParallel
