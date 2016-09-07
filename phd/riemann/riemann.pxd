@@ -17,5 +17,5 @@ cdef class HLL(RiemannBase):
             double d_r, double u_r, double p_r,
             double gamma, double *sl, double *sc, double *sr)
 
-#cdef class HLLC(HLL):
-#    pass
+cdef class HLLC(HLL):
+    pass
