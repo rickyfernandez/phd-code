@@ -49,12 +49,6 @@ cdef class HLL(RiemannBase):
         cdef double gamma = self.gamma
         cdef int num_faces = faces.get_number_of_items()
 
-
-        #left_faces.extract_field_vec_ptr(vl, "velocity")
-        #right_faces.extract_field_vec_ptr(vr, "velocity")
-        #fluxes.extract_field_vec_ptr(fmv, "momentum")
-        #faces.extract_field_vec_ptr(nx, "normal")
-        #faces.extract_field_vec_ptr(wx, "velocity")
         left_faces.pointer_groups(vl,  left_faces.named_groups['velocity'])
         right_faces.pointer_groups(vr, right_faces.named_groups['velocity'])
         fluxes.pointer_groups(fmv, fluxes.named_groups['momentum'])
@@ -255,11 +249,6 @@ cdef class HLLC(HLL):
         cdef double gamma = self.gamma
         cdef int num_faces = faces.get_number_of_items()
 
-        #left_faces.pointer_groups(vl, "velocity")
-        #right_faces.pointer_groups(vr, "velocity")
-        #fluxes.pointer_groups(fmv, "momentum")
-        #faces.pointer_groups(nx, "normal")
-        #faces.pointer_groups(wx, "velocity")
         left_faces.pointer_groups(vl,  left_faces.named_groups['velocity'])
         right_faces.pointer_groups(vr, right_faces.named_groups['velocity'])
         fluxes.pointer_groups(fmv, fluxes.named_groups['momentum'])

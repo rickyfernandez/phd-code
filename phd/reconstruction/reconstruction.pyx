@@ -1,16 +1,14 @@
 import numpy as np
 cimport numpy as np
+cimport libc.stdlib as stdlib
+from libc.math cimport sqrt, fmax, fmin
 
+from ..mesh.mesh cimport Mesh
 from ..utils.particle_tags import ParticleTAGS
-
 from ..containers.containers cimport CarrayContainer, ParticleContainer
 from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
-from libc.math cimport sqrt, fmax, fmin
-cimport libc.stdlib as stdlib
-from ..mesh.mesh cimport Mesh
 
 cdef int Real = ParticleTAGS.Real
-#cdef int Boundary = ParticleTAGS.Boundary
 
 cdef class ReconstructionBase:
     def __init__(self):
@@ -50,10 +48,6 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef np.float64_t *v[3], *vl[3], *vr[3]
         cdef int num_faces = faces.get_number_of_items()
 
-
-        #particles.extract_field_vec_ptr(v, "velocity")
-        #left_state.extract_field_vec_ptr(vl, "velocity")
-        #right_state.extract_field_vec_ptr(vr, "velocity")
         particles.pointer_groups(v,    particles.named_groups['velocity'])
         left_state.pointer_groups(vl,  left_state.named_groups['velocity'])
         right_state.pointer_groups(vr, right_state.named_groups['velocity'])

@@ -105,12 +105,6 @@ cdef class Mesh:
                 "dcom-y"
                 ]
 
-        #for axis in "xyz"[:dim]:
-        #    self.fields.append("dcom-" + axis)
-            #face_vars["velocity-" + axis] = "double"
-            #face_vars["normal-" + axis] = "double"
-            #face_vars["com-" + axis] = "double"
-
         self.faces = CarrayContainer(var_dict=face_vars)
         self.faces.named_groups['velocity'] = ['velocity-x', 'velocity-y']
         self.faces.named_groups['normal'] = ['normal-x', 'normal-y']
@@ -138,7 +132,6 @@ cdef class Mesh:
 
         # initial mesh should only have local particles
         pc.remove_tagged_particles(ParticleTAGS.Ghost)
-        #pc.extract_field_vec_ptr(xp, "position")
         pc.pointer_groups(xp, pc.named_groups["position"])
         rp = r.get_data_ptr()
 
@@ -150,7 +143,6 @@ cdef class Mesh:
         num_ghost = self.boundary._create_ghost_particles(pc)
 
         # creating ghost may have called remalloc
-        #pc.extract_field_vec_ptr(xp, "position")
         pc.pointer_groups(xp, pc.named_groups['position'])
         self.tess.update_initial_tess(xp, num_ghost)
 
@@ -185,15 +177,11 @@ cdef class Mesh:
         self.faces.resize(num_faces)
 
         # pointers to particle data 
-        #pc.extract_field_vec_ptr(x, "position")
-        #pc.extract_field_vec_ptr(dcom, "dcom")
         pc.pointer_groups(x, pc.named_groups['position'])
         pc.pointer_groups(dcom, pc.named_groups['dcom'])
         vol = p_vol.get_data_ptr()
 
         # pointers to face data
-        #self.faces.extract_field_vec_ptr(nx, "normal")
-        #self.faces.extract_field_vec_ptr(com, "com")
         self.faces.pointer_groups(nx,  self.faces.named_groups['normal'])
         self.faces.pointer_groups(com, self.faces.named_groups['com'])
         pair_i = f_pair_i.get_data_ptr()

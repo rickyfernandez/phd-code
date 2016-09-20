@@ -18,23 +18,10 @@ cdef class IntegrateBase:
         self.dim = mesh.dim
         self.mesh = mesh
         self.riemann = riemann
-        #self.particles = pc
         self.pc = pc
 
         self.gamma = riemann.gamma
 
-        # create flux data array
-        #flux_vars = {
-        #        "mass": "double",
-        #        "momentum-x": "double",
-        #        "momentum-y": "double",
-        #        "energy": "double",
-        #        }
-        #
-        #if self.dim == 3:
-        #    flux_vars["momentum-z"] = "double"
-        #
-        #self.flux = CarrayContainer(var_dict=flux_vars)
         cdef str field
         cdef dict flux_vars = {}
         for field in pc.named_groups['conserative']:
@@ -42,24 +29,7 @@ cdef class IntegrateBase:
         self.flux = CarrayContainer(var_dict=flux_vars)
         self.flux.named_groups['momentum'] = pc.named_groups['momentum']
 
-        #self.flux.named_groups['momentum'] = ['momentum-x', 'momentum-y']
-        #if self.dim == 3:
-        #    self.flux.named_groups.append('momentum-z')
-        #
-        # create left/right face state array 
-        #state_vars = {
-        #        "density": "double",
-        #        "velocity-x": "double",
-        #        "velocity-y": "double",
-        #        "pressure": "double",
-        #        }
-        #
-        #if self.dim == 3:
-        #    state_vars["velocity-z"] = "double"
-        #
-        #self.left_state  = CarrayContainer(var_dict=state_vars)
-        #self.right_state = CarrayContainer(var_dict=state_vars)
-        state_vars = {}
+        cdef dict state_vars = {}
         for field in pc.named_groups['primitive']:
             state_vars[field] = 'double'
 
@@ -140,8 +110,6 @@ cdef class MovingMesh(IntegrateBase):
         self.riemann.solve(self.flux, self.left_state, self.right_state, self.mesh.faces,
                 t, dt, iteration_count, self.mesh.dim)
 
-        #self.particles.extract_field_vec_ptr(mv, "momentum")
-        #self.flux.extract_field_vec_ptr(fmv, "momentum")
         self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
         self.flux.pointer_groups(fmv, self.flux.named_groups['momentum'])
 
@@ -169,8 +137,6 @@ cdef class MovingMesh(IntegrateBase):
                 for k in range(self.dim):
                     mv[k][j] += dt*a*fmv[k][n]
 
-        #self.particles.extract_field_vec_ptr(x, "position")
-        #self.particles.extract_field_vec_ptr(wx, "w")
         self.pc.pointer_groups(x, self.pc.named_groups['position'])
         self.pc.pointer_groups(wx, self.pc.named_groups['w'])
 
@@ -193,8 +159,6 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i, k, npart
         cdef np.float64_t* v[3]
 
-
-        #self.particles.extract_field_vec_ptr(v, "velocity")
         self.pc.pointer_groups(v, self.pc.named_groups['velocity'])
 
         c = sqrt(gamma*p.data[0]/r.data[0])
@@ -250,11 +214,6 @@ cdef class MovingMesh(IntegrateBase):
         cdef double eta = self.eta
         cdef int i, k
 
-
-        #self.particles.extract_field_vec_ptr(x, "position")
-        #self.particles.extract_field_vec_ptr(v, "velocity")
-        #self.particles.extract_field_vec_ptr(wx, "w")
-        #self.particles.extract_field_vec_ptr(dcx, "dcom")
         self.pc.pointer_groups(x, self.pc.named_groups['position'])
         self.pc.pointer_groups(v, self.pc.named_groups['velocity'])
         self.pc.pointer_groups(wx, self.pc.named_groups['w'])
@@ -310,13 +269,9 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i, j, k, n
         cdef np.float64_t *x[3], *wx[3], *fv[3], *fcx[3]
 
-        #self.particles.extract_field_vec_ptr(x, "position")
-        #self.particles.extract_field_vec_ptr(wx, "w")
         self.pc.pointer_groups(x,  self.pc.named_groups['position'])
         self.pc.pointer_groups(wx, self.pc.named_groups['w'])
 
-        #self.mesh.faces.extract_field_vec_ptr(fv, "velocity")
-        #self.mesh.faces.extract_field_vec_ptr(fcx, "com")
         self.mesh.faces.pointer_groups(fv,  self.mesh.faces.named_groups['velocity'])
         self.mesh.faces.pointer_groups(fcx, self.mesh.faces.named_groups['com'])
 

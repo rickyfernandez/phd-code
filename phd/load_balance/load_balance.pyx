@@ -198,7 +198,6 @@ cdef class LoadBalance:
         cdef np.float64_t *x[3]
         cdef LongLongArray keys = pc.get_carray("key")
 
-        #pc.extract_field_vec_ptr(x, "position")
         pc.pointer_groups(x, pc.named_groups['position'])
 
         for i in range(pc.get_number_of_particles()):

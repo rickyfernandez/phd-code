@@ -234,17 +234,6 @@ cdef class CarrayContainer:
             prop_array = property_arrays[i]
             prop_array.remove(sorted_indices, 1)
 
-#    cdef void extract_field_vec_ptr(self, np.float64_t *vec[3], str field_name):
-#
-#        cdef int i
-#        cdef str axis, field
-#        cdef DoubleArray arr
-#
-#        for i, axis in enumerate("xyz"):
-#            field = field_name + "-" + axis
-#            if field in self.properties.keys():
-#                arr = <DoubleArray> self.get_carray(field)
-#                vec[i] = arr.get_data_ptr()
     cdef void pointer_groups(self, np.float64_t *vec[], list field_names):
         cdef int i
         cdef str field, msg
