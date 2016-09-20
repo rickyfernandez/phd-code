@@ -72,8 +72,10 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particl
     cdef dim = domain.dim
     cdef LongArray indices = LongArray()
 
-    pc.extract_field_vec_ptr(x, "position")
-    pc.extract_field_vec_ptr(v, "velocity")
+    #pc.extract_field_vec_ptr(x, "position")
+    #pc.extract_field_vec_ptr(v, "velocity")
+    pc.pointer_groups(x, pc.named_groups['position'])
+    pc.pointer_groups(v, pc.named_groups['velocity'])
 
     for i in range(num_real_particles):
         for j in range(dim):
@@ -119,8 +121,10 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particl
         exterior_ghost = pc.extract_items(indices.get_npy_array())
 
         # references to new ghost data
-        exterior_ghost.extract_field_vec_ptr(xg, "position")
-        exterior_ghost.extract_field_vec_ptr(vg, "velocity")
+        #exterior_ghost.extract_field_vec_ptr(xg, "position")
+        #exterior_ghost.extract_field_vec_ptr(vg, "velocity")
+        exterior_ghost.pointer_groups(xg, pc.named_groups['position'])
+        exterior_ghost.pointer_groups(vg, pc.named_groups['velocity'])
 
         maps = exterior_ghost.get_carray("map")
         tags = exterior_ghost.get_carray("tag")
@@ -178,7 +182,8 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
     cdef int num_shifts = 3**dim
     cdef LongArray indices = LongArray()
 
-    pc.extract_field_vec_ptr(x, "position")
+    #pc.extract_field_vec_ptr(x, "position")
+    pc.pointer_groups(x, pc.named_groups['position'])
 
     # velocities not needed set to zero
     for j in range(dim):
@@ -214,7 +219,8 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
     exterior_ghost = pc.extract_items(indices.get_npy_array())
 
     # references to new ghost data
-    exterior_ghost.extract_field_vec_ptr(xg, "position")
+    #exterior_ghost.extract_field_vec_ptr(xg, "position")
+    exterior_ghost.pointer_groups(xg, pc.named_groups['position'])
 
     maps = exterior_ghost.get_carray("map")
     tags = exterior_ghost.get_carray("tag")
@@ -290,7 +296,8 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
     cdef int num_shifts = 3**dim
     cdef int i, j, m, num_neighbors, index[3]
 
-    pc.extract_field_vec_ptr(x, "position")
+    #pc.extract_field_vec_ptr(x, "position")
+    pc.pointer_groups(x, pc.named_groups['position'])
 
     # velocities not needed set to zero
     for j in range(dim):
@@ -352,7 +359,8 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
         exterior_ghost = pc.extract_items(indices.get_npy_array())
 
         # references to new ghost data
-        exterior_ghost.extract_field_vec_ptr(xg, "position")
+        #exterior_ghost.extract_field_vec_ptr(xg, "position")
+        exterior_ghost.pointer_groups(xg, pc.named_groups['position'])
         tags = exterior_ghost.get_carray("tag")
         types = exterior_ghost.get_carray("type")
 
@@ -464,7 +472,8 @@ cdef class Boundary:
 
         pc.remove_tagged_particles(ParticleTAGS.Ghost)
         tags = pc.get_carray("tag")
-        pc.extract_field_vec_ptr(x, "position")
+        #pc.extract_field_vec_ptr(x, "position")
+        pc.pointer_groups(x, pc.named_groups['position'])
 
         for i in range(pc.get_number_of_particles()):
 
@@ -495,7 +504,8 @@ cdef class Boundary:
 
         pc.remove_tagged_particles(ParticleTAGS.Ghost)
         tags = pc.get_carray("tag")
-        pc.extract_field_vec_ptr(x, "position")
+        #pc.extract_field_vec_ptr(x, "position")
+        pc.pointer_groups(x, pc.named_groups['position'])
 
         for i in range(pc.get_number_of_particles()):
 
@@ -564,7 +574,8 @@ cdef class BoundaryParallel(Boundary):
 
         cdef int i, j, dim = self.domain.dim
 
-        pc.extract_field_vec_ptr(x, "position")
+        #pc.extract_field_vec_ptr(x, "position")
+        pc.pointer_groups(x, pc.named_groups['position'])
 
         for i in range(num_real_particles):
 
@@ -741,7 +752,8 @@ cdef class BoundaryParallel(Boundary):
 
         tags = pc.get_carray("tag")
         keys = pc.get_carray("key")
-        pc.extract_field_vec_ptr(x, "position")
+        #pc.extract_field_vec_ptr(x, "position")
+        pc.pointer_groups(x, pc.named_groups['position'])
 
         for i in range(pc.get_number_of_particles()):
             if tags.data[i] == Real:

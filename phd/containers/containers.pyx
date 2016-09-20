@@ -25,6 +25,7 @@ cdef class CarrayContainer:
 
         self.properties = {}
         self.carray_info = {}
+        self.named_groups = {}
 
         if var_dict != None:
             for name in var_dict:
@@ -233,18 +234,31 @@ cdef class CarrayContainer:
             prop_array = property_arrays[i]
             prop_array.remove(sorted_indices, 1)
 
-    cdef void extract_field_vec_ptr(self, np.float64_t *vec[3], str field_name):
-
+#    cdef void extract_field_vec_ptr(self, np.float64_t *vec[3], str field_name):
+#
+#        cdef int i
+#        cdef str axis, field
+#        cdef DoubleArray arr
+#
+#        for i, axis in enumerate("xyz"):
+#            field = field_name + "-" + axis
+#            if field in self.properties.keys():
+#                arr = <DoubleArray> self.get_carray(field)
+#                vec[i] = arr.get_data_ptr()
+    cdef void pointer_groups(self, np.float64_t *vec[], list field_names):
         cdef int i
-        cdef str axis, field
+        cdef str field, msg
         cdef DoubleArray arr
 
-        for i, axis in enumerate("xyz"):
-            field = field_name + "-" + axis
+        i = 0
+        for field in field_names:
             if field in self.properties.keys():
                 arr = <DoubleArray> self.get_carray(field)
                 vec[i] = arr.get_data_ptr()
-
+                i += 1
+            else:
+                msg = 'Unknown field in pointer_groups'
+                raise ValueError, msg
 
 cdef class ParticleContainer(CarrayContainer):
 
@@ -267,6 +281,7 @@ cdef class ParticleContainer(CarrayContainer):
         self.dim = dim
 
         self.carray_info = {}
+        self.named_groups = {}
 
         if var_dict == None:
 
@@ -274,17 +289,23 @@ cdef class ParticleContainer(CarrayContainer):
             self.register_property(num_real_parts, "position-x", "double")
             self.register_property(num_real_parts, "position-y", "double")
 
+            self.named_groups['position'] = ['position-x', 'position-y']
+
             # register primitive fields
             self.register_property(num_real_parts, "density", "double")
             self.register_property(num_real_parts, "velocity-x", "double")
             self.register_property(num_real_parts, "velocity-y", "double")
             self.register_property(num_real_parts, "pressure", "double")
 
+            self.named_groups['velocity'] = ['velocity-x', 'velocity-y']
+
             # register conservative fields
             self.register_property(num_real_parts, "mass", "double")
             self.register_property(num_real_parts, "momentum-x", "double")
             self.register_property(num_real_parts, "momentum-y", "double")
             self.register_property(num_real_parts, "energy", "double")
+
+            self.named_groups['momentum'] = ['momentum-x', 'momentum-y']
 
             # information for prallel runs
             self.register_property(num_real_parts, "key", "longlong")
@@ -304,12 +325,29 @@ cdef class ParticleContainer(CarrayContainer):
             self.register_property(num_real_parts, "volume", "double")
             self.register_property(num_real_parts, "radius", "double")
 
+            self.named_groups['w'] = ['w-x', 'w-y']
+            self.named_groups['dcom'] = ['dcom-x', 'dcom-y']
+
             if dim == 3:
+
                 self.register_property(num_real_parts, "position-z", "double")
                 self.register_property(num_real_parts, "velocity-z", "double")
                 self.register_property(num_real_parts, "momentum-z", "double")
                 self.register_property(num_real_parts, "w-z", "double")
                 self.register_property(num_real_parts, "dcom-z", "double")
+
+                self.named_groups['position'].append('position-z')
+                self.named_groups['velocity'].append('velocity-z')
+                self.named_groups['momentum'].append('momentum-z')
+                self.named_groups['w'].append('w-z')
+                self.named_groups['dcom'].append('dcom-z')
+
+            self.named_groups['primitive'] = ['density'] +\
+                    self.named_groups['velocity'] +\
+                    ['pressure']
+            self.named_groups['conserative'] = ['mass'] +\
+                    self.named_groups['momentum'] +\
+                    ['energy']
 
             # set initial particle tags to be real
             self['tag'][:] = Real

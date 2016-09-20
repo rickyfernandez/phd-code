@@ -1,5 +1,10 @@
+from libcpp.vector cimport vector
+
 from ..containers.containers cimport ParticleContainer, CarrayContainer
 from ..boundary.boundary cimport Boundary
+
+#ctypedef vector[int] nns           # nearest neighbors
+#ctypedef vector[neighbors] nns_vec
 
 cdef extern from "tess.h":
     cdef cppclass Tess2d:
@@ -44,6 +49,8 @@ cdef class Mesh:
     cdef public CarrayContainer faces
     cdef public int dim
     cdef public list fields
+
+#    cdef public nns_vec neighbors
 
     cdef PyTess tess
 

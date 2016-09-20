@@ -38,7 +38,7 @@ class Solver(object):
             Solver time. Initialize with non-zero for a restart
         """
         self.mesh = integrator.mesh
-        self.pc = integrator.particles
+        self.pc = integrator.pc
         self.boundary = integrator.mesh.boundary
         self.domain = integrator.mesh.boundary.domain
 
@@ -222,7 +222,7 @@ class SolverParallel(Solver):
             Perform total energy check at start and end
         """
         self.mesh = integrator.mesh
-        self.pc = integrator.particles
+        self.pc = integrator.pc
         self.boundary = integrator.mesh.boundary
         self.domain = integrator.mesh.boundary.domain
 

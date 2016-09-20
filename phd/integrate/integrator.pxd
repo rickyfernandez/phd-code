@@ -4,7 +4,7 @@ from ..mesh.mesh cimport Mesh
 
 cdef class IntegrateBase:
 
-    cdef public ParticleContainer particles
+    cdef public ParticleContainer pc
     cdef public CarrayContainer left_state
     cdef public CarrayContainer right_state
     cdef public CarrayContainer flux

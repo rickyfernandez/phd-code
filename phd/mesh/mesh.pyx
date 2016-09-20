@@ -84,25 +84,46 @@ cdef class Mesh:
         self.boundary = boundary
         self.dim = dim
 
+        #self.neighbors = nns_vec(128, nns)
+
         face_vars = {
                 "area": "double",
                 "pair-i": "long",
-                "pair-j": "long"
+                "pair-j": "long",
+                "com-x": "double",
+                "com-y": "double",
+                "velocity-x": "double",
+                "velocity-y": "double",
+                "normal-x": "double",
+                "normal-y": "double",
                 }
 
-        self.fields = ["volume"]
-        for axis in "xyz"[:dim]:
-            self.fields.append("dcom-" + axis)
-            face_vars["velocity-" + axis] = "double"
-            face_vars["normal-" + axis] = "double"
-            face_vars["com-" + axis] = "double"
+        # which fields to upate in pc
+        self.fields = [
+                "volume",
+                "dcom-x",
+                "dcom-y"
+                ]
+
+        #for axis in "xyz"[:dim]:
+        #    self.fields.append("dcom-" + axis)
+            #face_vars["velocity-" + axis] = "double"
+            #face_vars["normal-" + axis] = "double"
+            #face_vars["com-" + axis] = "double"
 
         self.faces = CarrayContainer(var_dict=face_vars)
+        self.faces.named_groups['velocity'] = ['velocity-x', 'velocity-y']
+        self.faces.named_groups['normal'] = ['normal-x', 'normal-y']
+        self.faces.named_groups['com'] = ['com-x', 'com-y']
 
         if dim == 2:
             self.tess = PyTess2d()
         elif dim == 3:
             self.tess = PyTess3d()
+            self.fields.append("dcom-z")
+            self.faces.named_groups['velocity'].append('velocity-z')
+            self.faces.named_groups['normal'].append('normal-z')
+            self.faces.named_groups['com'].append('com-z')
 
     def tessellate(self, ParticleContainer pc):
         self._tessellate(pc)
@@ -117,7 +138,8 @@ cdef class Mesh:
 
         # initial mesh should only have local particles
         pc.remove_tagged_particles(ParticleTAGS.Ghost)
-        pc.extract_field_vec_ptr(xp, "position")
+        #pc.extract_field_vec_ptr(xp, "position")
+        pc.pointer_groups(xp, pc.named_groups["position"])
         rp = r.get_data_ptr()
 
         # add local particles to the tessellation
@@ -128,7 +150,8 @@ cdef class Mesh:
         num_ghost = self.boundary._create_ghost_particles(pc)
 
         # creating ghost may have called remalloc
-        pc.extract_field_vec_ptr(xp, "position")
+        #pc.extract_field_vec_ptr(xp, "position")
+        pc.pointer_groups(xp, pc.named_groups['position'])
         self.tess.update_initial_tess(xp, num_ghost)
 
     def build_geometry(self, ParticleContainer pc):
@@ -162,21 +185,30 @@ cdef class Mesh:
         self.faces.resize(num_faces)
 
         # pointers to particle data 
-        pc.extract_field_vec_ptr(x, "position")
-        pc.extract_field_vec_ptr(dcom, "dcom")
+        #pc.extract_field_vec_ptr(x, "position")
+        #pc.extract_field_vec_ptr(dcom, "dcom")
+        pc.pointer_groups(x, pc.named_groups['position'])
+        pc.pointer_groups(dcom, pc.named_groups['dcom'])
         vol = p_vol.get_data_ptr()
 
         # pointers to face data
-        self.faces.extract_field_vec_ptr(nx, "normal")
-        self.faces.extract_field_vec_ptr(com, "com")
+        #self.faces.extract_field_vec_ptr(nx, "normal")
+        #self.faces.extract_field_vec_ptr(com, "com")
+        self.faces.pointer_groups(nx,  self.faces.named_groups['normal'])
+        self.faces.pointer_groups(com, self.faces.named_groups['com'])
         pair_i = f_pair_i.get_data_ptr()
         pair_j = f_pair_j.get_data_ptr()
         area   = f_area.get_data_ptr()
+
+        #self.neighbors.resize(self.domain.num_real_particles)
+        #for i in range(self.domain.num_real_particles):
+        #    self.neighbors[i].resize(0)
 
         # store particle and face information for the tessellation
         # only real particle information is computed
         fail = self.tess.extract_geometry(x, dcom, vol,
                 area, com, nx, <int*>pair_i, <int*>pair_j)
+        #        self.neighbors)
         assert(fail != -1)
 
         # tmp for now

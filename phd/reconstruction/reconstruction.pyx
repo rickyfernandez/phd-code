@@ -51,9 +51,12 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef int num_faces = faces.get_number_of_items()
 
 
-        particles.extract_field_vec_ptr(v, "velocity")
-        left_state.extract_field_vec_ptr(vl, "velocity")
-        right_state.extract_field_vec_ptr(vr, "velocity")
+        #particles.extract_field_vec_ptr(v, "velocity")
+        #left_state.extract_field_vec_ptr(vl, "velocity")
+        #right_state.extract_field_vec_ptr(vr, "velocity")
+        particles.pointer_groups(v,    particles.named_groups['velocity'])
+        left_state.pointer_groups(vl,  left_state.named_groups['velocity'])
+        right_state.pointer_groups(vr, right_state.named_groups['velocity'])
 
         # loop through each face
         for n in range(num_faces):
@@ -139,7 +142,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #
 #        # loop over particles
 #        for i in range(particles.get_number_of_particles()):
-#            if tags.data[i] == Real or type.data[i] == Boundary:
+#            if tags.data[i] == Real:
 #
 #                # particle position 
 #                _xi = x.data[i]
@@ -165,42 +168,31 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #                # loop over neighbors of particle
 #                for k in range(num_neighbors[i]):
 #
-#                    # index of neighbor
-#                    j = neighbor_graph[ind]
+#                    # index of face neighbor
+#                    j = face_neighbor[k]
+#
+#                    # go to face and extract neighbor
+#                    if i != pair_i[j]:
+#                        j = pair_i[j]
+#                    else:
+#                        j = pair_j[j]
 #
 #                    # neighbor position
-#                    _xj = x.data[j]
-#                    _yj = y.data[j]
+#                    for ii in range(dim):
+#                        _xj[ii] = xj[ii][j]
 #
-#                    # coordinates that make up the face, in 2d a
-#                    # face is made up of two points
-#                    _x1 = circum_centers[face_graph[ind_face],0]
-#                    _y1 = circum_centers[face_graph[ind_face],1]
-#                    ind_face += 1 # go to next face vertex
-#
-#                    _x2 = circum_centers[face_graph[ind_face],0]
-#                    _y2 = circum_centers[face_graph[ind_face],1]
-#                    ind_face += 1 # go to next face
-#
-#                    face_area = sqrt( (_x2 - _x1)*(_x2 - _x1) +\
-#                            (_y2 - _y1)*(_y2 - _y1) )
-#
-#                    # face center of mass
-#                    _fcx = 0.5*(_x1 + _x2)
-#                    _fcy = 0.5*(_y1 + _y2)
+#                    area = face_area[j]
 #
 #                    # face center mass relative to midpoint of particles
-#                    _fpx = _fcx - 0.5*(_xi + _xj)
-#                    _fpy = _fcy - 0.5*(_yi + _yj)
+#                    for ii in range(dim):
+#                        fpx[ii] = fcom[ii] - 0.5*(_xi[i] + _xj[i])
 #
 #                    # separation vector of particles
-#                    _xr = _xi - _xj
-#                    _yr = _yi - _yj
-#                    _mag = sqrt(_xr*_xr + _yr*_yr)
-#
-#                    if _mag == 0:
-#                        print 'tag:', tags.data[i], 'type:', type.data[i], 'i:', i, 'j:', j
-#                        raise RuntimeError("mag equal to zero")
+#                    mag = 0.0
+#                    for ii in range(dim):
+#                        dr[ii] = _xi[ii] - _xj[ii]
+#                        mag = dr[ii]**2
+#                    mag = sqrt(mag)
 #
 #                    for var in range(num_fields):
 #

@@ -18,36 +18,56 @@ cdef class IntegrateBase:
         self.dim = mesh.dim
         self.mesh = mesh
         self.riemann = riemann
-        self.particles = pc
+        #self.particles = pc
+        self.pc = pc
 
         self.gamma = riemann.gamma
 
         # create flux data array
-        flux_vars = {
-                "mass": "double",
-                "momentum-x": "double",
-                "momentum-y": "double",
-                "energy": "double",
-                }
-
-        if self.dim == 3:
-            flux_vars["momentum-z"] = "double"
-
+        #flux_vars = {
+        #        "mass": "double",
+        #        "momentum-x": "double",
+        #        "momentum-y": "double",
+        #        "energy": "double",
+        #        }
+        #
+        #if self.dim == 3:
+        #    flux_vars["momentum-z"] = "double"
+        #
+        #self.flux = CarrayContainer(var_dict=flux_vars)
+        cdef str field
+        cdef dict flux_vars = {}
+        for field in pc.named_groups['conserative']:
+            flux_vars[field] = 'double'
         self.flux = CarrayContainer(var_dict=flux_vars)
+        self.flux.named_groups['momentum'] = pc.named_groups['momentum']
 
+        #self.flux.named_groups['momentum'] = ['momentum-x', 'momentum-y']
+        #if self.dim == 3:
+        #    self.flux.named_groups.append('momentum-z')
+        #
         # create left/right face state array 
-        state_vars = {
-                "density": "double",
-                "velocity-x": "double",
-                "velocity-y": "double",
-                "pressure": "double",
-                }
-
-        if self.dim == 3:
-            state_vars["velocity-z"] = "double"
+        #state_vars = {
+        #        "density": "double",
+        #        "velocity-x": "double",
+        #        "velocity-y": "double",
+        #        "pressure": "double",
+        #        }
+        #
+        #if self.dim == 3:
+        #    state_vars["velocity-z"] = "double"
+        #
+        #self.left_state  = CarrayContainer(var_dict=state_vars)
+        #self.right_state = CarrayContainer(var_dict=state_vars)
+        state_vars = {}
+        for field in pc.named_groups['primitive']:
+            state_vars[field] = 'double'
 
         self.left_state  = CarrayContainer(var_dict=state_vars)
+        self.left_state.named_groups['velocity'] = pc.named_groups['velocity']
+
         self.right_state = CarrayContainer(var_dict=state_vars)
+        self.right_state.named_groups['velocity'] = pc.named_groups['velocity']
 
     def compute_time_step(self):
         return self._compute_time_step()
@@ -78,7 +98,7 @@ cdef class MovingMesh(IntegrateBase):
         """Main step routine"""
 
         # particle flag information
-        cdef IntArray tags = self.particles.get_carray("tag")
+        cdef IntArray tags = self.pc.get_carray("tag")
 
         # face information
         cdef LongArray pair_i = self.mesh.faces.get_carray("pair-i")
@@ -86,8 +106,8 @@ cdef class MovingMesh(IntegrateBase):
         cdef DoubleArray area = self.mesh.faces.get_carray("area")
 
         # particle values
-        cdef DoubleArray m  = self.particles.get_carray("mass")
-        cdef DoubleArray e  = self.particles.get_carray("energy")
+        cdef DoubleArray m  = self.pc.get_carray("mass")
+        cdef DoubleArray e  = self.pc.get_carray("energy")
 
         # flux values
         cdef DoubleArray fm  = self.flux.get_carray("mass")
@@ -101,7 +121,7 @@ cdef class MovingMesh(IntegrateBase):
         cdef str field, axis
 
         cdef int num_faces = self.mesh.faces.get_number_of_items()
-        cdef int npart = self.particles.get_number_of_particles()
+        cdef int npart = self.pc.get_number_of_particles()
 
 
         # compute particle and face velocities
@@ -113,15 +133,17 @@ cdef class MovingMesh(IntegrateBase):
         self.flux.resize(num_faces)
 
         # reconstruct left\right states at each face
-        self.riemann.reconstruction.compute(self.particles, self.mesh.faces, self.left_state, self.right_state,
+        self.riemann.reconstruction.compute(self.pc, self.mesh.faces, self.left_state, self.right_state,
                 self.mesh, self.gamma, dt)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
         self.riemann.solve(self.flux, self.left_state, self.right_state, self.mesh.faces,
                 t, dt, iteration_count, self.mesh.dim)
 
-        self.particles.extract_field_vec_ptr(mv, "momentum")
-        self.flux.extract_field_vec_ptr(fmv, "momentum")
+        #self.particles.extract_field_vec_ptr(mv, "momentum")
+        #self.flux.extract_field_vec_ptr(fmv, "momentum")
+        self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
+        self.flux.pointer_groups(fmv, self.flux.named_groups['momentum'])
 
         # update conserved quantities
         for n in range(num_faces):
@@ -147,8 +169,10 @@ cdef class MovingMesh(IntegrateBase):
                 for k in range(self.dim):
                     mv[k][j] += dt*a*fmv[k][n]
 
-        self.particles.extract_field_vec_ptr(x, "position")
-        self.particles.extract_field_vec_ptr(wx, "w")
+        #self.particles.extract_field_vec_ptr(x, "position")
+        #self.particles.extract_field_vec_ptr(wx, "w")
+        self.pc.pointer_groups(x, self.pc.named_groups['position'])
+        self.pc.pointer_groups(wx, self.pc.named_groups['w'])
 
         # move particles
         for i in range(npart):
@@ -159,10 +183,10 @@ cdef class MovingMesh(IntegrateBase):
 
     cdef double _compute_time_step(self):
 
-        cdef IntArray tags = self.particles.get_carray("tag")
-        cdef DoubleArray r = self.particles.get_carray("density")
-        cdef DoubleArray p = self.particles.get_carray("pressure")
-        cdef DoubleArray vol = self.particles.get_carray("volume")
+        cdef IntArray tags = self.pc.get_carray("tag")
+        cdef DoubleArray r = self.pc.get_carray("density")
+        cdef DoubleArray p = self.pc.get_carray("pressure")
+        cdef DoubleArray vol = self.pc.get_carray("volume")
 
         cdef double gamma = self.gamma
         cdef double c, R, dt, vi
@@ -170,7 +194,8 @@ cdef class MovingMesh(IntegrateBase):
         cdef np.float64_t* v[3]
 
 
-        self.particles.extract_field_vec_ptr(v, "velocity")
+        #self.particles.extract_field_vec_ptr(v, "velocity")
+        self.pc.pointer_groups(v, self.pc.named_groups['velocity'])
 
         c = sqrt(gamma*p.data[0]/r.data[0])
         if self.dim == 2:
@@ -183,7 +208,7 @@ cdef class MovingMesh(IntegrateBase):
             vi += v[k][0]*v[k][0]
         dt = R/(c + sqrt(vi))
 
-        for i in range(self.particles.get_number_of_particles()):
+        for i in range(self.pc.get_number_of_particles()):
             if tags.data[i] == Real:
 
                 c = sqrt(gamma*p.data[i]/r.data[i])
@@ -212,12 +237,12 @@ cdef class MovingMesh(IntegrateBase):
         term. The algorithm is taken from Springel (2009).
         """
         # particle flag information
-        cdef IntArray tags = self.particles.get_carray("tag")
+        cdef IntArray tags = self.pc.get_carray("tag")
 
         # particle values
-        cdef DoubleArray r = self.particles.get_carray("density")
-        cdef DoubleArray p = self.particles.get_carray("pressure")
-        cdef DoubleArray vol = self.particles.get_carray("volume")
+        cdef DoubleArray r = self.pc.get_carray("density")
+        cdef DoubleArray p = self.pc.get_carray("pressure")
+        cdef DoubleArray vol = self.pc.get_carray("volume")
 
         # local variables
         cdef np.float64_t *x[3], *v[3], *wx[3], *dcx[3]
@@ -226,12 +251,16 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i, k
 
 
-        self.particles.extract_field_vec_ptr(x, "position")
-        self.particles.extract_field_vec_ptr(v, "velocity")
-        self.particles.extract_field_vec_ptr(wx, "w")
-        self.particles.extract_field_vec_ptr(dcx, "dcom")
+        #self.particles.extract_field_vec_ptr(x, "position")
+        #self.particles.extract_field_vec_ptr(v, "velocity")
+        #self.particles.extract_field_vec_ptr(wx, "w")
+        #self.particles.extract_field_vec_ptr(dcx, "dcom")
+        self.pc.pointer_groups(x, self.pc.named_groups['position'])
+        self.pc.pointer_groups(v, self.pc.named_groups['velocity'])
+        self.pc.pointer_groups(wx, self.pc.named_groups['w'])
+        self.pc.pointer_groups(dcx, self.pc.named_groups['dcom'])
 
-        for i in range(self.particles.get_number_of_particles()):
+        for i in range(self.pc.get_number_of_particles()):
 
             for k in range(self.dim):
                 wx[k][i] = v[k][i]
@@ -281,11 +310,15 @@ cdef class MovingMesh(IntegrateBase):
         cdef int i, j, k, n
         cdef np.float64_t *x[3], *wx[3], *fv[3], *fcx[3]
 
-        self.particles.extract_field_vec_ptr(x, "position")
-        self.particles.extract_field_vec_ptr(wx, "w")
+        #self.particles.extract_field_vec_ptr(x, "position")
+        #self.particles.extract_field_vec_ptr(wx, "w")
+        self.pc.pointer_groups(x,  self.pc.named_groups['position'])
+        self.pc.pointer_groups(wx, self.pc.named_groups['w'])
 
-        self.mesh.faces.extract_field_vec_ptr(fv, "velocity")
-        self.mesh.faces.extract_field_vec_ptr(fcx, "com")
+        #self.mesh.faces.extract_field_vec_ptr(fv, "velocity")
+        #self.mesh.faces.extract_field_vec_ptr(fcx, "com")
+        self.mesh.faces.pointer_groups(fv,  self.mesh.faces.named_groups['velocity'])
+        self.mesh.faces.pointer_groups(fcx, self.mesh.faces.named_groups['com'])
 
         for n in range(self.mesh.faces.get_number_of_items()):
 
