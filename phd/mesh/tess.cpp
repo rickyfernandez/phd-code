@@ -1,5 +1,5 @@
 #include "tess.h"
-#include <vector>
+//#include <vector>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 //#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_2.h>
@@ -184,7 +184,8 @@ int Tess2d::extract_geometry(
         double* face_com[3],
         double* face_n[3],
         int* pair_i,
-        int* pair_j) {
+        int* pair_j,
+        std::vector< std::vector<int> > &neighbors) {
 
     // face counter
     int fc=0;
@@ -286,6 +287,10 @@ int Tess2d::extract_geometry(
 
                     pair_i[fc] = id1;
                     pair_j[fc] = id2;
+
+                    // store neighbors - face id is stored
+                    neighbors[id1].push_back(fc);
+                    neighbors[id2].push_back(fc);
 
                     fc++;
                 }

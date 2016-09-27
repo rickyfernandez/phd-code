@@ -22,7 +22,7 @@ cdef class PyTess:
 
     cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
-                int* pair_i, int* pair_j):
+                int* pair_i, int* pair_j, nn_vec &neighbors):
         raise NotImplementedError, 'PyTess::extract_geometry'
 
 cdef class PyTess2d(PyTess):
@@ -46,10 +46,10 @@ cdef class PyTess2d(PyTess):
 
     cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
-                int* pair_i, int* pair_j):
+                int* pair_i, int* pair_j, nn_vec &neighbors):
         return self.thisptr.extract_geometry(x, dcenter_of_mass, volume,
                 face_area, face_com, face_n,
-                pair_i, pair_j)
+                pair_i, pair_j, neighbors)
 
 cdef class PyTess3d(PyTess):
     def __cinit__(self):
@@ -72,10 +72,10 @@ cdef class PyTess3d(PyTess):
 
     cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
-                int* pair_i, int* pair_j):
+                int* pair_i, int* pair_j, nn_vec &neighbors):
         return self.thisptr.extract_geometry(x, dcenter_of_mass, volume,
                 face_area, face_com, face_n,
-                pair_i, pair_j)
+                pair_i, pair_j, neighbors)
 
 cdef class Mesh:
     def __init__(self, Boundary boundary):
@@ -84,7 +84,8 @@ cdef class Mesh:
         self.boundary = boundary
         self.dim = dim
 
-        #self.neighbors = nns_vec(128, nns)
+        cdef nn nearest_neigh = nn()
+        self.neighbors = nn_vec(128, nearest_neigh)
 
         face_vars = {
                 "area": "double",
@@ -188,15 +189,15 @@ cdef class Mesh:
         pair_j = f_pair_j.get_data_ptr()
         area   = f_area.get_data_ptr()
 
-        #self.neighbors.resize(self.domain.num_real_particles)
-        #for i in range(self.domain.num_real_particles):
-        #    self.neighbors[i].resize(0)
+        self.neighbors.resize(pc.get_number_of_particles())
+        for i in range(pc.get_number_of_particles()):
+            self.neighbors[i].resize(0)
 
         # store particle and face information for the tessellation
         # only real particle information is computed
         fail = self.tess.extract_geometry(x, dcom, vol,
-                area, com, nx, <int*>pair_i, <int*>pair_j)
-        #        self.neighbors)
+                area, com, nx, <int*>pair_i, <int*>pair_j,
+                self.neighbors)
         assert(fail != -1)
 
         # tmp for now

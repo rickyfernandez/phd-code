@@ -3,8 +3,8 @@ from libcpp.vector cimport vector
 from ..containers.containers cimport ParticleContainer, CarrayContainer
 from ..boundary.boundary cimport Boundary
 
-#ctypedef vector[int] nns           # nearest neighbors
-#ctypedef vector[neighbors] nns_vec
+ctypedef vector[int] nn           # nearest neighbors
+ctypedef vector[nn] nn_vec
 
 cdef extern from "tess.h":
     cdef cppclass Tess2d:
@@ -15,7 +15,7 @@ cdef extern from "tess.h":
         int count_number_of_faces()
         int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
-                int* pair_i, int* pair_j)
+                int* pair_i, int* pair_j, nn_vec &neighbors)
 
     cdef cppclass Tess3d:
         Tess3d() except +
@@ -25,7 +25,7 @@ cdef extern from "tess.h":
         int count_number_of_faces()
         int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
-                int* pair_i, int* pair_j)
+                int* pair_i, int* pair_j, nn_vec &neighbors)
 
 cdef class PyTess:
 
@@ -35,7 +35,7 @@ cdef class PyTess:
     cdef int count_number_of_faces(self)
     cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
-                int* pair_i, int* pair_j)
+                int* pair_i, int* pair_j, nn_vec &neighbors)
 
 cdef class PyTess2d(PyTess):
     cdef Tess2d *thisptr
@@ -50,9 +50,8 @@ cdef class Mesh:
     cdef public int dim
     cdef public list fields
 
-#    cdef public nns_vec neighbors
-
     cdef PyTess tess
+    cdef nn_vec neighbors
 
     cdef _tessellate(self, ParticleContainer pc)
     cdef _build_geometry(self, ParticleContainer pc)

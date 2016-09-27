@@ -2,6 +2,7 @@
 #define __MESH_H__
 
 #include <cmath>
+#include <vector>
 
 struct vector3 {
     public:
@@ -62,7 +63,8 @@ class Tess2d {
         int update_initial_tess(double *x[3], int up_num_particles);
         int count_number_of_faces(void);
         int extract_geometry(double* x[3], double* dcom[3], double* volume,
-                double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j);
+                double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j,
+                std::vector< std::vector<int> > &neighbors);
 };
 
 class Tess3d {
@@ -82,7 +84,8 @@ class Tess3d {
         //int update_initial_tess(double *x, double *y, double *z, int up_num_particles);
         int count_number_of_faces(void);
         int extract_geometry(double* x[3], double* dcom[3], double* volume,
-                double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j);
+                double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j,
+                std::vector< std::vector<int> > &neighbors);
         //int extract_geometry(double* x, double* y, double* z, double* center_of_mass_x, double* center_of_mass_y, double* center_of_mass_z,
         //        double* volume,
         //        double* face_area, double* face_comx, double* face_comy, double* face_comz,
