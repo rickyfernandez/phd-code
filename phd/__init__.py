@@ -18,7 +18,8 @@ from phd.mesh.mesh import \
         Mesh
 
 from phd.reconstruction.reconstruction import \
-        PieceWiseConstant
+        PieceWiseConstant, \
+        PieceWiseLinear
 
 from phd.riemann.riemann import \
         HLL, HLLC
@@ -31,3 +32,6 @@ from phd.utils.particle_tags import \
 
 from phd.utils.plot_voro import \
         vor_collection
+
+from phd.utils.store_class import \
+        to_dict
