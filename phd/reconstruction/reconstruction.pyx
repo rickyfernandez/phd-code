@@ -11,25 +11,25 @@ from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 cdef int Real = ParticleTAGS.Real
 
 cdef class ReconstructionBase:
-    def __init__(self):
+    def __init__(self, ParticleContainer pc, Mesh mesh):
         pass
 
-    def compute(self, particles, faces, left_state, right_state, mesh, gamma, dt):
-        self._compute(particles, faces, left_state, right_state, mesh, gamma, dt)
+    def compute(self, pc, faces, left_state, right_state, mesh, gamma, dt):
+        self._compute(pc, faces, left_state, right_state, mesh, gamma, dt)
 
-    cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+    cdef _compute(self, ParticleContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
             Mesh mesh, double gamma, double dt):
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
 
 cdef class PieceWiseConstant(ReconstructionBase):
 
-    cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+    cdef _compute(self, ParticleContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
             Mesh mesh, double gamma, double dt):
 
         # particle primitive variables
-        cdef DoubleArray d = particles.get_carray("density")
-        cdef DoubleArray p = particles.get_carray("pressure")
+        cdef DoubleArray d = pc.get_carray("density")
+        cdef DoubleArray p = pc.get_carray("pressure")
 
         # left state primitive variables
         cdef DoubleArray dl = left_state.get_carray("density")
@@ -48,7 +48,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef np.float64_t *v[3], *vl[3], *vr[3]
         cdef int num_faces = faces.get_number_of_items()
 
-        particles.pointer_groups(v,    particles.named_groups['velocity'])
+        pc.pointer_groups(v, pc.named_groups['velocity'])
         left_state.pointer_groups(vl,  left_state.named_groups['velocity'])
         right_state.pointer_groups(vr, right_state.named_groups['velocity'])
 
@@ -73,283 +73,259 @@ cdef class PieceWiseConstant(ReconstructionBase):
                 vl[k][n] = v[k][i]
                 vr[k][n] = v[k][j]
 
+cdef class PieceWiseLinear(ReconstructionBase):
 
-# out of comission - adding cgal library
-#cdef class PieceWiseLinear(ReconstructionBase):
-#
-#    def __init__(self):
-#
-#        self.state_vars = {
-#                "density": "double",
-#                "velocity-x": "double",
-#                "velocity-y": "double",
-#                "pressure": "double",
-#                }
-#
-#        self.gradx = CarrayContainer(var_dict=self.state_vars)
-#        self.grady = CarrayContainer(var_dict=self.state_vars)
-#
-#    cdef _compute_gradients(self, ParticleContainer particles, CarrayContainer faces, np.int32_t[:] neighbor_graph, np.int32_t[:] num_neighbors,
-#        np.int32_t[:] face_graph, double[:,::1] circum_centers):
-#
-#        cdef IntArray tags = particles.get_carray("tag")
-#        cdef IntArray type = particles.get_carray("type")
-#
-#        # particle information
-#        cdef DoubleArray x   = particles.get_carray("position-x")
-#        cdef DoubleArray y   = particles.get_carray("position-y")
-#        cdef DoubleArray cx  = particles.get_carray("com-x")
-#        cdef DoubleArray cy  = particles.get_carray("com-y")
-#        cdef DoubleArray vol = particles.get_carray("volume")
-#
-#        cdef DoubleArray pres = particles.get_carray("pressure")
-#
-#        cdef double _xi, _yi, _xj, _yj, _xr, _yr, _cx, _cy, _mag, _vol
-#        cdef double _x1, _y1, _x2, _y2, _fpx, _fpy, _fcx, _fcy, face_area
-#        cdef double dph, psi
-#        cdef int i, j, k, ind, ind2, ind_face, ind_face2
-#        cdef int num_fields
-#
-#        cdef double[:] phi_max = np.zeros(4, dtype=np.float64)
-#        cdef double[:] phi_min = np.zeros(4, dtype=np.float64)
-#        cdef double[:] alpha   = np.zeros(4, dtype=np.float64)
-#
-#        ind = ind2 = 0              # neighbor index for graph
-#        ind_face = ind_face2 = 0    # face index for graph
-#
-#        num_fields = len(self.state_vars)
-#
-#        # allocate pointers to fields for indexing
-#        cdef np.float64_t** fields = <np.float64_t**>stdlib.malloc(sizeof(void*)*num_fields)
-#        cdef np.float64_t** dfdx   = <np.float64_t**>stdlib.malloc(sizeof(void*)*num_fields)
-#        cdef np.float64_t** dfdy   = <np.float64_t**>stdlib.malloc(sizeof(void*)*num_fields)
-#
-#        cdef str name
-#        cdef DoubleArray tmp
-#        cdef int var
-#        for i, name in enumerate(self.state_vars):
-#
-#            # store field pointers to array
-#            tmp = particles.get_carray(name);  fields[i] = tmp.get_data_ptr()
-#            tmp = self.gradx.get_carray(name); dfdx[i]   = tmp.get_data_ptr()
-#            tmp = self.grady.get_carray(name); dfdy[i]   = tmp.get_data_ptr()
-#
-#        # loop over particles
-#        for i in range(particles.get_number_of_particles()):
-#            if tags.data[i] == Real:
-#
-#                # particle position 
-#                _xi = x.data[i]
-#                _yi = y.data[i]
-#
-#                # particle volume
-#                _vol = vol.data[i]
-#                if vol.data[i] == 0:
-#                    print 'tag:', tags.data[i], 'type:', type.data[i]
-#                    raise RuntimeError("volume equal to zero")
-#
-#                for var in range(num_fields):
-#
-#                    # set min and max particle values
-#                    phi_max[var] = fields[var][i]
-#                    phi_min[var] = fields[var][i]
-#                    alpha[var]   = 1.0
-#
-#                    # zero out gradients
-#                    dfdx[var][i] = 0
-#                    dfdy[var][i] = 0
-#
-#                # loop over neighbors of particle
-#                for k in range(num_neighbors[i]):
-#
-#                    # index of face neighbor
-#                    j = face_neighbor[k]
-#
-#                    # go to face and extract neighbor
-#                    if i != pair_i[j]:
-#                        j = pair_i[j]
-#                    else:
-#                        j = pair_j[j]
-#
-#                    # neighbor position
-#                    for ii in range(dim):
-#                        _xj[ii] = xj[ii][j]
-#
-#                    area = face_area[j]
-#
-#                    # face center mass relative to midpoint of particles
-#                    for ii in range(dim):
-#                        fpx[ii] = fcom[ii] - 0.5*(_xi[i] + _xj[i])
-#
-#                    # separation vector of particles
-#                    mag = 0.0
-#                    for ii in range(dim):
-#                        dr[ii] = _xi[ii] - _xj[ii]
-#                        mag = dr[ii]**2
-#                    mag = sqrt(mag)
-#
-#                    for var in range(num_fields):
-#
-#                        # add neighbor values to max and min
-#                        phi_max[var] = fmax(phi_max[var], fields[var][j])
-#                        phi_min[var] = fmin(phi_min[var], fields[var][j])
-#
-#                        dfdx[var][i] += face_area*( (fields[var][j] -\
-#                                fields[var][i])*_fpx - 0.5*(fields[var][i] + fields[var][j])*_xr )/(_mag*_vol)
-#                        dfdy[var][i] += face_area*( (fields[var][j] -\
-#                                fields[var][i])*_fpy - 0.5*(fields[var][i] + fields[var][j])*_yr )/(_mag*_vol)
-#
-#                    # go to next neighbor
-#                    ind += 1
-#
-#                # center of mass of particle
-#                _cx = cx.data[i]
-#                _cy = cy.data[i]
-#
-#                for k in range(num_neighbors[i]):
-#
-#                    # index of neighbor
-#                    j = neighbor_graph[ind2]
-#
-#                    _x1 = circum_centers[face_graph[ind_face2],0]
-#                    _y1 = circum_centers[face_graph[ind_face2],1]
-#                    ind_face2 += 1
-#
-#                    _x2 = circum_centers[face_graph[ind_face2],0]
-#                    _y2 = circum_centers[face_graph[ind_face2],1]
-#                    ind_face2 += 1
-#
-#                    # face center of mass
-#                    _fcx = 0.5*(_x1 + _x2)
-#                    _fcy = 0.5*(_y1 + _y2)
-#
-#                    for var in range(num_fields):
-#
-#                        dphi = dfdx[var][i]*(_fcx - _cx) + dfdy[var][i]*(_fcy - _cy)
-#                        if dphi > 0.0:
-#                            psi = (phi_max[var] - fields[var][i])/dphi
-#                        elif dphi < 0.0:
-#                            psi = (phi_min[var] - fields[var][i])/dphi
-#                        else:
-#                            psi = 1.0
-#
-#                        alpha[var] = fmin(alpha[var], psi)
-#
-#                    # go to next neighbor
-#                    ind2 += 1
-#
-#                for var in range(num_fields):
-#
-#                    dfdx[var][i] *= alpha[var]
-#                    dfdy[var][i] *= alpha[var]
-#            else:
-#
-#                ind  += num_neighbors[i]
-#                ind2 += num_neighbors[i]
-#                ind_face  += num_neighbors[i]*2
-#                ind_face2 += num_neighbors[i]*2
-#
-#        # relase pointers
-#        stdlib.free(fields)
-#        stdlib.free(dfdx)
-#        stdlib.free(dfdy)
-#
-#    cdef _compute(self, ParticleContainer particles, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-#            object mesh, double gamma, double dt):
-#
-#        cdef int i, j, k, var
-#        cdef double _fcx, _fcy, _cxi, _cxj, _cyi, _cyj
-#
-#        # particle indices that make up the face
-#        cdef LongLongArray pair_i = faces.get_carray("pair-i")
-#        cdef LongLongArray pair_j = faces.get_carray("pair-j")
-#        cdef DoubleArray fcx  = faces.get_carray("com-x")
-#        cdef DoubleArray fcy  = faces.get_carray("com-y")
-#
-#        # particle primitive variables
-#        cdef DoubleArray r = particles.get_carray("density")
-#        cdef DoubleArray u = particles.get_carray("velocity-x")
-#        cdef DoubleArray v = particles.get_carray("velocity-y")
-#        cdef DoubleArray p = particles.get_carray("pressure")
-#
-#        cdef DoubleArray cx  = particles.get_carray("com-x")
-#        cdef DoubleArray cy  = particles.get_carray("com-y")
-#
-#        # left state primitive variables
-#        cdef DoubleArray rl = left_state.get_carray("density")
-#        cdef DoubleArray ul = left_state.get_carray("velocity-x")
-#        cdef DoubleArray vl = left_state.get_carray("velocity-y")
-#        cdef DoubleArray pl = left_state.get_carray("pressure")
-#
-#        # left state primitive variables
-#        cdef DoubleArray rr = right_state.get_carray("density")
-#        cdef DoubleArray ur = right_state.get_carray("velocity-x")
-#        cdef DoubleArray vr = right_state.get_carray("velocity-y")
-#        cdef DoubleArray pr = right_state.get_carray("pressure")
-#
-#        cdef DoubleArray drdx = self.gradx.get_carray("density")
-#        cdef DoubleArray dudx = self.gradx.get_carray("velocity-x")
-#        cdef DoubleArray dvdx = self.gradx.get_carray("velocity-y")
-#        cdef DoubleArray dpdx = self.gradx.get_carray("pressure")
-#
-#        cdef DoubleArray drdy = self.grady.get_carray("density")
-#        cdef DoubleArray dudy = self.grady.get_carray("velocity-x")
-#        cdef DoubleArray dvdy = self.grady.get_carray("velocity-y")
-#        cdef DoubleArray dpdy = self.grady.get_carray("pressure")
-#
-#        cdef int num_particles = particles.get_number_of_particles()
-#
-#        self.gradx.resize(num_particles)
-#        self.grady.resize(num_particles)
-#
-#        self._compute_gradients(particles, faces, mesh['neighbors'], mesh['number of neighbors'],
-#                mesh['faces'], mesh['voronoi vertices'])
-#
-#        for k in range(faces.get_number_of_items()):
-#
-#            i = pair_i.data[k]
-#            j = pair_j.data[k]
-#
-#            # density
-#            rl.data[k] = r.data[i] - 0.5*dt*( u.data[i]*drdx.data[i] + v.data[i]*drdy.data[i] + r.data[i]*(dudx[i] + dvdy[i]) )
-#            rr.data[k] = r.data[j] - 0.5*dt*( u.data[j]*drdx.data[j] + v.data[j]*drdy.data[j] + r.data[j]*(dudx[j] + dvdy[j]) )
-#
-#            # velocity x
-#            ul.data[k] = u.data[i] - 0.5*dt*( u.data[i]*dudx.data[i] + v.data[i]*dudy.data[i] + dpdx.data[i]/r.data[i] )
-#            ur.data[k] = u.data[j] - 0.5*dt*( u.data[j]*dudx.data[j] + v.data[j]*dudy.data[j] + dpdx.data[j]/r.data[j] )
-#
-#            # velocity y
-#            vl.data[k] = v.data[i] - 0.5*dt*( u.data[i]*dvdx.data[i] + v.data[i]*dvdy.data[i] + dpdy.data[i]/r.data[i] )
-#            vr.data[k] = v.data[j] - 0.5*dt*( u.data[j]*dvdx.data[j] + v.data[j]*dvdy.data[j] + dpdy.data[j]/r.data[j] )
-#
-#            # pressure
-#            pl.data[k] = p.data[i] - 0.5*dt*( u.data[i]*dpdx.data[i] + v.data[i]*dpdy.data[i] + gamma*p.data[i]*(dudx.data[i] + dvdy.data[i]) )
-#            pr.data[k] = p.data[j] - 0.5*dt*( u.data[j]*dpdx.data[j] + v.data[j]*dpdy.data[j] + gamma*p.data[j]*(dudx.data[j] + dvdy.data[j]) )
-#
-#            # spatial component
-###            for var in range(4):
-###
-#            _fcx = fcx.data[k]; _fcy = fcy.data[k]
-#            _cxi =  cx.data[i]; _cxj =  cx.data[j]
-#            _cyi =  cy.data[i]; _cyj =  cy.data[j]
-#
-#            rl.data[k] += drdx.data[i]*(_fcx - _cxi) + drdy.data[i]*(_fcy - _cyi)
-#            rr.data[k] += drdx.data[j]*(_fcx - _cxj) + drdy.data[j]*(_fcy - _cyj)
-#
-#            ul.data[k] += dudx.data[i]*(_fcx - _cxi) + dudy.data[i]*(_fcy - _cyi)
-#            ur.data[k] += dudx.data[j]*(_fcx - _cxj) + dudy.data[j]*(_fcy - _cyj)
-#
-#            vl.data[k] += dvdx.data[i]*(_fcx - _cxi) + dvdy.data[i]*(_fcy - _cyi)
-#            vr.data[k] += dvdx.data[j]*(_fcx - _cxj) + dvdy.data[j]*(_fcy - _cyj)
-#
-#            pl.data[k] += dpdx.data[i]*(_fcx - _cxi) + dpdy.data[i]*(_fcy - _cyi)
-#            pr.data[k] += dpdx.data[j]*(_fcx - _cxj) + dpdy.data[j]*(_fcy - _cyj)
-#
-###                left_face[var,k]  += gradx[var,i]*(face_com[0,k] - cell_com[0,i]) + grady[var,i]*(face_com[1,k] - cell_com[1,i])
-###                right_face[var,k] += gradx[var,j]*(face_com[0,k] - cell_com[0,j]) + grady[var,j]*(face_com[1,k] - cell_com[1,j])
-###
-###                if (left_face[var,k] < 0.0) and (var == 0 or var == 3):
-###                    print "left_face[", var, "],", k, "] = ", left_face[var,k]
-###
-###                if (right_face[var,k] < 0.0) and (var == 0 or var == 3):
-###                    print "right_face[", var, "],", k, "] = ", right_face[var,k]
+    def __init__(self, ParticleContainer pc, Mesh mesh):
+
+        cdef int i
+        cdef str field
+        cdef list axis = ['x', 'y', 'z']
+        cdef dict group = {}, named_groups = {}, state_vars = {}
+
+        named_groups['primitive'] = []
+        named_groups['velocity'] = []
+
+        for field in pc.named_groups['primitive']:
+            for i in range(mesh.dim):
+
+                if field not in named_groups:
+                    named_groups[field] = []
+
+                # subset of gradient
+                named_groups[field].append(field + '_' + axis[i])
+                named_groups['primitive'].append(field + '_' + axis[i])
+
+                # store velocity gradient matrix
+                if 'vel' in field:
+                    named_groups['velocity'].append(field + '_' + axis[i])
+
+                state_vars[field + '_' + axis[i]] = 'double'
+
+        self.grad = CarrayContainer(var_dict=state_vars)
+        self.grad.named_groups = named_groups
+
+    cdef _compute_gradients(self, ParticleContainer pc, CarrayContainer faces, Mesh mesh):
+
+        # particle information
+        cdef IntArray tags = pc.get_carray("tag")
+        cdef DoubleArray vol = pc.get_carray("volume")
+
+        cdef DoubleArray face_area = faces.get_carray("area")
+        cdef LongArray pair_i = faces.get_carray("pair-i")
+        cdef LongArray pair_j = faces.get_carray("pair-j")
+
+        cdef double dph, psi, d_dif, d_sum
+        cdef int i, j, k, n, m, fid, dim = mesh.dim
+
+        cdef double *x[3], *dcx[3]
+        cdef double cfx[3], *fij[3], area
+        cdef double xi[3], xj[3], dr[3], cx[3], r, _vol
+
+        cdef int num_fields = len(pc.named_groups['primitive'])
+
+        cdef double[:] phi_max = np.zeros(num_fields, dtype=np.float64)
+        cdef double[:] phi_min = np.zeros(num_fields, dtype=np.float64)
+        cdef double[:] alpha   = np.zeros(num_fields, dtype=np.float64)
+        cdef double[:,:] df = np.zeros((num_fields,dim), dtype=np.float64)
+
+        #cdef np.float64_t *prim[4]
+        #cdef np.float64_t *grad[8]
+
+        cdef np.float64_t** prim = <np.float64_t**>stdlib.malloc(sizeof(void*)*num_fields)
+        cdef np.float64_t** grad = <np.float64_t**>stdlib.malloc(sizeof(void*)*(num_fields*dim))
+
+        # pointer to particle information
+        pc.pointer_groups(x, pc.named_groups['position'])
+        pc.pointer_groups(dcx, pc.named_groups['dcom'])
+        pc.pointer_groups(prim, pc.named_groups['primitive'])
+
+        # pointer to face center of mass
+        faces.pointer_groups(fij, faces.named_groups['com'])
+
+        # pointer to primitive gradients with dimension stacked
+        self.grad.pointer_groups(grad, self.grad.named_groups['primitive'])
+
+        # calculate gradients
+        for i in range(pc.get_number_of_particles()):
+            if tags.data[i] == Real:
+
+                # store particle position
+                for k in range(dim):
+                    xi[k] = x[k][i]
+                    cx[k] = xi[k] + dcx[k][i]
+                _vol = vol.data[i]
+
+                for n in range(num_fields):
+
+                    # set min/max primitive values
+                    phi_max[n] = phi_min[n] = prim[n][i]
+                    alpha[n]   = 1.0
+
+                    # zero out gradients
+                    for k in range(dim):
+                        df[n,k] = 0
+
+                # loop over faces of particle
+                for m in range(mesh.neighbors[i].size()):
+
+                    # index of face neighbor
+                    fid = mesh.neighbors[i][m]
+                    area = face_area.data[fid]
+
+                    # extract neighbor from face
+                    if i == pair_i.data[fid]:
+                        j = pair_j.data[fid]
+                    elif i == pair_j.data[fid]:
+                        j = pair_i.data[fid]
+                    else:
+                        print 'error in neighobr'
+
+                    r = 0.0
+                    for k in range(dim):
+
+                        # neighbor position
+                        xj[k] = x[k][j]
+
+                        # face center mass relative to midpoint of particles
+                        cfx[k] = fij[k][fid] - 0.5*(xi[k] + xj[k])
+
+                        # separation vector of particles
+                        dr[k] = xi[k] - xj[k]
+                        r += dr[k]**2
+
+                    r = sqrt(r)
+
+                    # extrapolate each field to face
+                    for n in range(num_fields):
+
+                        # add neighbor values to max and min
+                        phi_max[n] = fmax(phi_max[n], prim[n][j])
+                        phi_min[n] = fmin(phi_min[n], prim[n][j])
+
+                        d_dif = prim[n][j] - prim[n][i]
+                        d_sum = prim[n][j] + prim[n][i]
+
+                        # gradient estimate eq. 21
+                        for k in range(dim):
+                            df[n,k] += area*(d_dif*cfx[k] - 0.5*d_sum*dr[k])/(r*_vol)
+
+                # limit gradients eq. 30
+                for m in range(mesh.neighbors[i].size()):
+
+                    # index of face neighbor
+                    fid = mesh.neighbors[i][m]
+                    for n in range(num_fields):
+
+                        dphi = 0
+                        for k in range(dim):
+                            dphi += df[n,k]*(fij[k][fid] - cx[k])
+
+                        if dphi > 0.0:
+                            psi = (phi_max[n] - prim[n][i])/dphi
+                        elif dphi < 0.0:
+                            psi = (phi_min[n] - prim[n][i])/dphi
+                        else:
+                            psi = 1.0
+
+                        alpha[n] = fmin(alpha[n], psi)
+
+                # store the gradients
+                for n in range(num_fields):
+                    for k in range(dim):
+                        grad[dim*n+k][i] = alpha[n]*df[n,k]
+
+        # transfer gradients to ghost particles
+        mesh.boundary._update_gradients(pc, self.grad, self.grad.named_groups['primitive'])
+
+        # clean up
+        stdlib.free(prim)
+        stdlib.free(grad)
+
+    cdef _compute(self, ParticleContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+            Mesh mesh, double gamma, double dt):
+        """
+        compute linear reconstruction. Method taken from Springel (2009)
+        """
+        cdef double fac = 0.5*dt
+        cdef double sepi, sepj, vi, vj
+        cdef int i, j, k, m, n, dim = mesh.dim
+
+        cdef np.float64_t *fij[3]
+        cdef np.float64_t *vl[3], *vr[3]
+        cdef np.float64_t *x[3], *v[3], *dcx[3]
+        cdef np.float64_t *dd[3], *dv[9], *dp[3]
+
+        cdef LongArray pair_i = faces.get_carray("pair-i")
+        cdef LongArray pair_j = faces.get_carray("pair-j")
+
+        # particle primitive variables
+        cdef DoubleArray d = pc.get_carray("density")
+        cdef DoubleArray p = pc.get_carray("pressure")
+
+        # left state primitive variables
+        cdef DoubleArray dl = left_state.get_carray("density")
+        cdef DoubleArray pl = left_state.get_carray("pressure")
+
+        # right state primitive variables
+        cdef DoubleArray dr = right_state.get_carray("density")
+        cdef DoubleArray pr = right_state.get_carray("pressure")
+
+        # extract pointers
+        pc.pointer_groups(x, pc.named_groups['position'])
+        pc.pointer_groups(dcx, pc.named_groups['dcom'])
+        pc.pointer_groups(v, pc.named_groups['velocity'])
+
+        left_state.pointer_groups(vl,  left_state.named_groups['velocity'])
+        right_state.pointer_groups(vr, left_state.named_groups['velocity'])
+
+        faces.pointer_groups(fij, faces.named_groups['com'])
+
+        # allocate space and compute gradients
+        self.grad.resize(pc.get_number_of_particles())
+        self._compute_gradients(pc, faces, mesh)
+
+        self.grad.pointer_groups(dd, self.grad.named_groups['density'])
+        self.grad.pointer_groups(dv, self.grad.named_groups['velocity'])
+        self.grad.pointer_groups(dp, self.grad.named_groups['pressure'])
+
+        # create left/right states for each face
+        for m in range(faces.get_number_of_items()):
+
+            i = pair_i.data[m]
+            j = pair_j.data[m]
+
+            # density
+            dl.data[m] = d.data[i]
+            dr.data[m] = d.data[j]
+
+            # pressure
+            pl.data[m] = p.data[i]
+            pr.data[m] = p.data[j]
+
+            # velocity - add pressure gradient component
+            for k in range(dim):
+                vl[k][m] = v[k][i] - fac*dp[k][i]/d.data[i]
+                vr[k][m] = v[k][j] - fac*dp[k][j]/d.data[j]
+
+            # MUSCL schemem eq. 36
+            for k in range(dim): # dot products
+
+                # distance from particle to com of face
+                sepi = fij[k][m] - (x[k][i] + dcx[k][i])
+                sepj = fij[k][m] - (x[k][j] + dcx[k][j])
+
+                vi = v[k][i]
+                vj = v[k][j]
+
+                # add gradient (eq. 21) and time extrapolation (eq. 37)
+                # the trace of dv is div of velocity
+                dl.data[m] += dd[k][i]*(sepi - fac*vi) - fac*d.data[i]*dv[(dim+1)*k][i]
+                dr.data[m] += dd[k][j]*(sepj - fac*vj) - fac*d.data[j]*dv[(dim+1)*k][j]
+
+                pl.data[m] += dp[k][i]*(sepi - fac*vi) - fac*gamma*p.data[i]*dv[(dim+1)*k][i]
+                pr.data[m] += dp[k][j]*(sepj - fac*vj) - fac*gamma*p.data[j]*dv[(dim+1)*k][j]
+
+                # pressure term already added before loop 
+                for n in range(dim): # over velocity components
+                    vl[n][m] += dv[n*dim+k][i]*(sepi - fac*vi)
+                    vr[n][m] += dv[n*dim+k][j]*(sepj - fac*vj)
