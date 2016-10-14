@@ -232,7 +232,7 @@ cdef class MovingMesh(IntegrateBase):
                 # distance form cell com to particle position
                 d = 0.0
                 for k in range(self.dim):
-                    d += (dcx[k][i])**2
+                    d += dcx[k][i]**2
                 d = sqrt(d)
 
                 # approximate length of cell
@@ -244,11 +244,11 @@ cdef class MovingMesh(IntegrateBase):
                 # regularize - eq. 63
                 if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
                     for k in range(self.dim):
-                        wx[k][i] += cs*(dcx[k][i])*(d - 0.9*eta*R)/(d*0.2*eta*R)
+                        wx[k][i] += cs*dcx[k][i]*(d - 0.9*eta*R)/(d*0.2*eta*R)
 
                 elif (1.1 <= d/(eta*R)):
                     for k in range(self.dim):
-                        wx[k][i] += cs*(dcx[k][i])/d
+                        wx[k][i] += cs*dcx[k][i]/d
 
 
     cdef _assign_face_velocities(self):
@@ -267,13 +267,13 @@ cdef class MovingMesh(IntegrateBase):
         # local variables
         cdef double factor
         cdef int i, j, k, n
-        cdef np.float64_t *x[3], *wx[3], *fv[3], *fcx[3]
+        cdef np.float64_t *x[3], *wx[3], *fv[3], *fij[3]
 
         self.pc.pointer_groups(x,  self.pc.named_groups['position'])
         self.pc.pointer_groups(wx, self.pc.named_groups['w'])
 
         self.mesh.faces.pointer_groups(fv,  self.mesh.faces.named_groups['velocity'])
-        self.mesh.faces.pointer_groups(fcx, self.mesh.faces.named_groups['com'])
+        self.mesh.faces.pointer_groups(fij, self.mesh.faces.named_groups['com'])
 
         for n in range(self.mesh.faces.get_number_of_items()):
 
@@ -284,7 +284,7 @@ cdef class MovingMesh(IntegrateBase):
             # correct face velocity due to residual motion - eq. 32
             factor = denom = 0.0
             for k in range(self.dim):
-                factor += (wx[k][i] - wx[k][j])*(fcx[k][n] - 0.5*(x[k][i] + x[k][j]))
+                factor += (wx[k][i] - wx[k][j])*(fij[k][n] - 0.5*(x[k][i] + x[k][j]))
                 denom  += pow(x[k][j] - x[k][i], 2.0)
             factor /= denom
 
