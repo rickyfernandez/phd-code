@@ -430,6 +430,39 @@ cdef class Boundary:
         fields : list
             List of field strings to update
         """
+        cdef int i
+        cdef LongArray indices = LongArray()
+        cdef IntArray types = pc.get_carray("type")
+        cdef np.ndarray indices_npy, map_indices_npy
+
+        # find all ghost that need to be updated
+        for i in range(pc.get_number_of_particles()):
+            if types.data[i] == Exterior:
+                indices.append(i)
+
+        if indices.length:
+
+            indices_npy = indices.get_npy_array()
+            map_indices_npy = pc["map"][indices_npy]
+
+            # update ghost with their image data
+            for field in fields:
+                pc[field][indices_npy] = pc[field][map_indices_npy]
+
+    cdef _update_gradients(self, ParticleContainer pc, CarrayContainer gradient, list fields):
+        """
+        Transfer gradient from image particle to ghost particle.
+
+        Parameters
+        ----------
+        pc : CarrayContainer
+            Gradient data
+        fields : list
+            List of field strings to update
+        """
+        cdef int i, j, ip, dim = self.domain.dim
+        cdef np.float64_t *x[3], *dv[4]
+
         cdef LongArray indices = LongArray()
         cdef IntArray types = pc.get_carray("type")
         cdef np.ndarray indices_npy, map_indices_npy
@@ -444,7 +477,31 @@ cdef class Boundary:
 
         # update ghost with their image data
         for field in fields:
-            pc[field][indices_npy] = pc[field][map_indices_npy]
+            gradient[field][indices_npy] = gradient[field][map_indices_npy]
+
+        # refective bc, mirror velocity gradients
+        if self.boundary_type == BoundaryType.Reflective:
+
+            pc.pointer_groups(x, pc.named_groups['position'])
+            gradient.pointer_groups(dv, gradient.named_groups['velocity'])
+
+            for i in range(indices_npy.size): # every exterior ghost
+                for j in range(dim): # each dimension
+
+                    ip = indices.data[i]
+
+                    # reverse the normal of velocity gradient
+                    if x[j][ip] < self.domain.bounds[0][j]:
+                        # loop over velocity gradients
+                        for k in range(dim):
+                            # flip each gradient component in j dimension
+                            dv[dim*k+j][ip] *= -1
+
+                    if x[j][ip] > self.domain.bounds[0][j]:
+                        # loop over velocity gradients
+                        for k in range(dim):
+                            # flip each gradient component in j dimension
+                            dv[dim*k+j][ip] *= -1
 
     def migrate_boundary_particles(self, ParticleContainer pc):
         """
@@ -814,3 +871,25 @@ cdef class BoundaryParallel(Boundary):
         # import ghost particles and add to container
         exchange_particles(pc, export_pc, self.send_particles, self.recv_particles,
                 self.start_ghost, self.comm)
+
+    cdef _update_gradients(self, ParticleContainer pc, CarrayContainer gradient, list fields):
+        """
+        Transfer gradient from image particle to ghost particle.
+
+        Parameters
+        ----------
+        pc : CarrayContainer
+            Gradient data
+        fields : list
+            List of field strings to update
+        """
+        cdef str field
+        cdef CarrayContainer grad_ghost
+
+        # first transfer gradients to exterior ghost particles
+        Boundary._update_gradients(self, pc, gradient, fields)
+
+        # second transfer gradients to interior ghost particles
+        grad_ghost = gradient.extract_items(self.buffer_ids.get_npy_array(), fields)
+        exchange_particles(gradient, grad_ghost, self.send_particles, self.recv_particles,
+                self.start_ghost, self.comm, fields)
