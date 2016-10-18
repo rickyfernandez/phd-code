@@ -361,13 +361,13 @@ cdef class Tree:
             if child.number_particles > max_in_leaf:
                 self._fill_segments_nodes(child, sorted_segm_keys, sorted_segm_parts, max_in_leaf)
 
-    cdef void construct_global_tree(self, ParticleContainer pc, object comm):
+    cdef void construct_global_tree(self, CarrayContainer pc, object comm):
         """
         Create global tree on all processors.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Carray container holding all particle information
         comm : object
             Parallel class responsible for all communications
@@ -387,7 +387,7 @@ cdef class Tree:
         size = comm.Get_size()
 
         # collect number of particles from all process
-        sendbuf = np.array([pc.get_number_of_particles()], dtype=np.int32)
+        sendbuf = np.array([pc.get_number_of_items()], dtype=np.int32)
         recvbuf = np.empty(size, dtype=np.int32)
 
         comm.Allgather(sendbuf=sendbuf, recvbuf=recvbuf)

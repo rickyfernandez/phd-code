@@ -1,10 +1,10 @@
-from ..containers.containers cimport CarrayContainer, ParticleContainer
-from ..riemann.riemann cimport RiemannBase
 from ..mesh.mesh cimport Mesh
+from ..riemann.riemann cimport RiemannBase
+from ..containers.containers cimport CarrayContainer
 
 cdef class IntegrateBase:
 
-    cdef public ParticleContainer pc
+    cdef public CarrayContainer pc
     cdef public CarrayContainer left_state
     cdef public CarrayContainer right_state
     cdef public CarrayContainer flux

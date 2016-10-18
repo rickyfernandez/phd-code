@@ -3,7 +3,7 @@ cimport numpy as np
 
 from ..load_balance.tree cimport Tree, hilbert_type
 from ..utils.carray cimport LongArray, LongLongArray
-from ..containers.containers cimport ParticleContainer
+from ..containers.containers cimport CarrayContainer
 
 
 cdef class LoadBalance:
@@ -27,8 +27,8 @@ cdef class LoadBalance:
 
     cdef hilbert_type hilbert_func
 
-    cdef void _calculate_local_work(self, ParticleContainer pc, np.ndarray work)
+    cdef void _calculate_local_work(self, CarrayContainer pc, np.ndarray work)
     cdef void _find_split_in_work(self, np.ndarray global_work)
-    cdef void _collect_particles_export(self, ParticleContainer pc, LongArray part_ids, LongArray part_pid,
+    cdef void _collect_particles_export(self, CarrayContainer pc, LongArray part_ids, LongArray part_pid,
             LongArray leaf_pid, int my_pid)
-    cdef void _compute_hilbert_keys(self, ParticleContainer pc)
+    cdef void _compute_hilbert_keys(self, CarrayContainer pc)

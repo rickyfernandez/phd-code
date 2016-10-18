@@ -1,7 +1,7 @@
 from libcpp.vector cimport vector
 
-from ..containers.containers cimport ParticleContainer, CarrayContainer
 from ..boundary.boundary cimport Boundary
+from ..containers.containers cimport CarrayContainer
 
 ctypedef vector[int] nn           # nearest neighbors
 ctypedef vector[nn] nn_vec
@@ -53,6 +53,6 @@ cdef class Mesh:
     cdef PyTess tess
     cdef nn_vec neighbors
 
-    cdef _tessellate(self, ParticleContainer pc)
-    cdef _build_geometry(self, ParticleContainer pc)
+    cdef _tessellate(self, CarrayContainer pc)
+    cdef _build_geometry(self, CarrayContainer pc)
     cdef _reset_mesh(self)

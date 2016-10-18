@@ -1,6 +1,7 @@
 cimport numpy as np
-from ..containers.containers cimport ParticleContainer
+
 from ..utils.carray cimport LongArray
+from ..containers.containers cimport CarrayContainer
 
 ctypedef np.int64_t (*hilbert_type)(np.int32_t, np.int32_t, np.int32_t, int)
 
@@ -70,7 +71,7 @@ cdef class Tree:
     cdef void _build_global_tree(self, int global_num_particles, np.ndarray[np.int64_t, ndim=1] sorted_segm_keys,
             np.ndarray[np.int32_t, ndim=1]  sorted_segm_parts, int max_in_leaf)
 
-    cdef void construct_global_tree(self, ParticleContainer pc, object comm)
+    cdef void construct_global_tree(self, CarrayContainer pc, object comm)
 
     cdef Node* find_leaf(self, np.int64_t key)
     cdef int get_nearest_process_neighbors(self, double center[3], double h,

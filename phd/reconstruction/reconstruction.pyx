@@ -5,26 +5,27 @@ from libc.math cimport sqrt, fmax, fmin
 
 from ..mesh.mesh cimport Mesh
 from ..utils.particle_tags import ParticleTAGS
-from ..containers.containers cimport CarrayContainer, ParticleContainer
+from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 
 cdef int Real = ParticleTAGS.Real
 
 cdef class ReconstructionBase:
-    def __init__(self, ParticleContainer pc, Mesh mesh):
+
+    def __init__(self, CarrayContainer pc, Mesh mesh):
         pass
 
     def compute(self, pc, faces, left_state, right_state, mesh, gamma, dt):
         self._compute(pc, faces, left_state, right_state, mesh, gamma, dt)
 
-    cdef _compute(self, ParticleContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+    cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
             Mesh mesh, double gamma, double dt):
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
 
 cdef class PieceWiseConstant(ReconstructionBase):
 
-    cdef _compute(self, ParticleContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+    cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
             Mesh mesh, double gamma, double dt):
 
         # particle primitive variables
@@ -75,7 +76,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 
 cdef class PieceWiseLinear(ReconstructionBase):
 
-    def __init__(self, ParticleContainer pc, Mesh mesh):
+    def __init__(self, CarrayContainer pc, Mesh mesh):
 
         cdef int i
         cdef str field
@@ -104,7 +105,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         self.grad = CarrayContainer(var_dict=state_vars)
         self.grad.named_groups = named_groups
 
-    cdef _compute_gradients(self, ParticleContainer pc, CarrayContainer faces, Mesh mesh):
+    cdef _compute_gradients(self, CarrayContainer pc, CarrayContainer faces, Mesh mesh):
 
         # particle information
         cdef IntArray tags = pc.get_carray("tag")
@@ -146,7 +147,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         self.grad.pointer_groups(grad, self.grad.named_groups['primitive'])
 
         # calculate gradients
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
             if tags.data[i] == Real:
 
                 # store particle position
@@ -241,7 +242,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         stdlib.free(prim)
         stdlib.free(grad)
 
-    cdef _compute(self, ParticleContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+    cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
             Mesh mesh, double gamma, double dt):
         """
         compute linear reconstruction. Method taken from Springel (2009)
@@ -281,7 +282,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         faces.pointer_groups(fij, faces.named_groups['com'])
 
         # allocate space and compute gradients
-        self.grad.resize(pc.get_number_of_particles())
+        self.grad.resize(pc.get_number_of_items())
         self._compute_gradients(pc, faces, mesh)
 
         self.grad.pointer_groups(dd, self.grad.named_groups['density'])

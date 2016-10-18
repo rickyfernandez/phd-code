@@ -1,5 +1,4 @@
 from ..utils.particle_tags import ParticleTAGS
-from ..containers.containers import ParticleContainer
 
 import itertools
 import numpy as np

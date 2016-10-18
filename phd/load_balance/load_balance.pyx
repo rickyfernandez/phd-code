@@ -53,7 +53,7 @@ cdef class LoadBalance:
         self.tree = Tree(self.corner, self.box_length, domain.dim,
                 factor, min_in_leaf, order)
 
-    def decomposition(self, ParticleContainer pc):
+    def decomposition(self, CarrayContainer pc):
         """Perform domain decomposition
         """
         cdef np.ndarray ind
@@ -104,17 +104,16 @@ cdef class LoadBalance:
         # extract particles to send 
         send_data = pc.get_sendbufs(export_ids_npy)
         pc.remove_items(export_ids_npy)
-        temp = pc.get_number_of_particles()
+        temp = pc.get_number_of_items()
 
         # exchange load balance particles
         pc.extend(np.sum(recvbuf))
         exchange_particles(pc, send_data, sendbuf, recvbuf,
                 temp, self.comm)
 
-        pc.align_particles()
         pc['process'][:] = self.rank
 
-    cdef void _calculate_local_work(self, ParticleContainer pc, np.ndarray work):
+    cdef void _calculate_local_work(self, CarrayContainer pc, np.ndarray work):
         """Calculate global work by calculating local work in each leaf. Then sum
         work across all process. Currently the work is just the the number of
         particles in each leaf.
@@ -124,7 +123,7 @@ cdef class LoadBalance:
         cdef LongLongArray keys = pc.get_carray("key")
 
         # work is the number of local particles in leaf
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
             node = self.tree.find_leaf(keys.data[i])
             work[node.array_index] += 1
 
@@ -151,7 +150,7 @@ cdef class LoadBalance:
                 j += 1
             self.leaf_pid.data[i] = j - 1
 
-    cdef void _collect_particles_export(self, ParticleContainer pc, LongArray part_ids,
+    cdef void _collect_particles_export(self, CarrayContainer pc, LongArray part_ids,
         LongArray part_pid, LongArray leaf_pid, int my_pid):
         """
         Collect export particle indices and the process that it will be sent too.
@@ -174,7 +173,7 @@ cdef class LoadBalance:
         cdef int i, pid
         cdef LongLongArray keys = pc.get_carray("key")
 
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
 
             node = self.tree.find_leaf(keys.data[i])
             pid  = leaf_pid.data[node.array_index]
@@ -183,13 +182,13 @@ cdef class LoadBalance:
                 part_ids.append(i)
                 part_pid.append(pid)
 
-    cdef void _compute_hilbert_keys(self, ParticleContainer pc):
+    cdef void _compute_hilbert_keys(self, CarrayContainer pc):
         """Compute hilbert key for each particle. The container is assumed to only have
         real particles.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle container holding all information of particles in the simulation.
         """
         cdef int i, j
@@ -200,7 +199,7 @@ cdef class LoadBalance:
 
         pc.pointer_groups(x, pc.named_groups['position'])
 
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
             for j in range(self.tree.dim):
                 xh[j] = <np.int32_t> ( (x[j][i] - self.corner[j])*self.fac )
 

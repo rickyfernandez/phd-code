@@ -1,18 +1,20 @@
-from ..utils.particle_tags import ParticleTAGS
+import numpy as np
+cimport numpy as np
+
+from libc.math cimport sqrt, fabs, fmin, pow
 
 from ..mesh.mesh cimport Mesh
 from ..riemann.riemann cimport RiemannBase
-from ..containers.containers cimport CarrayContainer, ParticleContainer
+from ..utils.particle_tags import ParticleTAGS
+from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
-from libc.math cimport sqrt, fabs, fmin, pow
 
-import numpy as np
-cimport numpy as np
 
 cdef int Real = ParticleTAGS.Real
 
 cdef class IntegrateBase:
-    def __init__(self, ParticleContainer pc, Mesh mesh, RiemannBase riemann):
+
+    def __init__(self, CarrayContainer pc, Mesh mesh, RiemannBase riemann):
         """Constructor for the Integrator"""
 
         self.dim = mesh.dim
@@ -55,14 +57,14 @@ cdef class IntegrateBase:
 
 
 cdef class MovingMesh(IntegrateBase):
-    def __init__(self, ParticleContainer pc, Mesh mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
+
+    def __init__(self, CarrayContainer pc, Mesh mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
         """Constructor for the Integrator"""
 
         IntegrateBase.__init__(self, pc, mesh, riemann)
 
         self.regularize = regularize
         self.eta = eta
-
 
     cdef _integrate(self, double dt, double t, int iteration_count):
         """Main step routine"""
@@ -91,7 +93,7 @@ cdef class MovingMesh(IntegrateBase):
         cdef str field, axis
 
         cdef int num_faces = self.mesh.faces.get_number_of_items()
-        cdef int npart = self.pc.get_number_of_particles()
+        cdef int npart = self.pc.get_number_of_items()
 
 
         # compute particle and face velocities
@@ -172,7 +174,7 @@ cdef class MovingMesh(IntegrateBase):
             vi += v[k][0]*v[k][0]
         dt = R/(c + sqrt(vi))
 
-        for i in range(self.pc.get_number_of_particles()):
+        for i in range(self.pc.get_number_of_items()):
             if tags.data[i] == Real:
 
                 c = sqrt(gamma*p.data[i]/r.data[i])
@@ -219,7 +221,7 @@ cdef class MovingMesh(IntegrateBase):
         self.pc.pointer_groups(wx, self.pc.named_groups['w'])
         self.pc.pointer_groups(dcx, self.pc.named_groups['dcom'])
 
-        for i in range(self.pc.get_number_of_particles()):
+        for i in range(self.pc.get_number_of_items()):
 
             for k in range(self.dim):
                 wx[k][i] = v[k][i]

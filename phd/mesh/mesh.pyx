@@ -4,8 +4,8 @@ cimport libc.stdlib as stdlib
 
 from ..boundary.boundary cimport Boundary
 from ..utils.particle_tags import ParticleTAGS
+from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, LongArray, IntArray
-from ..containers.containers cimport ParticleContainer, CarrayContainer
 
 cdef class PyTess:
     cdef void reset_tess(self):
@@ -120,10 +120,10 @@ cdef class Mesh:
             self.faces.named_groups['normal'].append('normal-z')
             self.faces.named_groups['com'].append('com-z')
 
-    def tessellate(self, ParticleContainer pc):
+    def tessellate(self, CarrayContainer pc):
         self._tessellate(pc)
 
-    cdef _tessellate(self, ParticleContainer pc):
+    cdef _tessellate(self, CarrayContainer pc):
 
         cdef DoubleArray r = pc.get_carray("radius")
         cdef np.float64_t *xp[3]
@@ -137,7 +137,7 @@ cdef class Mesh:
         rp = r.get_data_ptr()
 
         # add local particles to the tessellation
-        fail = self.tess.build_initial_tess(xp, rp, pc.get_number_of_particles(), 1.0E33)
+        fail = self.tess.build_initial_tess(xp, rp, pc.get_number_of_items(), 1.0E33)
         assert(fail != -1)
 
         # pc modified - ghost particles append to container
@@ -147,10 +147,10 @@ cdef class Mesh:
         pc.pointer_groups(xp, pc.named_groups['position'])
         self.tess.update_initial_tess(xp, num_ghost)
 
-    def build_geometry(self, ParticleContainer pc):
+    def build_geometry(self, CarrayContainer pc):
         self._build_geometry(pc)
 
-    cdef _build_geometry(self, ParticleContainer pc):
+    cdef _build_geometry(self, CarrayContainer pc):
 
         # particle information
         cdef DoubleArray p_vol = pc.get_carray("volume")
@@ -189,8 +189,8 @@ cdef class Mesh:
         pair_j = f_pair_j.get_data_ptr()
         area   = f_area.get_data_ptr()
 
-        self.neighbors.resize(pc.get_number_of_particles())
-        for i in range(pc.get_number_of_particles()):
+        self.neighbors.resize(pc.get_number_of_items())
+        for i in range(pc.get_number_of_items()):
             self.neighbors[i].resize(0)
 
         # store particle and face information for the tessellation

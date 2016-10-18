@@ -1,9 +1,10 @@
 import numpy as np
 cimport numpy as np
 
+from cpython cimport PyDict_Contains, PyDict_GetItem
+
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.carray cimport BaseArray, DoubleArray, IntArray, LongArray, LongLongArray
-from cpython cimport PyDict_Contains, PyDict_GetItem
 
 
 cdef int Real = ParticleTAGS.Real
@@ -11,7 +12,6 @@ cdef int Ghost = ParticleTAGS.Ghost
 
 cdef class CarrayContainer:
 
-    # add a method to add extra fields
     def __init__(self, int num_items=0, dict var_dict=None):
         """
         Create container of carrays of size num_items
@@ -234,130 +234,6 @@ cdef class CarrayContainer:
             prop_array = property_arrays[i]
             prop_array.remove(sorted_indices, 1)
 
-    cdef void pointer_groups(self, np.float64_t *vec[], list field_names):
-        cdef int i
-        cdef str field, msg
-        cdef DoubleArray arr
-
-        i = 0
-        for field in field_names:
-            if field in self.properties.keys():
-                arr = <DoubleArray> self.get_carray(field)
-                vec[i] = arr.get_data_ptr()
-                i += 1
-            else:
-                msg = 'Unknown field in pointer_groups'
-                raise ValueError, msg
-
-cdef class ParticleContainer(CarrayContainer):
-
-    # add a method to add extra fields
-    def __init__(self, int num_real_parts=0, int dim=2, dict var_dict=None):
-        """
-        Create a particle array with property arrays of size
-        num_real_particles
-
-        Parameters
-        ----------
-        num_real_particles : int
-            number of real particles that the particle array will hold
-        """
-        cdef str name, dtype
-
-        self.num_real_particles = num_real_parts
-        self.num_ghost_particles = 0
-        self.properties = {}
-        self.dim = dim
-
-        self.carray_info = {}
-        self.named_groups = {}
-
-        if var_dict == None:
-
-            # register position
-            self.register_property(num_real_parts, "position-x", "double")
-            self.register_property(num_real_parts, "position-y", "double")
-
-            self.named_groups['position'] = ['position-x', 'position-y']
-
-            # register primitive fields
-            self.register_property(num_real_parts, "density", "double")
-            self.register_property(num_real_parts, "velocity-x", "double")
-            self.register_property(num_real_parts, "velocity-y", "double")
-            self.register_property(num_real_parts, "pressure", "double")
-
-            self.named_groups['velocity'] = ['velocity-x', 'velocity-y']
-
-            # register conservative fields
-            self.register_property(num_real_parts, "mass", "double")
-            self.register_property(num_real_parts, "momentum-x", "double")
-            self.register_property(num_real_parts, "momentum-y", "double")
-            self.register_property(num_real_parts, "energy", "double")
-
-            self.named_groups['momentum'] = ['momentum-x', 'momentum-y']
-
-            # information for prallel runs
-            self.register_property(num_real_parts, "key", "longlong")
-            self.register_property(num_real_parts, "process", "long")
-
-            # particle labels 
-            self.register_property(num_real_parts, "tag", "int")
-            self.register_property(num_real_parts, "type", "int")
-            self.register_property(num_real_parts, "ids", "long")
-            self.register_property(num_real_parts, "map", "long")
-
-            # particle geometry
-            self.register_property(num_real_parts, "w-x", "double")
-            self.register_property(num_real_parts, "w-y", "double")
-            self.register_property(num_real_parts, "dcom-x", "double")
-            self.register_property(num_real_parts, "dcom-y", "double")
-            self.register_property(num_real_parts, "volume", "double")
-            self.register_property(num_real_parts, "radius", "double")
-
-            self.named_groups['w'] = ['w-x', 'w-y']
-            self.named_groups['dcom'] = ['dcom-x', 'dcom-y']
-
-            if dim == 3:
-
-                self.register_property(num_real_parts, "position-z", "double")
-                self.register_property(num_real_parts, "velocity-z", "double")
-                self.register_property(num_real_parts, "momentum-z", "double")
-                self.register_property(num_real_parts, "w-z", "double")
-                self.register_property(num_real_parts, "dcom-z", "double")
-
-                self.named_groups['position'].append('position-z')
-                self.named_groups['velocity'].append('velocity-z')
-                self.named_groups['momentum'].append('momentum-z')
-                self.named_groups['w'].append('w-z')
-                self.named_groups['dcom'].append('dcom-z')
-
-            self.named_groups['primitive'] = ['density'] +\
-                    self.named_groups['velocity'] +\
-                    ['pressure']
-            self.named_groups['conserative'] = ['mass'] +\
-                    self.named_groups['momentum'] +\
-                    ['energy']
-
-            # set initial particle tags to be real
-            self['tag'][:] = Real
-
-        else:
-
-            for name in var_dict:
-                dtype = var_dict[name]
-                self.register_property(num_real_parts, name, dtype)
-
-
-    cpdef int get_number_of_particles(self, bint real=False):
-        """Return the number of particles"""
-        if real:
-            return self.num_real_particles
-        else:
-            if len(self.properties) > 0:
-                return self.properties.values()[0].length
-            else:
-                return 0
-
     cpdef remove_tagged_particles(self, np.int8_t tag):
         """Remove particles that have the given tag.
 
@@ -382,55 +258,17 @@ cdef class ParticleContainer(CarrayContainer):
         ind = indices.get_npy_array()
         self.remove_items(ind)
 
+    cdef void pointer_groups(self, np.float64_t *vec[], list field_names):
+        cdef int i
+        cdef str field, msg
+        cdef DoubleArray arr
 
-    cpdef int align_particles(self) except -1:
-        """Moves all Real particles to the beginning of the array.
-
-        This makes retrieving numpy slices of properties of Real
-        particles possible. This facility will be required frequently.
-        """
-        cdef size_t i, num_particles
-        cdef size_t next_insert
-        cdef size_t num_arrays
-        cdef int tmp
-        cdef LongArray index_array
-        cdef IntArray tag_arr
-        cdef BaseArray arr
-        cdef list arrays
-        cdef int num_real_particles = 0
-        cdef int num_moves = 0
-
-        next_insert = 0
-        num_particles = self.get_number_of_particles()
-
-        tag_arr = self.get_carray('tag')
-
-        # malloc the new index array
-        index_array = LongArray(num_particles)
-
-        for i in range(num_particles):
-            if tag_arr.data[i] == Real:
-                num_real_particles += 1
-                if i != next_insert:
-                    tmp = index_array.data[next_insert]
-                    index_array.data[next_insert] = i
-                    index_array.data[i] = tmp
-                    next_insert += 1
-                    num_moves += 1
-                else:
-                    index_array.data[i] = i
-                    next_insert += 1
+        i = 0
+        for field in field_names:
+            if field in self.properties.keys():
+                arr = <DoubleArray> self.get_carray(field)
+                vec[i] = arr.get_data_ptr()
+                i += 1
             else:
-                index_array.data[i] = i
-
-        self.num_real_particles = num_real_particles
-        self.num_ghost_particles = num_particles - num_real_particles
-
-        # we now have the alinged indices. Rearrange the particles
-        # accordingly
-        arrays = self.properties.values()
-        num_arrays = len(arrays)
-
-        for i in range(num_arrays):
-            arr = arrays[i]
-            arr.align_array(index_array.get_npy_array())
+                msg = 'Unknown field in pointer_groups'
+                raise ValueError, msg

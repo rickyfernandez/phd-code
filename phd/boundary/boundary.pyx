@@ -1,10 +1,10 @@
 import numpy as np
 cimport numpy as np
 
-from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
+from libcpp.vector cimport vector
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.exchange_particles import exchange_particles
-from libcpp.vector cimport vector
+from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
@@ -38,7 +38,7 @@ cdef int in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], in
             return 0
     return 1
 
-cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particles):
+cdef _reflective(CarrayContainer pc, DomainLimits domain, int num_real_particles):
     """
     Create reflective ghost particles in the simulation. Can be used in non-parallel
     and parallel runs. Ghost particles are appended right after real particles in
@@ -46,7 +46,7 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particl
 
     Parameters
     ----------
-    pc : ParticleContainer
+    pc : CarrayContainer
         Particle data
     domain : DomainLimits
         Information of the domain size and coordinates
@@ -142,7 +142,7 @@ cdef _reflective(ParticleContainer pc, DomainLimits domain, int num_real_particl
         # add new ghost to particle container
         pc.append_container(exterior_ghost)
 
-cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles):
+cdef _periodic(CarrayContainer pc, DomainLimits domain, int num_real_particles):
     """
     Create periodic ghost particles in the simulation. Should only be used in
     non-parallel runs. Ghost particles are appended right after real particles in
@@ -150,7 +150,7 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
 
     Parameters
     ----------
-    pc : ParticleContainer
+    pc : CarrayContainer
         Particle data
     domain : DomainLimits
         Information of the domain size and coordinates
@@ -235,7 +235,7 @@ cdef _periodic(ParticleContainer pc, DomainLimits domain, int num_real_particles
     # add periodic ghost to particle container
     pc.append_container(exterior_ghost)
 
-cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimits domain,
+cdef _periodic_parallel(CarrayContainer pc, CarrayContainer ghost, DomainLimits domain,
         Tree glb_tree, LongArray leaf_pid, LongArray buffer_ids, LongArray buffer_pid,
         int num_real_particles, int rank):
     """
@@ -248,9 +248,9 @@ cdef _periodic_parallel(ParticleContainer pc, CarrayContainer ghost, DomainLimit
 
     Parameters
     ----------
-    pc : ParticleContainer
+    pc : CarrayContainer
         Particle data
-    ghost : ParticleContainer
+    ghost : CarrayContainer
         Ghost data that will be exported to other processors
     domain : DomainLimits
         Information of the domain size and coordinates
@@ -376,14 +376,14 @@ cdef class Boundary:
         self.scale_factor = scale_factor
         self.boundary_type = boundary_type
 
-    cdef _set_radius(self, ParticleContainer pc, int num_real_particles):
+    cdef _set_radius(self, CarrayContainer pc, int num_real_particles):
         """
         Filter particle radius. This is done because in the initial mesh creation
         some particles will have infinite radius.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         num_real_particles : int
             Number of real particles in the container
@@ -396,7 +396,7 @@ cdef class Boundary:
         for i in range(num_real_particles):
             r.data[i] = min(fac*box_size, r.data[i])
 
-    cdef int _create_ghost_particles(self, ParticleContainer pc):
+    cdef int _create_ghost_particles(self, CarrayContainer pc):
         """
         Main routine in creating ghost particles. This routine appends ghost
         particles in particle container. Particle container should not have
@@ -404,11 +404,11 @@ cdef class Boundary:
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         """
         # container should not have ghost particles
-        cdef int num_real_particles = pc.get_number_of_particles()
+        cdef int num_real_particles = pc.get_number_of_items()
 
         self._set_radius(pc, num_real_particles)
         if self.boundary_type == BoundaryType.Reflective:
@@ -417,15 +417,15 @@ cdef class Boundary:
             _periodic(pc, self.domain, num_real_particles)
 
         # container should now have ghost particles
-        return pc.get_number_of_particles() - num_real_particles
+        return pc.get_number_of_items() - num_real_particles
 
-    cdef _update_ghost_particles(self, ParticleContainer pc, list fields):
+    cdef _update_ghost_particles(self, CarrayContainer pc, list fields):
         """
         Transfer data from image particle to ghost particle.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         fields : list
             List of field strings to update
@@ -436,7 +436,7 @@ cdef class Boundary:
         cdef np.ndarray indices_npy, map_indices_npy
 
         # find all ghost that need to be updated
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
             if types.data[i] == Exterior:
                 indices.append(i)
 
@@ -449,7 +449,7 @@ cdef class Boundary:
             for field in fields:
                 pc[field][indices_npy] = pc[field][map_indices_npy]
 
-    cdef _update_gradients(self, ParticleContainer pc, CarrayContainer gradient, list fields):
+    cdef _update_gradients(self, CarrayContainer pc, CarrayContainer gradient, list fields):
         """
         Transfer gradient from image particle to ghost particle.
 
@@ -468,7 +468,7 @@ cdef class Boundary:
         cdef np.ndarray indices_npy, map_indices_npy
 
         # find all ghost that need to be updated
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
             if types.data[i] == Exterior:
                 indices.append(i)
 
@@ -503,14 +503,14 @@ cdef class Boundary:
                             # flip each gradient component in j dimension
                             dv[dim*k+j][ip] *= -1
 
-    def migrate_boundary_particles(self, ParticleContainer pc):
+    def migrate_boundary_particles(self, CarrayContainer pc):
         """
         After a simulation timestep in a parallel run, particles may have left processor patch.
         This routine export all particles that have left.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         """
         cdef IntArray tags
@@ -523,7 +523,7 @@ cdef class Boundary:
         tags = pc.get_carray("tag")
         pc.pointer_groups(x, pc.named_groups['position'])
 
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
 
             # did particle leave domain
             is_outside = 0
@@ -542,29 +542,6 @@ cdef class Boundary:
                             x[j][i] += self.domain.translate[j]
                         if xp[j] >= self.domain.bounds[1][j]:
                             x[j][i] -= self.domain.translate[j]
-
-    def flag_real_and_ghost(self, ParticleContainer pc):
-
-        cdef IntArray tags
-        cdef np.float64_t *x[3]
-        cdef int i, j, is_outside
-        cdef int dim = self.domain.dim
-
-        pc.remove_tagged_particles(ParticleTAGS.Ghost)
-        tags = pc.get_carray("tag")
-        pc.pointer_groups(x, pc.named_groups['position'])
-
-        for i in range(pc.get_number_of_particles()):
-
-            # did particle leave domain
-            is_outside = 0
-            for j in range(dim):
-                is_outside += x[j][i] <= self.domain.bounds[0][j] or self.domain.bounds[1][j] <= x[j][i]
-
-            if is_outside:  # particle left domain
-                tags.data[i] = Ghost
-            else:           # particle remain domain
-                tags.data[i] = Real
 
 cdef class BoundaryParallel(Boundary):
     def __init__(self, DomainLimits domain, int boundary_type, LoadBalance load_bal, object comm, double scale_factor=0.4):
@@ -594,14 +571,14 @@ cdef class BoundaryParallel(Boundary):
         else:
             raise RuntimeError("Wrong dimension for tree")
 
-    cdef CarrayContainer _create_interior_ghost_particles(self, ParticleContainer pc, int num_real_particles):
+    cdef CarrayContainer _create_interior_ghost_particles(self, CarrayContainer pc, int num_real_particles):
         """
         Create ghost particles from neighboring processor. Should only be used
         in parallel runs. This routine modifies the radius of each particle.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         """
         cdef DoubleArray r = pc.get_carray("radius")
@@ -660,7 +637,7 @@ cdef class BoundaryParallel(Boundary):
 
         return interior_ghost
 
-    cdef int _create_ghost_particles(self, ParticleContainer pc):
+    cdef int _create_ghost_particles(self, CarrayContainer pc):
         """
         Main routine in creating ghost particles. This routine works only in
         parallel. It is responsible in creating interior and exterior ghost
@@ -670,7 +647,7 @@ cdef class BoundaryParallel(Boundary):
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         """
         cdef CarrayContainer ghost
@@ -678,7 +655,7 @@ cdef class BoundaryParallel(Boundary):
         cdef np.ndarray ind, buf_pid, buf_ids
 
         cdef int incoming_ghost
-        cdef int num_real_particles = pc.get_number_of_particles()
+        cdef int num_real_particles = pc.get_number_of_items()
 
         # clear out all buffer arrays
         self.buffer_ids.reset()
@@ -692,7 +669,7 @@ cdef class BoundaryParallel(Boundary):
         if self.boundary_type == BoundaryType.Reflective:
             _reflective(pc, self.domain, num_real_particles)
             # reflective ghost are appendend to pc
-            self.start_ghost = pc.get_number_of_particles()
+            self.start_ghost = pc.get_number_of_items()
         if self.boundary_type == BoundaryType.Periodic:
             _periodic_parallel(pc, ghost, self.domain, self.load_bal.tree,
                     self.load_bal.leaf_pid, self.buffer_ids, self.buffer_pid,
@@ -729,16 +706,16 @@ cdef class BoundaryParallel(Boundary):
         exchange_particles(pc, ghost, self.send_particles, self.recv_particles,
                 self.start_ghost, self.comm)
 
-        return pc.get_number_of_particles() - num_real_particles
+        return pc.get_number_of_items() - num_real_particles
 
-    cdef _update_ghost_particles(self, ParticleContainer pc, list fields):
+    cdef _update_ghost_particles(self, CarrayContainer pc, list fields):
         """
         Transfer data from image particle to ghost particle. Works only in
         parallel.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         fields : dict
             List of field strings to update
@@ -754,14 +731,14 @@ cdef class BoundaryParallel(Boundary):
         exchange_particles(pc, ghost, self.send_particles, self.recv_particles,
                 self.start_ghost, self.comm, fields)
 
-    def migrate_boundary_particles(self, ParticleContainer pc):
+    def migrate_boundary_particles(self, CarrayContainer pc):
         """
         After a simulation timestep in a parallel run, particles may have left processor patch.
         This routine export all particles that have left.
 
         Parameters
         ----------
-        pc : ParticleContainer
+        pc : CarrayContainer
             Particle data
         """
         cdef Tree tree
@@ -800,7 +777,7 @@ cdef class BoundaryParallel(Boundary):
         keys = pc.get_carray("key")
         pc.pointer_groups(x, pc.named_groups['position'])
 
-        for i in range(pc.get_number_of_particles()):
+        for i in range(pc.get_number_of_items()):
             if tags.data[i] == Real:
 
                # did the particle leave the domain
@@ -855,10 +832,10 @@ cdef class BoundaryParallel(Boundary):
 
         else:
 
-            export_pc = ParticleContainer(var_dict=pc.carray_info)
+            export_pc = CarrayContainer(var_dict=pc.carray_info)
             self.send_particles[:] = 0
 
-        self.start_ghost = pc.get_number_of_particles()
+        self.start_ghost = pc.get_number_of_items()
 
         # how many particles are you receiving from each processor
         self.recv_particles[:] = 0
@@ -872,7 +849,7 @@ cdef class BoundaryParallel(Boundary):
         exchange_particles(pc, export_pc, self.send_particles, self.recv_particles,
                 self.start_ghost, self.comm)
 
-    cdef _update_gradients(self, ParticleContainer pc, CarrayContainer gradient, list fields):
+    cdef _update_gradients(self, CarrayContainer pc, CarrayContainer gradient, list fields):
         """
         Transfer gradient from image particle to ghost particle.
 
@@ -887,7 +864,9 @@ cdef class BoundaryParallel(Boundary):
         cdef CarrayContainer grad_ghost
 
         # first transfer gradients to exterior ghost particles
-        Boundary._update_gradients(self, pc, gradient, fields)
+        # reflective is a special case
+        if self.boundary_type == BoundaryType.Reflective:
+            Boundary._update_gradients(self, pc, gradient, fields)
 
         # second transfer gradients to interior ghost particles
         grad_ghost = gradient.extract_items(self.buffer_ids.get_npy_array(), fields)
