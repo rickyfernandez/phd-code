@@ -2,8 +2,8 @@ from phd.boundary.boundary import \
         BoundaryType, Boundary, \
         BoundaryParallel
 
-from phd.containers.containers import \
-        ParticleContainer
+#from phd.containers.containers import \
+#        ParticleContainer
 
 from phd.domain.domain import \
         DomainLimits
@@ -35,3 +35,6 @@ from phd.utils.plot_voro import \
 
 from phd.utils.store_class import \
         to_dict
+
+from phd.utils.particle_creator import \
+        HydroParticleCreator
