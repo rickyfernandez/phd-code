@@ -24,9 +24,9 @@ cdef _periodic_parallel(CarrayContainer pc, CarrayContainer ghost, DomainLimits 
 cdef class Boundary:
     cdef public DomainLimits domain
     cdef public int boundary_type
+    cdef public double scale_factor
 
     cdef int start_ghost
-    cdef double scale_factor
 
     cdef np.ndarray send_particles, recv_particles
 

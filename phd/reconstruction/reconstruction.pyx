@@ -11,8 +11,12 @@ from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 cdef int Real = ParticleTAGS.Real
 
 cdef class ReconstructionBase:
+    def __init__(self, **kwargs):
+        #self.pc = None
+        #self.Mesh = None
+        pass
 
-    def __init__(self, CarrayContainer pc, Mesh mesh):
+    def _initialize(self):
         pass
 
     def compute(self, pc, faces, left_state, right_state, mesh, gamma, dt):
@@ -75,8 +79,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
                 vr[k][n] = v[k][j]
 
 cdef class PieceWiseLinear(ReconstructionBase):
-
-    def __init__(self, CarrayContainer pc, Mesh mesh):
+    def _initialize(self):
 
         cdef int i
         cdef str field
@@ -86,8 +89,8 @@ cdef class PieceWiseLinear(ReconstructionBase):
         named_groups['primitive'] = []
         named_groups['velocity'] = []
 
-        for field in pc.named_groups['primitive']:
-            for i in range(mesh.dim):
+        for field in self.pc.named_groups['primitive']:
+            for i in range(self.mesh.dim):
 
                 if field not in named_groups:
                     named_groups[field] = []

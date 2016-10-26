@@ -78,14 +78,14 @@ cdef class PyTess3d(PyTess):
                 pair_i, pair_j, neighbors)
 
 cdef class Mesh:
-    def __init__(self, Boundary boundary):
-        cdef dim = boundary.domain.dim
-
-        self.boundary = boundary
-        self.dim = dim
-
+    def __init__(self, int num_neigh=128, **kwargs):
+        # self.boundary = None
         cdef nn nearest_neigh = nn()
-        self.neighbors = nn_vec(128, nearest_neigh)
+        self.neighbors = nn_vec(num_neigh, nearest_neigh)
+
+    def _initialize(self):
+
+        self.dim = self.boundary.domain.dim
 
         face_vars = {
                 "area": "double",
@@ -111,9 +111,9 @@ cdef class Mesh:
         self.faces.named_groups['normal'] = ['normal-x', 'normal-y']
         self.faces.named_groups['com'] = ['com-x', 'com-y']
 
-        if dim == 2:
+        if self.dim == 2:
             self.tess = PyTess2d()
-        elif dim == 3:
+        elif self.dim == 3:
             self.tess = PyTess3d()
             self.fields.append("dcom-z")
             self.faces.named_groups['velocity'].append('velocity-z')

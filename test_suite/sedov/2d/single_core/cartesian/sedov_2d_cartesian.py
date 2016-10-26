@@ -10,7 +10,7 @@ def create_particles(gamma):
     dx = Lx/nx # spacing between particles
 
     # create particle container
-    pc = phd.ParticleContainer(n)
+    pc = phd.HydroParticleCreator(n)
     part = 0
     for i in range(nx):
         for j in range(nx):
@@ -36,19 +36,20 @@ def create_particles(gamma):
 
     return pc
 
-# create inital state of the simulation
-pc = create_particles(1.4)
-
-domain = phd.DomainLimits(dim=2, xmin=0., xmax=1.)           # spatial size of problem 
-boundary = phd.Boundary(domain,                              # reflective boundary condition
-        boundary_type=phd.BoundaryType.Reflective)
-mesh = phd.Mesh(boundary)                                    # tesselation algorithm
-reconstruction = phd.PieceWiseConstant()                     # constant reconstruction
-riemann = phd.HLL(reconstruction, gamma=1.4)                 # riemann solver
-integrator = phd.MovingMesh(pc, mesh, riemann, regularize=1) # integrator 
-solver = phd.Solver(integrator,                              # simulation driver
+# simulation driver
+sim = phd.Simulation(
         cfl=0.5, tf=0.1, pfreq=1,
         relax_num_iterations=0,
         output_relax=False,
         fname='sedov_2d_cartesian')
-solver.solve()
+
+sim.add_component(create_particles(1.4))                                   # create inital state of the simulation
+sim.add_component(phd.DomainLimits(dim=2, xmin=0., xmax=1.))               # spatial size of problem 
+sim.add_component(phd.Boundary(boundary_type=phd.BoundaryType.Reflective)) # reflective boundary condition
+sim.add_component(phd.Mesh())                                              # tesselation algorithm
+sim.add_component(phd.PieceWiseLinear())                                   # Linear reconstruction
+sim.add_component(phd.HLLC(gamma=1.4))                                     # riemann solver
+sim.add_component(phd.MovingMesh(regularize=1))                            # Integrator
+
+# run the simulation
+sim.solve()

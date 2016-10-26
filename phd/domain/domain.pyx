@@ -3,7 +3,7 @@ cdef class DomainLimits:
 
     # only square boxes for now
     def __init__(self, int dim=2, double xmin=0, double xmax=1.0,
-            is_periodic=False, is_outflow=False, is_wall=True):
+            is_periodic=False, is_outflow=False, is_wall=True, **kwargs):
 
         self._check_limits(xmin, xmax)
         for i in range(dim):

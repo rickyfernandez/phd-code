@@ -12,7 +12,7 @@ cdef int Ghost = ParticleTAGS.Ghost
 
 cdef class CarrayContainer:
 
-    def __init__(self, int num_items=0, dict var_dict=None):
+    def __init__(self, int num_items=0, dict var_dict=None, **kwargs):
         """
         Create container of carrays of size num_items
 

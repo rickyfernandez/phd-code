@@ -18,7 +18,8 @@ if rank == 0:
     n = nx*nx  # number of particles
 
     # create particle container
-    pc_root = phd.ParticleContainer(n)
+    #pc_root = phd.ParticleContainer(n)
+    pc_root = phd.HydroParticleCreator(n, parallel=True)
     part = 0
     np.random.seed(0)
     for i in range(nx):
@@ -62,7 +63,8 @@ else:
 send = comm.scatter(send, root=0)
 
 # allocate local particle container
-pc = phd.ParticleContainer(send)
+#pc = phd.ParticleContainer(send)
+pc = phd.HydroParticleCreator(send, parallel=True)
 
 # import particles from root
 fields = ['position-x', 'position-y', 'density', 'pressure', 'ids']
@@ -75,18 +77,23 @@ pc['process'][:] = rank
 pc['tag'][:] = phd.ParticleTAGS.Real
 pc['type'][:] = phd.ParticleTAGS.Undefined
 
-domain = phd.DomainLimits(dim=2, xmin=0., xmax=1.)           # spatial size of problem
-load_bal = phd.LoadBalance(domain, comm, order=21)           # tree load balance scheme
-boundary = phd.BoundaryParallel(domain,                      # reflective boundary condition
-        phd.BoundaryType.Reflective,
-        load_bal, comm)
-mesh = phd.Mesh(boundary)                                    # tesselation algorithm
-reconstruction = phd.PieceWiseConstant()                     # constant reconstruction
-riemann = phd.HLL(reconstruction, gamma=1.4)                 # riemann solver
-integrator = phd.MovingMesh(pc, mesh, riemann, regularize=1) # integrator 
-solver = phd.SolverParallel(integrator, load_bal,            # simulation driver
-        cfl=0.5, comm=comm, tf=0.1, pfreq=1,
-        relax_num_iterations=8,
+# simulation driver
+sim = phd.SimulationParallel(
+        cfl=0.5, tf=0.1, pfreq=1,
+        relax_num_iterations=10,
         output_relax=False,
         fname='sedov_2d_uniform')
-solver.solve()
+
+sim.add_component(pc)                                                      # create inital state of the simulation
+sim.add_component(comm)                                                    # create inital state of the simulation
+sim.add_component(phd.LoadBalance(order=21))                               # tree load balance scheme
+sim.add_component(phd.DomainLimits(dim=2, xmin=0., xmax=1.))               # spatial size of problem 
+sim.add_component(phd.BoundaryParallel(                                    # reflective boundary condition
+    boundary_type=phd.BoundaryType.Reflective))
+sim.add_component(phd.Mesh())                                              # tesselation algorithm
+sim.add_component(phd.PieceWiseLinear())                                   # Linear reconstruction
+sim.add_component(phd.HLLC(gamma=1.4))                                     # riemann solver
+sim.add_component(phd.MovingMesh(regularize=1))                            # Integrator
+
+# run the simulation
+sim.solve()

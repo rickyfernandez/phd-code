@@ -9,8 +9,27 @@ from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 
 
 cdef class LoadBalance:
-    def __init__(self, DomainLimits domain, object comm=None,
-            np.float64_t factor=0.1, int min_in_leaf=32, np.int32_t order=21):
+    def __init__(self, np.float64_t factor=0.1, int min_in_leaf=32, np.int32_t order=21, **kwargs):
+        """Constructor for load balance
+
+        Parameters
+        ----------
+        domain : DomainLimits
+            Domain coordinate information.
+        comm : MPI.COMM_WORLD
+            MPI communicator.
+        order : int
+            The number of bits per dimension for constructing hilbert keys.
+        """
+        self.order = order
+        self.factor = factor
+        self.min_in_leaf = min_in_leaf
+
+        self.leaf_pid = LongArray()
+        self.export_ids = LongArray()
+        self.export_pid = LongArray()
+
+    def _initialize(self):
         """Constructor for load balance
 
         Parameters
@@ -23,35 +42,28 @@ cdef class LoadBalance:
             The number of bits per dimension for constructing hilbert keys.
         """
         cdef int i
+        cdef int dim = self.domain.dim
 
-        self.comm = comm
-        self.rank = comm.Get_rank()
-        self.size = comm.Get_size()
-
-        self.order = order
-        self.factor = factor
+        self.rank = self.comm.Get_rank()
+        self.size = self.comm.Get_size()
 
         fudge_factor = 1.001
-        self.box_length = domain.max_length*fudge_factor
+        self.box_length = self.domain.max_length*fudge_factor
         self.fac = (1 << self.order) / self.box_length
 
         self.corner = np.zeros(3, dtype=np.float64)
-        for i in range(domain.dim):
-            self.corner[i] = (domain.bounds[0][i] + domain.bounds[1][i])*0.5 - 0.5*self.box_length
+        for i in range(dim):
+            self.corner[i] = (self.domain.bounds[0][i] + self.domain.bounds[1][i])*0.5 - 0.5*self.box_length
 
-        self.leaf_pid = LongArray()
-        self.export_ids = LongArray()
-        self.export_pid = LongArray()
-
-        if domain.dim == 2:
+        if dim == 2:
             self.hilbert_func = hilbert_key_2d
-        elif domain.dim == 3:
+        elif dim == 3:
             self.hilbert_func = hilbert_key_3d
         else:
             raise RuntimeError("Wrong dimension for tree")
 
-        self.tree = Tree(self.corner, self.box_length, domain.dim,
-                factor, min_in_leaf, order)
+        self.tree = Tree(self.corner, self.box_length, dim,
+                self.factor, self.min_in_leaf, self.order)
 
     def decomposition(self, CarrayContainer pc):
         """Perform domain decomposition

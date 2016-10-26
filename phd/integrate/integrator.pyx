@@ -13,33 +13,35 @@ from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
 cdef int Real = ParticleTAGS.Real
 
 cdef class IntegrateBase:
+    def __init__(self, **kwargs):
+        """Constructor for the Integrator"""
+        #self.pc = None
+        #self.mesh = None
+        #self.riemann = None
+        pass
 
-    def __init__(self, CarrayContainer pc, Mesh mesh, RiemannBase riemann):
+    def _initialize(self):
         """Constructor for the Integrator"""
 
-        self.dim = mesh.dim
-        self.mesh = mesh
-        self.riemann = riemann
-        self.pc = pc
-
-        self.gamma = riemann.gamma
+        self.dim = self.mesh.dim
+        self.gamma = self.riemann.gamma
 
         cdef str field
         cdef dict flux_vars = {}
-        for field in pc.named_groups['conserative']:
+        for field in self.pc.named_groups['conserative']:
             flux_vars[field] = 'double'
         self.flux = CarrayContainer(var_dict=flux_vars)
-        self.flux.named_groups['momentum'] = pc.named_groups['momentum']
+        self.flux.named_groups['momentum'] = self.pc.named_groups['momentum']
 
         cdef dict state_vars = {}
-        for field in pc.named_groups['primitive']:
+        for field in self.pc.named_groups['primitive']:
             state_vars[field] = 'double'
 
         self.left_state  = CarrayContainer(var_dict=state_vars)
-        self.left_state.named_groups['velocity'] = pc.named_groups['velocity']
+        self.left_state.named_groups['velocity'] = self.pc.named_groups['velocity']
 
         self.right_state = CarrayContainer(var_dict=state_vars)
-        self.right_state.named_groups['velocity'] = pc.named_groups['velocity']
+        self.right_state.named_groups['velocity'] = self.pc.named_groups['velocity']
 
     def compute_time_step(self):
         return self._compute_time_step()
@@ -57,12 +59,10 @@ cdef class IntegrateBase:
 
 
 cdef class MovingMesh(IntegrateBase):
-
-    def __init__(self, CarrayContainer pc, Mesh mesh, RiemannBase riemann, int regularize = 0, double eta = 0.25):
+    def __init__(self, int regularize = 0, double eta = 0.25, **kwargs):
         """Constructor for the Integrator"""
 
-        IntegrateBase.__init__(self, pc, mesh, riemann)
-
+        IntegrateBase.__init__(self, **kwargs)
         self.regularize = regularize
         self.eta = eta
 
@@ -115,6 +115,8 @@ cdef class MovingMesh(IntegrateBase):
         self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
         self.flux.pointer_groups(fmv, self.flux.named_groups['momentum'])
 
+        #self.pre_step()
+
         # update conserved quantities
         for n in range(num_faces):
 
@@ -138,6 +140,8 @@ cdef class MovingMesh(IntegrateBase):
 
                 for k in range(self.dim):
                     mv[k][j] += dt*a*fmv[k][n]
+
+        #self.post_step()
 
         self.pc.pointer_groups(x, self.pc.named_groups['position'])
         self.pc.pointer_groups(wx, self.pc.named_groups['w'])

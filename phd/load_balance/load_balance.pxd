@@ -1,6 +1,7 @@
 import numpy as np
 cimport numpy as np
 
+from ..domain.domain cimport DomainLimits
 from ..load_balance.tree cimport Tree, hilbert_type
 from ..utils.carray cimport LongArray, LongLongArray
 from ..containers.containers cimport CarrayContainer
@@ -8,11 +9,14 @@ from ..containers.containers cimport CarrayContainer
 
 cdef class LoadBalance:
 
+    cdef public DomainLimits domain
     cdef public object comm
     cdef public np.int32_t rank
     cdef public np.int32_t size
 
     cdef public np.int32_t order
+
+    cdef public np.int32_t min_in_leaf
 
     cdef public np.float64_t fac
     cdef public np.ndarray corner

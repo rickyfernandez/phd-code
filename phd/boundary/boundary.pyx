@@ -370,11 +370,13 @@ cdef _periodic_parallel(CarrayContainer pc, CarrayContainer ghost, DomainLimits 
         ghost.append_container(exterior_ghost)
 
 cdef class Boundary:
-    def __init__(self, DomainLimits domain, int boundary_type, double scale_factor=0.4):
-
-        self.domain = domain
+    def __init__(self, int boundary_type, double scale_factor=0.4, **kwargs):
+        #self.domain = None
         self.scale_factor = scale_factor
         self.boundary_type = boundary_type
+
+    def _initialize(self):
+        pass
 
     cdef _set_radius(self, CarrayContainer pc, int num_real_particles):
         """
@@ -544,29 +546,29 @@ cdef class Boundary:
                             x[j][i] -= self.domain.translate[j]
 
 cdef class BoundaryParallel(Boundary):
-    def __init__(self, DomainLimits domain, int boundary_type, LoadBalance load_bal, object comm, double scale_factor=0.4):
-
-        self.comm = comm
-        self.rank = comm.Get_rank()
-        self.size = comm.Get_size()
-
-        self.load_bal = load_bal
-
-        self.recv_particles = np.empty(self.size, np.int32)
-        self.send_particles = np.empty(self.size, np.int32)
+    def __init__(self, int boundary_type, double scale_factor=0.4):
+        #self.comm = None
+        #self.domain = None
+        #self.load_bal = None
+        self.boundary_type = boundary_type
+        self.scale_factor = scale_factor
 
         self.buffer_ids = LongArray()
         self.buffer_pid = LongArray()
 
         self.hilbert_func = NULL
 
-        self.domain = domain
-        self.boundary_type = boundary_type
-        self.scale_factor = scale_factor
+    def _initialize(self):
 
-        if domain.dim == 2:
+        self.rank = self.comm.Get_rank()
+        self.size = self.comm.Get_size()
+
+        self.recv_particles = np.empty(self.size, np.int32)
+        self.send_particles = np.empty(self.size, np.int32)
+
+        if self.domain.dim == 2:
             self.hilbert_func = hilbert_key_2d
-        elif domain.dim == 3:
+        elif self.domain.dim == 3:
             self.hilbert_func = hilbert_key_3d
         else:
             raise RuntimeError("Wrong dimension for tree")

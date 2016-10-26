@@ -8,8 +8,8 @@ cimport numpy as np
 from libc.math cimport sqrt, pow, fmin, fmax
 
 cdef class RiemannBase:
-    def __init__(self, ReconstructionBase reconstruction, double gamma=1.4, double cfl=0.3):
-        self.reconstruction = reconstruction
+    def __init__(self, double gamma=1.4, double cfl=0.3, **kwargs):
+        # self.reconstruction = None
         self.gamma = gamma
         self.cfl = cfl
 

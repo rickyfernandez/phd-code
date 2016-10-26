@@ -3,14 +3,15 @@ import h5py
 import numpy as np
 from mpi4py import MPI
 
+import phd
 from ..utils.particle_tags import ParticleTAGS
 
 
-class Solver(object):
-    """Solver object that marshalls the simulation."""
+class Simulation(object):
+    """Marshalls the simulation."""
     def __init__(
-        self, integrator, tf=1.0, dt=1e-3, cfl=0.5, pfreq=100, tfreq=100., relax_num_iterations=0, output_relax=False,
-        fname='simulation', outdir=None, iteration_count=0, current_time=0.):
+        self, tf=1.0, cfl=0.5, pfreq=100, tfreq=100., relax_num_iterations=0, output_relax=False,
+        fname='simulation', outdir=None):
         """Constructor
 
         Parameters:
@@ -32,17 +33,13 @@ class Solver(object):
             Output file base name
 
         iteration_count : int
-            Solver iteration counter. Initialize with non-zero for a restart
+            Simulation iteration counter. Initialize with non-zero for a restart
 
         current_time : double
-            Solver time. Initialize with non-zero for a restart
+            Simulation time. Initialize with non-zero for a restart
         """
-        self.mesh = integrator.mesh
-        self.pc = integrator.pc
-        self.boundary = integrator.mesh.boundary
-        self.domain = integrator.mesh.boundary.domain
-
-        self.dimensions = 'xyz'[:self.mesh.dim]
+        self.pc = self.mesh = self.domain = self.riemann = None
+        self.boundary = self.integrator = self.reconstruction = None
 
         self.cfl = cfl
         self.pfreq = pfreq
@@ -54,24 +51,103 @@ class Solver(object):
 
         # iteration iteration_counter and time
         self.relax_num_iterations = relax_num_iterations
-        self.iteration_count = iteration_count
-        self.current_time = current_time
+        self.iteration_count = 0
+        self.current_time = 0.0
 
         self.fname = fname
-
-        # default integrator
-        self.integrator = integrator
-        self.gamma = integrator.riemann.gamma
 
         if not outdir:
             outdir = self.fname + '_output'
 
-        #save the path where we want to dump output
+        # save the path where we want to dump output
         self.path = os.path.abspath(outdir)
         os.makedirs(self.path)
 
+    def _create_components_from_dict(self, cl_dict):
+
+        for comp_name, (cl_name, cl_param) in cl_dict.iteritems():
+            x = getattr(self, comp_name)
+            cl = getattr(phd, cl_name)
+            x = cl(**cl_param)
+
+    def _create_components_timeshot(self):
+
+        dict_output = {}
+        for attr_name, cl in self.__dict__.iteritems():
+
+            comp = getattr(self, attr_name)
+
+            # ignore parameters
+            if isinstance(comp, (int, float, str)):
+                continue
+
+            # store components
+            d = {}
+            for i in dir(cl):
+                x = getattr(cl, i)
+                if isinstance(x, (int, float, str)):
+                    d[i] = x
+
+            dict_output[attr_name] = (cl.__class__.__name__, d)
+
+        return dict_output
+
+    def add_component(self, cl):
+
+        if isinstance(cl, phd.CarrayContainer):
+            self.pc = cl
+        elif isinstance(cl, phd.DomainLimits):
+            self.domain = cl
+        elif isinstance(cl, phd.Boundary):
+            self.boundary = cl
+        elif isinstance(cl, phd.Mesh):
+            self.mesh = cl
+        elif isinstance(cl, phd.ReconstructionBase):
+            self.reconstruction = cl
+        elif isinstance(cl, phd.RiemannBase):
+            self.riemann = cl
+        elif isinstance(cl, phd.IntegrateBase):
+            self.integrator = cl
+        else:
+            raise RuntimeError("Unknown %s component" % cl.__class__.__name__)
+
+    def _check_component(self):
+
+        for attr_name, cl in self.__dict__.iteritems():
+            comp = getattr(self, attr_name)
+            if isinstance(comp, (int, float, str)):
+                continue
+            if comp == None:
+                raise RuntimeError("Component: %s not set." % attr_name)
+
+    def _initialize(self):
+
+        self._check_component()
+
+        self.boundary.domain = self.domain
+        self.boundary._initialize()
+
+        self.mesh.boundary = self.boundary
+        self.mesh._initialize()
+
+        self.reconstruction.pc = self.pc
+        self.reconstruction.mesh = self.mesh
+        self.reconstruction._initialize()
+
+        self.riemann.reconstruction = self.reconstruction
+
+        self.integrator.pc = self.pc
+        self.integrator.mesh = self.mesh
+        self.integrator.riemann = self.riemann
+        self.integrator._initialize()
+
+        self.gamma = self.integrator.riemann.gamma
+        self.dimensions = 'xyz'[:self.mesh.dim]
+
     def solve(self):
         """Main solver"""
+
+        self._initialize()
 
         tf = self.tf
         mesh = self.mesh; boundary = self.boundary; integrator = self.integrator
@@ -186,10 +262,10 @@ class Solver(object):
             if self.output_relax:
                 self._save(-1, self.current_time, 0)
 
-class SolverParallel(Solver):
-    """Solver object that marshalls the simulation in parallel."""
+class SimulationParallel(Simulation):
+    """Marshalls simulation in parallel."""
     def __init__(
-        self, integrator, load_balance, load_balance_freq=5, comm=None, tf=1.0, dt=1e-3, cfl=0.5, pfreq=100, tfreq=100,
+        self, load_balance_freq=5, tf=1.0, cfl=0.5, pfreq=100, tfreq=100,
         relax_num_iterations=0, output_relax=False, fname='simulation',
         outdir=None, iteration_count=0, current_time=0):
         """Constructor
@@ -213,20 +289,17 @@ class SolverParallel(Solver):
             Output file base name
 
         iteration_count : int
-            Solver iteration counter. Initialize with non-zero for a restart
+            Simulation iteration counter. Initialize with non-zero for a restart
 
         current_time : double
-            Solver time. Initialize with non-zero for a restart
+            Simulation time. Initialize with non-zero for a restart
 
         conservation_check : bool
             Perform total energy check at start and end
         """
-        self.mesh = integrator.mesh
-        self.pc = integrator.pc
-        self.boundary = integrator.mesh.boundary
-        self.domain = integrator.mesh.boundary.domain
-
-        self.dimensions = 'xyz'[:self.mesh.dim]
+        self.pc = self.mesh = self.domain = self.riemann = None
+        self.boundary = self.integrator = self.reconstruction = None
+        self.comm = self.load_balance = None
 
         self.cfl = cfl
         self.pfreq = pfreq
@@ -243,30 +316,86 @@ class SolverParallel(Solver):
 
         self.fname = fname
 
-        # default integrator
-        self.integrator = integrator
-        self.gamma = integrator.riemann.gamma
-
         if not outdir:
             outdir = self.fname + '_output'
 
         #save the path where we want to dump output
         self.path = os.path.abspath(outdir)
 
-        self.comm = comm
-        self.rank = comm.Get_rank()
-        self.size = comm.Get_size()
-
-        self.load_balance = load_balance
+        #self.load_balance = load_balance
         self.load_balance_freq = load_balance_freq
+
+    def _initialize(self):
+
+        self._check_component()
+
+        # distribute particles among processors
+        self.load_balance.comm = self.comm
+        self.load_balance.domain = self.domain
+        self.load_balance._initialize()
+
+        # boundary conditions - relect, periodic, or mixture
+        self.boundary.comm = self.comm
+        self.boundary.domain = self.domain
+        self.boundary.load_bal = self.load_balance
+        self.boundary._initialize()
+
+        # algorithm to construct voronoi mesh
+        self.mesh.boundary = self.boundary
+        self.mesh._initialize()
+
+        # create states at face for riemann solver
+        self.reconstruction.pc = self.pc
+        self.reconstruction.mesh = self.mesh
+        self.reconstruction._initialize()
+
+        # riemann solver
+        self.riemann.reconstruction = self.reconstruction
+
+        # how are the equations advance in time
+        self.integrator.pc = self.pc
+        self.integrator.mesh = self.mesh
+        self.integrator.riemann = self.riemann
+        self.integrator._initialize()
+
+        self.rank = self.comm.Get_rank()
+        self.size = self.comm.Get_size()
+
+        self.gamma = self.integrator.riemann.gamma
+        self.dimensions = 'xyz'[:self.mesh.dim]
 
         if self.rank == 0:
             if not os.path.isdir(self.path):
                 os.makedirs(self.path)
         self.comm.barrier()
 
+    def add_component(self, cl):
+
+        if isinstance(cl, phd.CarrayContainer):
+            self.pc = cl
+        elif isinstance(cl, MPI.Intracomm):
+            self.comm = cl
+        elif isinstance(cl, phd.DomainLimits):
+            self.domain = cl
+        elif isinstance(cl, phd.LoadBalance):
+            self.load_balance = cl
+        elif isinstance(cl, phd.Boundary):
+            self.boundary = cl
+        elif isinstance(cl, phd.Mesh):
+            self.mesh = cl
+        elif isinstance(cl, phd.ReconstructionBase):
+            self.reconstruction = cl
+        elif isinstance(cl, phd.RiemannBase):
+            self.riemann = cl
+        elif isinstance(cl, phd.IntegrateBase):
+            self.integrator = cl
+        else:
+            raise RuntimeError("Unknown %s component" % cl.__class__.__name__)
+
     def solve(self, **kwargs):
         """Main solver"""
+
+        self._initialize()
 
         tf = self.tf
         mesh = self.mesh; boundary = self.boundary; integrator = self.integrator

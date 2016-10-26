@@ -4,6 +4,8 @@ from ..mesh.mesh cimport Mesh
 from ..containers.containers cimport CarrayContainer, CarrayContainer
 
 cdef class ReconstructionBase:
+    cdef public CarrayContainer pc
+    cdef public Mesh mesh
 
     cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_faces,
             CarrayContainer right_faces, Mesh mesh, double gamma, double dt)
