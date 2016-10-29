@@ -1,5 +1,6 @@
 #include "tess.h"
 //#include <vector>
+#include <iostream>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 //#include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_2.h>
@@ -208,8 +209,10 @@ int Tess2d::extract_geometry(
         */
         do {
             // edge that contains infinite vertex
-            if (tess.is_infinite(ed)) 
+            if (tess.is_infinite(ed)) {
+                std::cout << "infinite" << "x: " << xp << " y: " << yp << std::endl;
                 return -1;
+            }
 
             // extract voronoi face from edge
             CGAL::Object o = tess.dual(*ed);
@@ -242,26 +245,25 @@ int Tess2d::extract_geometry(
                 double ye = y2 - y1;
 
                 // face area in 2d is length between voronoi vertices
-                double area = std::sqrt(xe*xe + ye*ye);
-
-                // need to work on
-                //const double SMALLDIFF1 = 1.0e-10;
-                //const double area0 = area1;
-                //const double L1 = std::sqrt(area0);
-                //const double L2 = (face_centroid - ipos).abs();
-                //const double area = (L1 < SMALLDIFF1*L2) ? 0.0 : area0;
-                //
-                // ignore face
-                //if (area == 0.0)
-                //    continue;
-
-
-                // the volume of the cell is the sum of triangle areas - eq. 27
-                vol += 0.25*area*h;
+                //double area = std::sqrt(xe*xe + ye*ye);
+                double area0 = std::sqrt(xe*xe + ye*ye);
 
                 // center of mass of face
                 double fx = 0.5*(x1 + x2);
                 double fy = 0.5*(y1 + y2);
+
+                // need to work on
+                const double SMALLDIFF = 1.0e-10;
+                const double L1 = std::sqrt(area0);
+                const double L2 = std::sqrt( (fx-xp)*(fx-xp) + (fy-yp)*(fy-yp) );
+                const double area = (L1 < SMALLDIFF*L2) ? 0.0 : area0;
+
+                // ignore face
+                if (area == 0.0)
+                    continue;
+
+                // the volume of the cell is the sum of triangle areas - eq. 27
+                vol += 0.25*area*h;
 
                 // center of mass of triangle - eq. 31
                 double tx = 2.0*fx/3.0 + xp/3.0;
@@ -296,6 +298,7 @@ int Tess2d::extract_geometry(
                 }
 
             } else {
+                std::cout << "infinite face " << "x: " << xp << " y: " << yp << std::endl;
                 return -1;
             }
         } while (++ed != done);
