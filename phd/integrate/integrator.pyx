@@ -149,6 +149,12 @@ cdef class MovingMesh(IntegrateBase):
         # move particles
         for i in range(npart):
             if tags.data[i] == Real:
+
+                if m.data[i] <= 0.:
+                    raise RuntimeError('Mass is less than zero...... id: %d' %i)
+                if e.data[i] <= 0.:
+                    raise RuntimeError('Energy is less than zero...... id:%d' %i)
+
                 for k in range(self.dim):
                     x[k][i] += dt*wx[k][i]
 
@@ -180,6 +186,11 @@ cdef class MovingMesh(IntegrateBase):
 
         for i in range(self.pc.get_number_of_items()):
             if tags.data[i] == Real:
+
+                if p.data[i] <= 0.:
+                    raise RuntimeError('Pressure less than zero ......')
+                if r.data[i] <= 0.:
+                    raise RuntimeError('Density less than zero ......')
 
                 c = sqrt(gamma*p.data[i]/r.data[i])
 
