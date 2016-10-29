@@ -79,6 +79,11 @@ cdef class PieceWiseConstant(ReconstructionBase):
                 vr[k][n] = v[k][j]
 
 cdef class PieceWiseLinear(ReconstructionBase):
+    def __init__(self, int limiter = 0, **kwargs):
+
+        ReconstructionBase.__init__(self, **kwargs)
+        self.limiter = limiter
+
     def _initialize(self):
 
         cdef int i
@@ -118,6 +123,8 @@ cdef class PieceWiseLinear(ReconstructionBase):
         cdef LongArray pair_i = faces.get_carray("pair-i")
         cdef LongArray pair_j = faces.get_carray("pair-j")
 
+        cdef int limiter = self.limiter
+
         cdef double dph, psi, d_dif, d_sum
         cdef int i, j, k, n, m, fid, dim = mesh.dim
 
@@ -131,9 +138,6 @@ cdef class PieceWiseLinear(ReconstructionBase):
         cdef double[:] phi_min = np.zeros(num_fields, dtype=np.float64)
         cdef double[:] alpha   = np.zeros(num_fields, dtype=np.float64)
         cdef double[:,:] df = np.zeros((num_fields,dim), dtype=np.float64)
-
-        #cdef np.float64_t *prim[4]
-        #cdef np.float64_t *grad[8]
 
         cdef np.float64_t** prim = <np.float64_t**>stdlib.malloc(sizeof(void*)*num_fields)
         cdef np.float64_t** grad = <np.float64_t**>stdlib.malloc(sizeof(void*)*(num_fields*dim))
@@ -218,20 +222,46 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
                     # index of face neighbor
                     fid = mesh.neighbors[i][m]
-                    for n in range(num_fields):
 
-                        dphi = 0
-                        for k in range(dim):
-                            dphi += df[n,k]*(fij[k][fid] - cx[k])
+                    if limiter == 0:
 
-                        if dphi > 0.0:
-                            psi = (phi_max[n] - prim[n][i])/dphi
-                        elif dphi < 0.0:
-                            psi = (phi_min[n] - prim[n][i])/dphi
-                        else:
-                            psi = 1.0
+                        for n in range(num_fields):
 
-                        alpha[n] = fmin(alpha[n], psi)
+                            # extract neighbor from face
+                            if i == pair_i.data[fid]:
+                                j = pair_j.data[fid]
+                            elif i == pair_j.data[fid]:
+                                j = pair_i.data[fid]
+
+                            dphi = 0
+                            for k in range(dim):
+                                dphi += df[n,k]*(fij[k][fid] - cx[k])
+
+                            if dphi > 0.0:
+                                psi = max((prim[n][j] - prim[n][i])/dphi, 0.)
+                            elif dphi < 0.0:
+                                psi = max((prim[n][j] - prim[n][i])/dphi, 0.)
+                            else:
+                                psi = 1.0
+
+                            alpha[n] = fmin(alpha[n], psi)
+
+                    elif limiter == 1:
+
+                        for n in range(num_fields):
+
+                            dphi = 0
+                            for k in range(dim):
+                                dphi += df[n,k]*(fij[k][fid] - cx[k])
+
+                            if dphi > 0.0:
+                                psi = (phi_max[n] - prim[n][i])/dphi
+                            elif dphi < 0.0:
+                                psi = (phi_min[n] - prim[n][i])/dphi
+                            else:
+                                psi = 1.0
+
+                            alpha[n] = fmin(alpha[n], psi)
 
                 # store the gradients
                 for n in range(num_fields):
@@ -333,3 +363,12 @@ cdef class PieceWiseLinear(ReconstructionBase):
                 for n in range(dim): # over velocity components
                     vl[n][m] += dv[n*dim+k][i]*(sepi - fac*vi)
                     vr[n][m] += dv[n*dim+k][j]*(sepj - fac*vj)
+
+            if dl.data[m] <= 0.0:
+                raise RuntimeError('left density less than zero...... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
+            if dr.data[m] <= 0.0:
+                raise RuntimeError('right density less than zero..... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))
+            if pl.data[m] <= 0.0:
+                raise RuntimeError('left pressure less than zero..... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
+            if pr.data[m] <= 0.0:
+                raise RuntimeError('right pressure less than zero.... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))

@@ -16,5 +16,6 @@ cdef class PieceWiseConstant(ReconstructionBase):
 cdef class PieceWiseLinear(ReconstructionBase):
 
     cdef public CarrayContainer grad
+    cdef public int limiter
 
     cdef _compute_gradients(self, CarrayContainer pc, CarrayContainer faces, Mesh mesh)
