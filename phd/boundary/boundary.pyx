@@ -57,6 +57,7 @@ cdef _reflective(CarrayContainer pc, DomainLimits domain, int num_real_particles
 
     cdef DoubleArray r = pc.get_carray("radius")
 
+    cdef DoubleArray mass
     cdef IntArray tags
     cdef IntArray types
     cdef LongArray maps
@@ -65,7 +66,7 @@ cdef _reflective(CarrayContainer pc, DomainLimits domain, int num_real_particles
     cdef Particle *p
 
     cdef double xp[3], vp[3]
-    cdef np.float64_t *x[3], *v[3]
+    cdef np.float64_t *x[3], *v[3], *mv[3]
     cdef np.float64_t *xg[3], *vg[3]
 
     cdef int i, j, k
@@ -126,6 +127,9 @@ cdef _reflective(CarrayContainer pc, DomainLimits domain, int num_real_particles
         tags = exterior_ghost.get_carray("tag")
         types = exterior_ghost.get_carray("type")
 
+        mass = exterior_ghost.get_carray("mass")
+        exterior_ghost.pointer_groups(mv, pc.named_groups['momentum'])
+
         # transfer new data to ghost 
         for i in range(exterior_ghost.get_number_of_items()):
 
@@ -136,8 +140,10 @@ cdef _reflective(CarrayContainer pc, DomainLimits domain, int num_real_particles
             # update new position/velocity
             p = &ghost_particle[i]
             for j in range(dim):
+
                 xg[j][i] = p.x[j]
                 vg[j][i] = p.v[j]
+                mv[j][i] = mass.data[i]*p.v[j]
 
         # add new ghost to particle container
         pc.append_container(exterior_ghost)
@@ -494,16 +500,12 @@ cdef class Boundary:
 
                     # reverse the normal of velocity gradient
                     if x[j][ip] < self.domain.bounds[0][j]:
-                        # loop over velocity gradients
-                        for k in range(dim):
-                            # flip each gradient component in j dimension
-                            dv[dim*k+j][ip] *= -1
+                        # flip gradient component
+                        dv[(dim+1)*j][ip] *= -1
 
-                    if x[j][ip] > self.domain.bounds[0][j]:
-                        # loop over velocity gradients
-                        for k in range(dim):
-                            # flip each gradient component in j dimension
-                            dv[dim*k+j][ip] *= -1
+                    if x[j][ip] > self.domain.bounds[1][j]:
+                        # flip gradient component
+                        dv[(dim+1)*j][ip] *= -1
 
     def migrate_boundary_particles(self, CarrayContainer pc):
         """
