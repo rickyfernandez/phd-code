@@ -11,6 +11,8 @@ cdef class RiemannBase:
     cdef _solve(self, CarrayContainer fluxes, CarrayContainer left_face, CarrayContainer right_face, CarrayContainer faces,
             double t, double dt, int iteration_count, int dim)
 
+    cdef _deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim)
+
 cdef class HLL(RiemannBase):
 
     cdef void get_waves(self, double d_l, double u_l, double p_l,
