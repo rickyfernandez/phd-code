@@ -21,3 +21,10 @@ cdef class HLL(RiemannBase):
 
 cdef class HLLC(HLL):
     pass
+
+cdef class Exact(RiemannBase):
+
+    cdef p_guess(self, double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma)
+    cdef p_func(self, double d, double u, double p, double gamma, double p_old)
+    cdef p_func_deriv(self, double d, double u, double p, double gamma, double p_old)
+    cdef get_pstar(self, double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma)
