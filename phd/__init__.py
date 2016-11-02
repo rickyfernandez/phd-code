@@ -26,10 +26,9 @@ from phd.reconstruction.reconstruction import \
 from phd.riemann.riemann import \
         RiemannBase, \
         HLL, \
-        HLLC
+        HLLC, \
+        Exact
 
-#from phd.solver.solver import \
-#        Solver, SolverParallel
 from phd.simulation.simulation import \
         Simulation, SimulationParallel
 
