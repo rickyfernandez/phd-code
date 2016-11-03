@@ -44,19 +44,72 @@ cdef class IntegrateBase:
         self.right_state.named_groups['velocity'] = self.pc.named_groups['velocity']
 
     def compute_time_step(self):
-        return self._compute_time_step()
+        return self.riemann._compute_time_step(self.pc)
 
     def integrate(self, double dt, double t, int iteration_count):
         self._integrate(dt, t, iteration_count)
-
-    cdef double _compute_time_step(self):
-        msg = "IntegrateBase::compute_time_step called!"
-        raise NotImplementedError(msg)
 
     cdef _integrate(self, double dt, double t, int iteration_count):
         msg = "IntegrateBase::_integrate called!"
         raise NotImplementedError(msg)
 
+#    def conserative_from_primitive(self):
+#
+#        cdef DoubleArray m  = self.pc.get_carray("mass")
+#        cdef DoubleArray e  = self.pc.get_carray("energy")
+#
+#        cdef DoubleArray r  = self.pc.get_carray("density")
+#        cdef DoubleArray p  = self.pc.get_carray("pressure")
+#
+#        cdef DoubleArray vol  = self.pc.get_carray("volume")
+#
+#        cdef double vs_sq
+#        cdef np.float64_t *v[3], *mv[3]
+#        self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
+#        self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
+#
+#        for i in range(self.pc.get_number_of_items()):
+#
+#            # total mass in cell
+#            m.data[i] = r.data[i]*vol.data[i]
+#
+#            # total momentum in cell
+#            v_sq = 0.
+#            for k in range(dim):
+#                mv[k][i] = v[k][i]*m.data[i]
+#                v_sq    += v[k][i]
+#
+#            # total energy in cell
+#            e.data[i] = (0.5*r.data[i]*v_sq + p.data[i]/(self.gamma-1.))*_vol
+
+#    def primitive_from_conserative(self):
+#
+#        cdef DoubleArray m  = self.pc.get_carray("mass")
+#        cdef DoubleArray e  = self.pc.get_carray("energy")
+#
+#        cdef DoubleArray r  = self.pc.get_carray("density")
+#        cdef DoubleArray p  = self.pc.get_carray("pressure")
+#
+#        cdef DoubleArray vol  = self.pc.get_carray("volume")
+#
+#        cdef double vs_sq
+#        cdef np.float64_t *v[3], *mv[3]
+#        self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
+#        self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
+#
+#        for i in range(self.pc.get_number_of_items()):
+#
+#            # total mass in cell
+#            r.data[i] = m.data[i]/vol.data[i]
+#
+#            # total momentum in cell
+#            v_sq = 0.
+#            for k in range(dim):
+#                v[k][i] = mv[k][i]/m.data[i]
+#                v_sq    += v[k][i]
+#
+#            # pressure in cell
+#            p.data[i] = (e.data[i]/vol.data[i] - 0.5*r.data[i]*v_sq)*(self.gamma-1.)
 
 cdef class MovingMesh(IntegrateBase):
     def __init__(self, int regularize = 0, double eta = 0.25, **kwargs):
@@ -106,7 +159,7 @@ cdef class MovingMesh(IntegrateBase):
 
         # reconstruct left\right states at each face
         self.riemann.reconstruction.compute(self.pc, self.mesh.faces, self.left_state, self.right_state,
-                self.mesh, self.gamma, dt)
+                self.mesh, self.gamma, dt, self.riemann.boost)
 
         # extrapolate state to face, apply frame transformations, solve riemann solver, and transform back
         self.riemann.solve(self.flux, self.left_state, self.right_state, self.mesh.faces,
@@ -159,53 +212,6 @@ cdef class MovingMesh(IntegrateBase):
                     x[k][i] += dt*wx[k][i]
 
 
-    cdef double _compute_time_step(self):
-
-        cdef IntArray tags = self.pc.get_carray("tag")
-        cdef DoubleArray r = self.pc.get_carray("density")
-        cdef DoubleArray p = self.pc.get_carray("pressure")
-        cdef DoubleArray vol = self.pc.get_carray("volume")
-
-        cdef double gamma = self.gamma
-        cdef double c, R, dt, vi
-        cdef int i, k, npart
-        cdef np.float64_t* v[3]
-
-        self.pc.pointer_groups(v, self.pc.named_groups['velocity'])
-
-        c = sqrt(gamma*p.data[0]/r.data[0])
-        if self.dim == 2:
-            R = sqrt(vol.data[0]/np.pi)
-        elif self.dim == 3:
-            R = pow(3.0*vol.data[0]/(4.0*np.pi), 1.0/3.0)
-
-        vi = 0.0
-        for k in range(self.dim):
-            vi += v[k][0]*v[k][0]
-        dt = R/(c + sqrt(vi))
-
-        for i in range(self.pc.get_number_of_items()):
-            if tags.data[i] == Real:
-
-                if p.data[i] <= 0.:
-                    raise RuntimeError('Pressure less than zero ......')
-                if r.data[i] <= 0.:
-                    raise RuntimeError('Density less than zero ......')
-
-                c = sqrt(gamma*p.data[i]/r.data[i])
-
-                # calculate approx radius of each voronoi cell
-                if self.dim == 2:
-                    R = sqrt(vol.data[i]/np.pi)
-                elif self.dim == 3:
-                    R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
-
-                vi = 0.0
-                for k in range(self.dim):
-                    vi += v[k][i]*v[k][i]
-                dt = fmin(R/(c + sqrt(vi)), dt)
-
-        return dt
 
     cdef _compute_face_velocities(self):
         self._assign_particle_velocities()
