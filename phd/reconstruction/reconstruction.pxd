@@ -8,7 +8,7 @@ cdef class ReconstructionBase:
     cdef public Mesh mesh
 
     cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_faces,
-            CarrayContainer right_faces, Mesh mesh, double gamma, double dt)
+            CarrayContainer right_faces, Mesh mesh, double gamma, double dt, int boost)
 
 cdef class PieceWiseConstant(ReconstructionBase):
     pass
@@ -17,7 +17,6 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
     cdef public CarrayContainer grad
     cdef public int limiter
-    cdef public int boost
 
     cdef np.float64_t** prim_ptr
     cdef np.float64_t** grad_ptr

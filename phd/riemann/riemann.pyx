@@ -1,5 +1,6 @@
+from ..utils.carray cimport DoubleArray, IntArray
+from ..utils.particle_tags import ParticleTAGS
 from ..containers.containers cimport CarrayContainer
-from ..utils.carray cimport DoubleArray
 from ..reconstruction.reconstruction cimport ReconstructionBase
 
 import numpy as np
@@ -7,11 +8,15 @@ cimport numpy as np
 
 from libc.math cimport sqrt, pow, fmin, fmax, fabs
 
+cdef int Real = ParticleTAGS.Real
+
 cdef class RiemannBase:
-    def __init__(self, double gamma=1.4, double cfl=0.3, **kwargs):
+    def __init__(self, double gamma=1.4, double cfl=0.3, int boost=1, int dim=2, **kwargs):
         # self.reconstruction = None
-        self.gamma = gamma
         self.cfl = cfl
+        self.boost = boost
+        self.dim = dim
+        self.gamma = gamma
 
     def solve(self, fluxes, left_faces, right_faces, faces, t, dt, iteration_count, dim):
         self._solve(fluxes, left_faces, right_faces, faces, t, dt, iteration_count, dim)
@@ -20,6 +25,64 @@ cdef class RiemannBase:
             double t, double dt, int iteration_count, int dim):
         msg = "RiemannBase::solve called!"
         raise NotImplementedError(msg)
+
+    cdef double _compute_time_step(self, CarrayContainer pc):
+
+        cdef IntArray tags = pc.get_carray("tag")
+        cdef DoubleArray r = pc.get_carray("density")
+        cdef DoubleArray p = pc.get_carray("pressure")
+        cdef DoubleArray vol = pc.get_carray("volume")
+
+        cdef int i, k, npart
+        cdef np.float64_t* v[3]
+        cdef double c, R, dt, vi
+        cdef int boost = self.boost
+        cdef double gamma = self.gamma
+
+        pc.pointer_groups(v, pc.named_groups['velocity'])
+
+        c = sqrt(gamma*p.data[0]/r.data[0])
+
+        if self.dim == 2:
+            R = sqrt(vol.data[0]/np.pi)
+        elif self.dim == 3:
+            R = pow(3.0*vol.data[0]/(4.0*np.pi), 1.0/3.0)
+
+        vi = 0.0
+        for k in range(self.dim):
+            vi += v[k][0]*v[k][0]
+
+        if boost == 1:
+            dt = R/c
+        else:
+            dt = R/(c + sqrt(vi))
+
+        for i in range(pc.get_number_of_items()):
+            if tags.data[i] == Real:
+
+                if p.data[i] <= 0.:
+                    raise RuntimeError('Pressure less than zero ......')
+                if r.data[i] <= 0.:
+                    raise RuntimeError('Density less than zero ......')
+
+                c = sqrt(gamma*p.data[i]/r.data[i])
+
+                # calculate approx radius of each voronoi cell
+                if self.dim == 2:
+                    R = sqrt(vol.data[i]/np.pi)
+                elif self.dim == 3:
+                    R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
+
+                vi = 0.0
+                for k in range(self.dim):
+                    vi += v[k][i]*v[k][i]
+
+                if boost == 1:
+                    dt = fmin(R/c, dt)
+                else:
+                    dt = fmin(R/(c + sqrt(vi)), dt)
+
+        return dt
 
     cdef _deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim):
 
@@ -389,6 +452,16 @@ cdef class HLLC(HLL):
             self._deboost(fluxes, faces, dim)
 
 cdef class Exact(RiemannBase):
+    def __init__(self, double gamma=1.4, double cfl=0.3, int boost=1, int dim=2, **kwargs):
+
+        if boost == 0:
+            RuntimeError("Exact solver can only be used in boost frame")
+
+        # self.reconstruction = None
+        self.cfl = cfl
+        self.boost = 1
+        self.dim = dim
+        self.gamma = gamma
 
     cdef _solve(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces, CarrayContainer faces,
             double t, double dt, int iteration_count, int dim):

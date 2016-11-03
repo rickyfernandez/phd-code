@@ -19,20 +19,20 @@ cdef class ReconstructionBase:
     def _initialize(self):
         pass
 
-    def compute(self, pc, faces, left_state, right_state, mesh, gamma, dt):
-        self._compute(pc, faces, left_state, right_state, mesh, gamma, dt)
+    def compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
+            Mesh mesh, double gamma, double dt, int boost):
+        self._compute(pc, faces, left_state, right_state, mesh, gamma, dt, boost)
 
     cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-            Mesh mesh, double gamma, double dt):
+            Mesh mesh, double gamma, double dt, int boost):
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
-
 
 
 cdef class PieceWiseConstant(ReconstructionBase):
 
     cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-            Mesh mesh, double gamma, double dt):
+            Mesh mesh, double gamma, double dt, int boost):
 
         # particle primitive variables
         cdef DoubleArray d = pc.get_carray("density")
@@ -52,12 +52,13 @@ cdef class PieceWiseConstant(ReconstructionBase):
 
         cdef int i, j, k, n
         cdef int dim = mesh.dim
-        cdef np.float64_t *v[3], *vl[3], *vr[3]
+        cdef np.float64_t *v[3], *vl[3], *vr[3], *wx[3]
         cdef int num_faces = faces.get_number_of_items()
 
         pc.pointer_groups(v, pc.named_groups['velocity'])
         left_state.pointer_groups(vl,  left_state.named_groups['velocity'])
         right_state.pointer_groups(vr, right_state.named_groups['velocity'])
+        faces.pointer_groups(wx,  faces.named_groups['velocity'])
 
         # loop through each face
         for n in range(num_faces):
@@ -77,15 +78,18 @@ cdef class PieceWiseConstant(ReconstructionBase):
 
             # velocities
             for k in range(dim):
-                vl[k][n] = v[k][i]
-                vr[k][n] = v[k][j]
+                if boost == 1:
+                    vl[k][n] = v[k][i] - wx[k][m]
+                    vr[k][n] = v[k][j] - wx[k][m]
+                else:
+                    vl[k][n] = v[k][i]
+                    vr[k][n] = v[k][j]
 
 cdef class PieceWiseLinear(ReconstructionBase):
-    def __init__(self, int limiter = 0, int boost = 0, **kwargs):
+    def __init__(self, int limiter = 0, **kwargs):
 
         ReconstructionBase.__init__(self, **kwargs)
         self.limiter = limiter
-        self.boost = boost
 
     def __dealloc_(self):
 
@@ -304,15 +308,13 @@ cdef class PieceWiseLinear(ReconstructionBase):
         mesh.boundary._update_gradients(pc, self.grad, self.grad.named_groups['primitive'])
 
     cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_state, CarrayContainer right_state,
-            Mesh mesh, double gamma, double dt):
+            Mesh mesh, double gamma, double dt, int boost):
         """
         compute linear reconstruction. Method taken from Springel (2009)
         """
         cdef double fac = 0.5*dt
         cdef double sepi, sepj
         cdef int i, j, k, m, n, dim = mesh.dim
-
-        cdef int boost = self.boost
 
         cdef np.float64_t vi[3], vj[3]
         cdef np.float64_t *fij[3], *wx[3]

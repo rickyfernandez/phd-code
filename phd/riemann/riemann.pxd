@@ -5,13 +5,18 @@ from ..reconstruction.reconstruction cimport ReconstructionBase
 cdef class RiemannBase:
 
     cdef public ReconstructionBase reconstruction
-    cdef public double gamma
+
     cdef public double cfl
+    cdef public double gamma
+    cdef public int boost
+    cdef public int dim
 
     cdef _solve(self, CarrayContainer fluxes, CarrayContainer left_face, CarrayContainer right_face, CarrayContainer faces,
             double t, double dt, int iteration_count, int dim)
 
     cdef _deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim)
+
+    cdef double _compute_time_step(self, CarrayContainer pc)
 
 cdef class HLL(RiemannBase):
 
