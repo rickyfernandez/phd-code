@@ -15,7 +15,6 @@ cdef class IntegrateBase:
     cdef public Mesh mesh
     cdef public int dim
 
-    cdef double _compute_time_step(self)
     cdef _integrate(self, double dt, double t, int iteration_count)
 
 cdef class MovingMesh(IntegrateBase):
