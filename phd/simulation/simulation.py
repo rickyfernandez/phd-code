@@ -1,4 +1,5 @@
 import os
+import json
 import h5py
 import numpy as np
 from mpi4py import MPI
@@ -63,15 +64,55 @@ class Simulation(object):
         self.path = os.path.abspath(outdir)
         os.makedirs(self.path)
 
-    def _create_components_from_dict(self, cl_dict):
+    def add_particles(self, cl):
+        if isinstance(cl, phd.CarrayContainer):
+            self.pc = cl
+        else:
+            raise RuntimeError("%s component not type CarrayContainer" % cl.__class__.__name__)
 
+    def add_domain(self, cl):
+        if isinstance(cl, phd.DomainLimits):
+            self.domain = cl
+        else:
+            raise RuntimeError("%s component not type DomainLimits" % cl.__class__.__name__)
+
+    def add_boundary(self, cl):
+        if isinstance(cl, phd.Boundary):
+            self.boundary = cl
+        else:
+            raise RuntimeError("%s component not type Boundary" % cl.__class__.__name__)
+
+    def add_mesh(self, cl):
+        if isinstance(cl, phd.Mesh):
+            self.mesh = cl
+        else:
+            raise RuntimeError("%s component not type Mesh" % cl.__class__.__name__)
+
+    def add_reconstruction(self, cl):
+        if isinstance(cl, phd.ReconstructionBase):
+            self.reconstruction = cl
+        else:
+            raise RuntimeError("%s component not type ReconstructionBase" % cl.__class__.__name__)
+
+    def add_riemann(self, cl):
+        if isinstance(cl, phd.RiemannBase):
+            self.riemann = cl
+        else:
+            raise RuntimeError("%s component not type RiemannBase" % cl.__class__.__name__)
+
+    def add_integrator(self, cl):
+        if isinstance(cl, phd.IntegrateBase):
+            self.integrator = cl
+        else:
+            raise RuntimeError("%s component not type IntegratorBase" % cl.__class__.__name__)
+
+    def _create_components_from_dict(self, cl_dict):
         for comp_name, (cl_name, cl_param) in cl_dict.iteritems():
             x = getattr(self, comp_name)
             cl = getattr(phd, cl_name)
             x = cl(**cl_param)
 
     def _create_components_timeshot(self):
-
         dict_output = {}
         for attr_name, cl in self.__dict__.iteritems():
 
@@ -91,25 +132,6 @@ class Simulation(object):
             dict_output[attr_name] = (cl.__class__.__name__, d)
 
         return dict_output
-
-    def add_component(self, cl):
-
-        if isinstance(cl, phd.CarrayContainer):
-            self.pc = cl
-        elif isinstance(cl, phd.DomainLimits):
-            self.domain = cl
-        elif isinstance(cl, phd.Boundary):
-            self.boundary = cl
-        elif isinstance(cl, phd.Mesh):
-            self.mesh = cl
-        elif isinstance(cl, phd.ReconstructionBase):
-            self.reconstruction = cl
-        elif isinstance(cl, phd.RiemannBase):
-            self.riemann = cl
-        elif isinstance(cl, phd.IntegrateBase):
-            self.integrator = cl
-        else:
-            raise RuntimeError("Unknown %s component" % cl.__class__.__name__)
 
     def _check_component(self):
 
@@ -369,28 +391,17 @@ class SimulationParallel(Simulation):
                 os.makedirs(self.path)
         self.comm.barrier()
 
-    def add_component(self, cl):
-
-        if isinstance(cl, phd.CarrayContainer):
-            self.pc = cl
-        elif isinstance(cl, MPI.Intracomm):
-            self.comm = cl
-        elif isinstance(cl, phd.DomainLimits):
-            self.domain = cl
-        elif isinstance(cl, phd.LoadBalance):
-            self.load_balance = cl
-        elif isinstance(cl, phd.Boundary):
+    def add_communicator(self, cl):
+        if isinstance(cl, MPI.Intracomm):
             self.boundary = cl
-        elif isinstance(cl, phd.Mesh):
-            self.mesh = cl
-        elif isinstance(cl, phd.ReconstructionBase):
-            self.reconstruction = cl
-        elif isinstance(cl, phd.RiemannBase):
-            self.riemann = cl
-        elif isinstance(cl, phd.IntegrateBase):
-            self.integrator = cl
         else:
-            raise RuntimeError("Unknown %s component" % cl.__class__.__name__)
+            raise RuntimeError("%s component not type Intracomm" % cl.__class__.__name__)
+
+    def add_loadbalance(self, cl):
+        if isinstance(cl, phd.LoadBalance):
+            self.boundary = cl
+        else:
+            raise RuntimeError("%s component not type LoadBalance" % cl.__class__.__name__)
 
     def solve(self, **kwargs):
         """Main solver"""
