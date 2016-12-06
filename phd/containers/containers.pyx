@@ -32,7 +32,7 @@ cdef class CarrayContainer:
                 dtype = var_dict[name]
                 self.register_property(num_items, name, dtype)
 
-    def register_property(self, int size, str name, str dtype="double"):
+    cpdef register_property(self, int size, str name, str dtype="double"):
         """
         Register new carray
 
@@ -158,7 +158,7 @@ cdef class CarrayContainer:
                 nparr_dest = dest.get_npy_array()
                 nparr_dest[old_num_items:] = nparr_source
 
-    cpdef CarrayContainer extract_items(self, np.ndarray index_array, list fields=None):
+    cpdef CarrayContainer extract_items(self, LongArray index_array, list fields=None):
         """
         Create new carray container for item indices in index_array
 
@@ -175,7 +175,7 @@ cdef class CarrayContainer:
         cdef BaseArray dst_prop_array, src_prop_array
         cdef list prop_names
         cdef str prop_type, prop, dtype
-        cdef int size = index_array.size
+        cdef long size = index_array.length
 
         if fields is None:
             prop_names = self.properties.keys()

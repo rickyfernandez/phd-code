@@ -116,8 +116,8 @@ cdef _reflective(CarrayContainer pc, DomainLimits domain, int num_real_particles
     # in parallel a patch might not have exterior ghost
     if indices.length:
 
-        # create ghost particles from flagged particles
-        exterior_ghost = pc.extract_items(indices.get_npy_array())
+       # create ghost particles from flagged particles
+        exterior_ghost = pc.extract_items(indices)
 
         # references to new ghost data
         exterior_ghost.pointer_groups(xg, pc.named_groups['position'])
@@ -217,7 +217,7 @@ cdef _periodic(CarrayContainer pc, DomainLimits domain, int num_real_particles):
                     indices.append(i)
 
     # create ghost particles from flagged particles
-    exterior_ghost = pc.extract_items(indices.get_npy_array())
+    exterior_ghost = pc.extract_items(indices)
 
     # references to new ghost data
     exterior_ghost.pointer_groups(xg, pc.named_groups['position'])
@@ -355,7 +355,7 @@ cdef _periodic_parallel(CarrayContainer pc, CarrayContainer ghost, DomainLimits 
     if indices.length:
 
         # create ghost particles from flagged particles
-        exterior_ghost = pc.extract_items(indices.get_npy_array())
+        exterior_ghost = pc.extract_items(indices)
 
         # references to new ghost data
         exterior_ghost.pointer_groups(xg, pc.named_groups['position'])
@@ -634,7 +634,7 @@ cdef class BoundaryParallel(Boundary):
                         self.buffer_ids.append(i)               # store particle id
                         self.buffer_pid.append(nbrs_pid_npy[j]) # store export processor
 
-        interior_ghost = pc.extract_items(self.buffer_ids.get_npy_array())
+        interior_ghost = pc.extract_items(self.buffer_ids)
 
         interior_ghost["tag"][:] = Ghost
         interior_ghost["type"][:] = Interior
@@ -731,7 +731,7 @@ cdef class BoundaryParallel(Boundary):
         if self.boundary_type == BoundaryType.Reflective:
             Boundary._update_ghost_particles(self, pc, fields)
 
-        ghost = pc.extract_items(self.buffer_ids.get_npy_array(), fields)
+        ghost = pc.extract_items(self.buffer_ids, fields)
         exchange_particles(pc, ghost, self.send_particles, self.recv_particles,
                 self.start_ghost, self.comm, fields)
 
@@ -827,7 +827,7 @@ cdef class BoundaryParallel(Boundary):
             buf_ids[:] = buf_ids[ind]
             buf_pid[:] = buf_pid[ind]
 
-            export_pc = pc.extract_items(buf_ids)
+            export_pc = pc.extract_items(self.buffer_ids)
             pc.remove_items(buf_ids)
 
             # bin the number of particles being sent to each processor
@@ -873,6 +873,6 @@ cdef class BoundaryParallel(Boundary):
             Boundary._update_gradients(self, pc, gradient, fields)
 
         # second transfer gradients to interior ghost particles
-        grad_ghost = gradient.extract_items(self.buffer_ids.get_npy_array(), fields)
+        grad_ghost = gradient.extract_items(self.buffer_ids, fields)
         exchange_particles(gradient, grad_ghost, self.send_particles, self.recv_particles,
                 self.start_ghost, self.comm, fields)
