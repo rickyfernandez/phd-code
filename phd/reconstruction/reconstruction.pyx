@@ -79,8 +79,8 @@ cdef class PieceWiseConstant(ReconstructionBase):
             # velocities
             for k in range(dim):
                 if boost == 1:
-                    vl[k][n] = v[k][i] - wx[k][m]
-                    vr[k][n] = v[k][j] - wx[k][m]
+                    vl[k][n] = v[k][i] - wx[k][n]
+                    vr[k][n] = v[k][j] - wx[k][n]
                 else:
                     vl[k][n] = v[k][i]
                     vr[k][n] = v[k][j]
