@@ -53,63 +53,60 @@ cdef class IntegrateBase:
         msg = "IntegrateBase::_integrate called!"
         raise NotImplementedError(msg)
 
-#    def conserative_from_primitive(self):
-#
-#        cdef DoubleArray m  = self.pc.get_carray("mass")
-#        cdef DoubleArray e  = self.pc.get_carray("energy")
-#
-#        cdef DoubleArray r  = self.pc.get_carray("density")
-#        cdef DoubleArray p  = self.pc.get_carray("pressure")
-#
-#        cdef DoubleArray vol  = self.pc.get_carray("volume")
-#
-#        cdef double vs_sq
-#        cdef np.float64_t *v[3], *mv[3]
-#        self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
-#        self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
-#
-#        for i in range(self.pc.get_number_of_items()):
-#
-#            # total mass in cell
-#            m.data[i] = r.data[i]*vol.data[i]
-#
-#            # total momentum in cell
-#            v_sq = 0.
-#            for k in range(dim):
-#                mv[k][i] = v[k][i]*m.data[i]
-#                v_sq    += v[k][i]
-#
-#            # total energy in cell
-#            e.data[i] = (0.5*r.data[i]*v_sq + p.data[i]/(self.gamma-1.))*_vol
+    def conserative_from_primitive(self):
 
-#    def primitive_from_conserative(self):
-#
-#        cdef DoubleArray m  = self.pc.get_carray("mass")
-#        cdef DoubleArray e  = self.pc.get_carray("energy")
-#
-#        cdef DoubleArray r  = self.pc.get_carray("density")
-#        cdef DoubleArray p  = self.pc.get_carray("pressure")
-#
-#        cdef DoubleArray vol  = self.pc.get_carray("volume")
-#
-#        cdef double vs_sq
-#        cdef np.float64_t *v[3], *mv[3]
-#        self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
-#        self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
-#
-#        for i in range(self.pc.get_number_of_items()):
-#
-#            # total mass in cell
-#            r.data[i] = m.data[i]/vol.data[i]
-#
-#            # total momentum in cell
-#            v_sq = 0.
-#            for k in range(dim):
-#                v[k][i] = mv[k][i]/m.data[i]
-#                v_sq    += v[k][i]
-#
-#            # pressure in cell
-#            p.data[i] = (e.data[i]/vol.data[i] - 0.5*r.data[i]*v_sq)*(self.gamma-1.)
+        cdef DoubleArray m = self.pc.get_carray("mass")
+        cdef DoubleArray e = self.pc.get_carray("energy")
+        cdef DoubleArray r = self.pc.get_carray("density")
+        cdef DoubleArray p = self.pc.get_carray("pressure")
+        cdef DoubleArray vol = self.pc.get_carray("volume")
+
+        cdef double vs_sq
+        cdef np.float64_t *v[3], *mv[3]
+
+        self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
+        self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
+
+        for i in range(self.pc.get_number_of_items()):
+
+            # total mass in cell
+            m.data[i] = r.data[i]*vol.data[i]
+
+            # total momentum in cell
+            v_sq = 0.
+            for k in range(self.dim):
+                mv[k][i] = v[k][i]*m.data[i]
+                v_sq    += v[k][i]*v[k][i]
+
+            # total energy in cell
+            e.data[i] = (0.5*r.data[i]*v_sq + p.data[i]/(self.gamma-1.))*vol.data[i]
+
+    def primitive_from_conserative(self):
+
+        cdef DoubleArray m = self.pc.get_carray("mass")
+        cdef DoubleArray e = self.pc.get_carray("energy")
+        cdef DoubleArray r = self.pc.get_carray("density")
+        cdef DoubleArray p = self.pc.get_carray("pressure")
+        cdef DoubleArray vol = self.pc.get_carray("volume")
+
+        cdef double vs_sq
+        cdef np.float64_t *v[3], *mv[3]
+        self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
+        self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
+
+        for i in range(self.pc.get_number_of_items()):
+
+            # density in cell
+            r.data[i] = m.data[i]/vol.data[i]
+
+            # velocity in cell
+            v_sq = 0.
+            for k in range(self.dim):
+                v[k][i] = mv[k][i]/m.data[i]
+                v_sq    += v[k][i]*v[k][i]
+
+            # pressure in cell
+            p.data[i] = (e.data[i]/vol.data[i] - 0.5*r.data[i]*v_sq)*(self.gamma-1.)
 
 cdef class MovingMesh(IntegrateBase):
     def __init__(self, int regularize = 0, double eta = 0.25, **kwargs):
