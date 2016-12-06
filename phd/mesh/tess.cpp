@@ -7,6 +7,8 @@
 #include <CGAL/Triangulation_vertex_base_with_info_2.h> 
 #include <CGAL/number_utils.h>
 
+#include <CGAL/Memory_sizer.h>
+
 typedef CGAL::Exact_predicates_inexact_constructions_kernel K; 
 //typedef CGAL::Exact_predicates_exact_constructions_kernel K; 
 typedef CGAL::Triangulation_vertex_base_with_info_2<int, K> Vb; 
@@ -108,6 +110,8 @@ int Tess2d::build_initial_tess(
 
         radius[i] = 2.01*std::sqrt(radius_max_sq);
     }
+    //std::size_t memory = CGAL::Memory_sizer().resident_size();
+    //std::cout << "Tessellation size: " << (memory >> 20) <<  " Mib" <<std::endl;
     return 0;
 }
 
@@ -192,6 +196,7 @@ int Tess2d::extract_geometry(
     int fc=0;
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
+
 
     // only process local particle information
     for (int i=0; i<local_num_particles; i++) {
@@ -309,5 +314,8 @@ int Tess2d::extract_geometry(
         dcom[1][i] = cy/vol - yp;
 
     }
+
+    //std::size_t memory = CGAL::Memory_sizer().resident_size();
+    //std::cout << "Tessellation size: " << (memory >> 20) <<  " Mib" <<std::endl;
     return fc;
 }
