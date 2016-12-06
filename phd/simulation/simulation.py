@@ -165,7 +165,7 @@ class Simulation(object):
 
         self.gamma = self.integrator.riemann.gamma
         self.dimensions = 'xyz'[:self.mesh.dim]
-
+    #@profile
     def solve(self):
         """Main solver"""
 
@@ -183,14 +183,14 @@ class Simulation(object):
             self._relax_geometry(self.relax_num_iterations)
 
         # convert primitive values to conserative
-        self._set_initial_state_from_primitive()
+        integrator.conserative_from_primitive()
 
         # main solver iteration
         time_counter = dt = 0.0
         while current_time < tf:
 
             mesh.build_geometry(pc)
-            self._compute_primitives()
+            integrator.primitive_from_conserative()
 
             # I/O
             if iteration_count % self.pfreq == 0:
@@ -202,7 +202,20 @@ class Simulation(object):
             if (current_time + dt > tf ):
                 dt = tf - current_time
 
-            print 'iteration:', iteration_count, 'time:', current_time, 'dt:', dt
+            # print total number of bytes
+            sum_bytes = 0.
+            for prop in pc.properties.keys():
+                sum_bytes += pc[prop].nbytes
+            for prop in integrator.flux.properties.keys():
+                sum_bytes += integrator.flux[prop].nbytes
+            for prop in integrator.left_state.properties.keys():
+                sum_bytes += integrator.left_state[prop].nbytes
+            for prop in integrator.right_state.properties.keys():
+                sum_bytes += integrator.right_state[prop].nbytes
+            for prop in mesh.faces.properties.keys():
+                sum_bytes += mesh.faces[prop].nbytes
+
+            print 'iteration:', iteration_count, 'time:', current_time, 'dt:', dt, 'Mb:', sum_bytes/1024**2
 
             if ( (time_counter + dt) > self.tfreq ):
                 dt = self.tfreq - time_counter
@@ -218,7 +231,7 @@ class Simulation(object):
             boundary.migrate_boundary_particles(pc)
 
         mesh.build_geometry(pc)
-        self._compute_primitives()
+        integrator.primitive_from_conserative()
 
         # final output
         self._save(iteration_count, current_time, dt)
