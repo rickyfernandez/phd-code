@@ -340,7 +340,7 @@ cdef class IntArray(BaseArray):
 
         self._setup_npy_array()
 
-    def __dealloc_(self):
+    def __dealloc__(self):
         """Frees the c array."""
         stdlib.free(<void*>self.data)
 
@@ -758,7 +758,7 @@ cdef class LongLongArray(BaseArray):
 
         self._setup_npy_array()
 
-    def __dealloc_(self):
+    def __dealloc__(self):
         """Frees the c array."""
         stdlib.free(<void*>self.data)
 
