@@ -79,7 +79,7 @@ cdef class TreeMemoryPool:
         """
         return self.used
 
-    def __dealloc_(self):
+    def __dealloc__(self):
         stdlib.free(<void*>self.node_array)
 
 
