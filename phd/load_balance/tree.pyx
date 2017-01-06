@@ -193,6 +193,78 @@ cdef class Tree:
             # right-back-down, right-back-up , right-front-down, right-front-up,
             node.children_index[(i<<1) + j + (k<<2)] = child_node_index
 
+#    # >>>>>>>>>>>>>>>>>>>>>>>>>>> work on later >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+#    cdef void _create_node_children(self, Node* node):
+#        """
+#        Subdivide node into children and transfer appropriate
+#        information to each child.
+#
+#        Parameters
+#        ----------
+#        node : Node*
+#            Node that will be subdivided.
+#        """
+#        cdef np.float64_t center[3]
+#        cdef int num_children = 2**self.dim
+#        #cdef int num_children = 1 << self.dim
+#
+#        # create children nodes
+#        cdef Node* new_node = self.mem_pool.get(num_children)
+#        node.children_start = new_node - node
+#
+#        #****** should remove sfc key, hilbert_func and level ******#
+#
+#        # pass parent data to children 
+#        cdef int i, j, k, m
+#        for i in range(num_children):
+#
+#            if node.number_sfc_keys < num_children:
+#                raise RuntimeError("Not enough hilbert keys to be split")
+#
+#            child = node + node.children_start + i
+#
+#            # each child has a cut of hilbert keys from parent
+#            child.number_sfc_keys = node.number_sfc_keys/num_children
+#            child.sfc_start_key = node.sfc_start_key + i*node.number_sfc_keys/num_children
+#            child.particle_index_start = node.particle_index_start
+#
+#            child.level = node.level + 1
+#            child.box_length = node.box_length/2.0
+#
+#            child.number_particles = 0
+#            child.number_segments = 0
+#            child.children_start = -1
+#
+#        # half box length in each dimension
+#        #cdef np.int64_t key
+#        #cdef int child_node_index
+#            # create children center coordinates by shifting parent coordinates by 
+#            for k in range(self.dim):
+#                if ((m >> k) & 1):
+#                    center[k] = node.center[k] + 0.25*node.box_length
+#                else:
+#                    center[k] = node.center[k] - 0.25*node.box_length
+#
+#            # compute hilbert key for each child
+#            key = self.hilbert_func(
+#                    <np.int32_t> center[0],
+#                    <np.int32_t> center[1],
+#                    <np.int32_t> center[2],
+#                    self.order)
+#
+#            # find which node this key belongs to it and store the key
+#            # center coordinates
+#            child_node_index = (key - node.sfc_start_key)/(node.number_sfc_keys/num_children)
+#            child = node + node.children_start + child_node_index
+#
+#            child.sfc_key = key
+#            for k in range(self.dim):
+#                child.center[k] = center[k]
+#
+#            # children in z-order
+#            node.children_index[m] = child_node_index
+#    # <<<<<<<<<<<<<<<<<<<<<<<<<<< work on later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
+
     cpdef _build_local_tree(self, np.ndarray[np.int64_t, ndim=1] sorted_part_keys, int max_in_leaf):
         """
         Create a local tree by using hilbert keys.
