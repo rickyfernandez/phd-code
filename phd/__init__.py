@@ -15,6 +15,11 @@ from phd.integrate.integrator import \
 from phd.load_balance.load_balance import \
         LoadBalance
 
+from phd.gravity.gravity_tree import \
+        GravityTree, \
+        GravityAcceleration, \
+        BarnesHut
+
 from phd.mesh.mesh import \
         Mesh
 
