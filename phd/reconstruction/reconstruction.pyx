@@ -91,7 +91,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         ReconstructionBase.__init__(self, **kwargs)
         self.limiter = limiter
 
-    def __dealloc_(self):
+    def __dealloc__(self):
 
         # clean up
         stdlib.free(self.prim_ptr)
