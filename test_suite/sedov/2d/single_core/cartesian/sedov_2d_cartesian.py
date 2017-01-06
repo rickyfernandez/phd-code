@@ -47,9 +47,9 @@ sim.add_particles(create_particles(1.4))                                  # crea
 sim.add_domain(phd.DomainLimits(dim=2, xmin=0., xmax=1.))                 # spatial size of problem 
 sim.add_boundary(phd.Boundary(boundary_type=phd.BoundaryType.Reflective)) # reflective boundary condition
 sim.add_mesh(phd.Mesh())                                                  # tesselation algorithm
-#sim.add_reconstruction(phd.PieceWiseLinear(limiter=1, boost=0))          # Linear reconstruction
-sim.add_reconstruction(phd.PieceWiseConstant(limiter=1, boost=0))         # Linear reconstruction
-sim.add_riemann(phd.HLLC(gamma=1.4))                                      # riemann solver
+sim.add_reconstruction(phd.PieceWiseLinear(limiter=1))                    # Linear reconstruction
+#sim.add_reconstruction(phd.PieceWiseConstant(limiter=1))                  # Linear reconstruction
+sim.add_riemann(phd.HLLC(gamma=1.4, boost=0))                             # riemann solver
 sim.add_integrator(phd.MovingMesh(regularize=1))                          # Integrator
 
 # run the simulation
