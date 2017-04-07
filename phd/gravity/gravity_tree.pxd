@@ -39,18 +39,16 @@ cdef struct Node:
 
 cdef class GravityNodePool:
 
-    cdef int used                             # number of nodes used in the pool
-    cdef int capacity                         # total capacity of the pool
+    cdef int used                     # number of nodes used in the pool
+    cdef int capacity                 # total capacity of the pool
 
-    cdef Node* node_array                     # array holding all nodes
+    cdef Node* node_array             # array holding all nodes
 
-    #cdef Node* get(self, int count) nogil     # return 'count' many nodes
-    cdef Node* get(self, int count, int funny)  except *# return 'count' many nodes
-    #cdef void resize(self, int size) nogil    # resize array of nodes to length size
-    cdef void resize(self, int size) # resize array of nodes to length size
-    cdef void reset(self)                     # reset the pool
-    cpdef int number_leaves(self)             # number of leves in tree
-    cpdef int number_nodes(self)              # number of nodes in tree
+    cdef Node* get(self, int count)   # allocate count many nodes
+    cdef void resize(self, int size)  # resize array of nodes to length size
+    cdef void reset(self)             # reset the pool
+    cpdef int number_leaves(self)     # number of leves in tree
+    cpdef int number_nodes(self)      # number of nodes in tree
 
 cdef class Splitter:
 
@@ -83,35 +81,36 @@ cdef class GravityAcceleration(Interaction):
     cdef np.float64_t *x[3]
     cdef np.float64_t *a[3]
 
-cdef class GravityTree:
+cdef class GravityTreeParallel(GravityTree):
 
     cdef public int dim
     cdef public int number_nodes
     cdef public DomainLimits domain
-
-    cdef Node* root
     cdef public GravityNodePool nodes
 
-    cdef void _build_tree(self, CarrayContainer pc)
-    #cdef inline int get_index(self, Node* node, Particle* p) nogil
-    cdef inline int get_index(self, Node* node, Particle* p)
-    #cdef inline Node* create_child(self, Node* parent, int index) nogil
-    #cdef inline Node* create_child(self, Node* parent, int index)
-    cdef inline Node* create_child(self, Node* parent, int index, int funny, int node_index) except * 
-    #cdef void _update_moments(self, int current, int sibling) nogil
-    cdef void _update_moments(self, int current, int sibling)
-    cdef void _walk(self, Interaction interaction, CarrayContainer pc)
-
-cdef class GravityTreeParallel(GravityTree):
-
+    # varaibles for parallel run
     cdef int parallel
     cdef public LoadBalance load_bal
     cdef public CarrayContainer remote_nodes
+    cdef public np.ndarray node_counts
+    cdef public np.ndarray node_dsip
 
-    #cdef inline void create_children(self, Node* parent) nogil
-    cdef inline void create_children(self, Node* parent)
+    # allocate node functions
+    cdef inline int get_index(self, Node* node, Particle* p)
+    cdef inline Node* create_child(self, int parent_index, int child_index)
+    cdef inline void create_children(self, int parent_index)
+
+    # tree build functions
+    #cdef void _build_tree(self, CarrayContainer pc)
     #cdef void _build_top_tree(self)
-    cdef void _create_top_tree(self, Node* parent, int node_index,
-            LoadNode* load_parent, np.int32_t* node_map)
+    cdef void _create_top_tree(self, int node_index, LoadNode* load_parent,
+            np.int32_t* node_map)
     cdef int _leaf_index_toptree(self, np.int64_t key)
-    #cdef void _update_remote_moments(self, int current) nogil
+
+    # moment calculation functions
+    cdef void _update_moments(self, int current, int sibling)
+    cdef void _export_import_remote_nodes(self)
+    cdef void _update_remote_moments(self, int current)
+
+    # tree walk functions
+    #cdef void _walk(self, Interaction interaction, CarrayContainer pc)

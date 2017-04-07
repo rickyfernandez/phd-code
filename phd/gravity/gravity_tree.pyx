@@ -7,9 +7,14 @@ from ..utils.particle_tags import ParticleTAGS
 from ..utils.carray cimport DoubleArray, IntArray, LongArray, LongLongArray
 from ..load_balance.tree cimport TreeMemoryPool as Pool
 
+# flags
 cdef int NOT_EXIST = -1
-cdef int NOT_LEAF  = 0
-cdef int LEAF      = 1
+
+cdef int NOT_LEAF = 0
+cdef int LEAF     = 1
+
+cdef int DEPENDANT     = 1
+cdef int NOT_DEPENDANT = 1
 
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
@@ -26,12 +31,18 @@ cdef class GravityNodePool:
 
     cdef Node* get(self, int count):
         """
-        Allocate 'count' number of nodes from the pool and return pointer to the first node.
+        Allocate count number of nodes from the pool and return
+        pointer to the first node.
 
         Parameters
         ----------
         int : count
             Number of nodes to allocate
+
+        Returns
+        -------
+        Node*
+            Pointer to node allocated
         """
         cdef Node* first_node
         cdef int current = self.used
@@ -45,7 +56,8 @@ cdef class GravityNodePool:
 
     cdef void resize(self, int size):
         """
-        Resize the memory pool to have 'size' number of nodes available
+        Resize the memory pool to have size number of nodes available
+        for use. Note this does not mean there are size nodes used.
 
         Parameters
         ----------
@@ -210,51 +222,61 @@ cdef class GravityAcceleration(Interaction):
 
 cdef class GravityTree:
     """
-    Solves gravity by barnes and hut algorithm in parallel.
-    Should only be used for parallel runs. This algorithm
-    heavily depends on the LoadBalance class. The algorithm
-    works in 2d or 3d.
+    Solves gravity by barnes and hut algorithm in serial or
+    parallel. Should only be used for parallel runs. This
+    algorithm heavily depends on the LoadBalance class.
+    The algorithm works in 2d or 3d.
     """
-    #def __init__(self, DomainLimits domain, LoadBalance load_bal):
-    def __init__(self, parallel=0):
+    def __init__(self, int parallel=0):
 
         #self.domain = domain
         #self.load_bal = load_bal
         self.parallel = parallel
 
     def _initialize(self):
-        cdef long num_leaves
-        cdef str axis, dimension
+        '''
+        Initialize variables for the gravity tree. Tree pool and
+        remote nodes are allocated as well dimension of the tree.
+        '''
+        cdef str axis
+        cdef dict state_vars = {}
         cdef dict named_groups = {}
 
         self.dim = self.domain.dim
         self.number_nodes = 2**self.dim
+        self.nodes = GravityNodePool(1000)
 
         if self.parallel:
 
-            self.nodes = GravityNodePool(1000)
-
-            # construct container for import/export nodes
-            dimension = 'xyz'[:self.dim]
-            num_leaves = self.load_bal.tree.number_leaves
-            self.remote_nodes = CarrayContainer(num_leaves)
-
-            self.remote_nodes.register_property(num_leaves, 'map', 'long')
-            self.remote_nodes.register_property(num_leaves, 'proc', 'long')
-            self.remote_nodes.register_property(num_leaves, 'mass', 'double')
+            state_vars['map']  = 'long'
+            state_vars['proc'] = 'long'
+            state_vars['mass'] = 'double'
 
             named_groups['com'] = []
-            for axis in dimension:
-                self.remote_nodes.register_property(num_leaves, 'com-' + axis, 'double')
+            for axis in 'xyz'[:self.dim]:
+                stat_vars['com-' + axis] = 'double'
                 named_groups['com'].append('com-' + axis)
             named_groups['moments'] = ['mass'] + named_groups['com']
 
+            self.remote_nodes = CarrayContainer(var_dict=state_vars)
             self.remote_nodes.named_groups = named_groups
 
     cdef inline int get_index(self, int node_index, Particle* p):
         """
         Return index of child from parent node with node_index. Children
-        are laid out z-order.
+        are laid out in z-order.
+
+        Parameters
+        ----------
+        node_index : int
+            index of node that you want to find child of
+        p : Particle*
+            particle used to find child
+
+        Returns
+        -------
+        int
+            integer of child laid in z-order
         """
         cdef int i, index = 0
         cdef Node* node = &self.nodes.node_array[node_index]
@@ -264,6 +286,23 @@ cdef class GravityTree:
         return index
 
     cdef inline Node* create_child(self, int parent_index, int child_index):
+        '''
+        Create child node given parent index and child index. Note parent_index
+        refers to memory pool and child_index refers to [0,3] in 2d or [0,7]
+        for children array in parent.
+
+        Parameters
+        ----------
+        parent_index : int
+            index of parent in pool to subdivide
+        child_index : int
+            index of child relative to parent.children array
+
+        Returns
+        -------
+        child : Node*
+            child pointer
+        '''
         cdef int i
         cdef Node* child
         cdef double width
@@ -277,7 +316,9 @@ cdef class GravityTree:
 
         for i in range(self.number_nodes):
             child.children[i] = NOT_EXIST
+
         child.leaf = LEAF
+        child.dependant = NOT_DEPENDANT
 
         width = .5*parent.width
         child.width = width
@@ -314,8 +355,8 @@ cdef class GravityTree:
             child = &self.nodes.node_array[start_index + i]
 
             child.leaf = LEAF
+            child.dependant = NOT_DEPENDANT
             child.width = width
-            child.dependant = 0
 
             # set children of children to null
             for k in range(self.number_nodes):
@@ -339,8 +380,7 @@ cdef class GravityTree:
         cdef int i
         cdef np.int32_t *node_ind
 
-        cdef Node *node, *root
-        cdef LoadNode *load_node
+        cdef Node *node
         cdef LoadNode *load_root = self.load_bal.tree.root
 
         cdef Pool pool = self.load_bal.tree.mem_pool
@@ -349,21 +389,21 @@ cdef class GravityTree:
         cdef LongArray maps = self.remote_nodes.get_carray('map')
         cdef LongArray proc = self.remote_nodes.get_carray('proc')
 
-        root = &self.nodes.node_array[0]
-        # reset memory pool
+        # resize memory pool to hold tree - this only allocates available
+        # memory it does not create nodes
+        self.nodes.resize(pool.number_nodes())
 
-        # resize to hold all nodes form load balance 
+        # resize container to hold leaf data 
         self.remote_nodes.resize(pool.number_leaves())
 
         # copy global partial tree in z-order, collect leaf index for mapping 
-        self._create_top_tree(self.root, 0, load_root, maps.get_data_ptr())
+        self._create_top_tree(0, load_root, maps.get_data_ptr())
 
         # remote nodes are in load balance order, hilbert and processor, this
         # allows for easy communication. Transfer processor id
         for i in range(leaf_pid.length):
             proc.data[i] = leaf_pid.data[i]
 
-    #cdef void _create_top_tree(self, Node* parent, int node_index,
     cdef void _create_top_tree(self, int node_index, LoadNode* load_parent,
             np.int32_t* node_map):
         """
@@ -375,17 +415,26 @@ cdef class GravityTree:
         the remote_nodes container and are in hilbert and processor order.
         The map array is used to map from remote_nodes to nodes in the gravity
         tree.
+
+        Parameters
+        ----------
+        node_index : int
+            index of node in gravity tree
+        load_parent : LoadNode*
+            node pointer to load balance tree
+        node_map : np.int32_t*
+            array to map remote nodes to leafs in gravity tree
         """
         cdef int index, i
         cdef Node* parent = &self.nodes.node_array[node_index]
 
         if load_parent.children_start == -1: # leaf stop
-            parent.dependant = 0
+            parent.dependant = NOT_DEPENDANT
             node_map[load_parent.array_index] = node_index
         else: # non leaf copy
 
             # create children in z-order
-            parent.dependant = 1
+            parent.dependant = DEPENDANT
             self.create_children(parent)
 
             # create children could of realloc
@@ -397,7 +446,6 @@ cdef class GravityTree:
                 # grab next child in z-order
                 index = load_parent.zorder_to_hilbert[i]
                 self._create_top_tree(
-                        #&self.nodes.node_array[parent.children[i]], parent.children[i],
                         parent.children[i], load_parent + load_parent.children_start + index,
                         node_map)
 
@@ -517,7 +565,6 @@ cdef class GravityTree:
         if self.parallel:
             self._export_import_remote_nodes()
 
-    #cdef void _update_moments(self, int current, int sibling) nogil:
     cdef void _update_moments(self, int current, int sibling):
         """
         Recursively update moments of each local node. As a by
@@ -580,14 +627,14 @@ cdef class GravityTree:
         cdef np.float64_t* comx[3]
 
         cdef LongArray proc   = self.remote_nodes.get_carray('proc')
-        cdef LongArray maps   = self.export_nodes.get_carray('map')
-        cdef DoubleArray mass = self.export_nodes.get_carray('mass')
+        cdef LongArray maps   = self.remote_nodes.get_carray('map')
+        cdef DoubleArray mass = self.remote_nodes.get_carray('mass')
 
-        self.export_nodes.pointer_groups(comx, self.remote_nodes.named_groups['com'])
+        self.remote_nodes.pointer_groups(comx, self.remote_nodes.named_groups['com'])
 
-        # loop over top tree leaves
+        # collect moments belonging to current processor
         for i in range(self.remote_nodes.length):
-            if proc.data[i] == self.pid: # export node
+            if proc.data[i] == self.pid:
 
                 # copy moment information
                 node = self.nodes.array[maps.data[i]]
@@ -597,7 +644,7 @@ cdef class GravityTree:
 
         # export local node info and import remote node
         for field in self.remote_nodes.named_groups['moments']:
-            comm.Allgatherv(sendbuf=self.send_nodes[field],
+            comm.Allgatherv(MPI.IN_PLACE,
                     [self.remote_nodes[field], self.node_counts, self.node_disp, MPI.DOUBLE])
 
         # update moments
