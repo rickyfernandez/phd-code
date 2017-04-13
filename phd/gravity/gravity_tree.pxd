@@ -81,9 +81,9 @@ cdef class GravityAcceleration(Interaction):
     cdef np.float64_t *x[3]
     cdef np.float64_t *a[3]
 
-cdef class GravityTreeParallel(GravityTree):
+cdef class GravityTree:
 
-    cdef public int dim
+    cdef public int dim, rank, size
     cdef public int number_nodes
     cdef public DomainLimits domain
     cdef public GravityNodePool nodes
@@ -93,16 +93,16 @@ cdef class GravityTreeParallel(GravityTree):
     cdef public LoadBalance load_bal
     cdef public CarrayContainer remote_nodes
     cdef public np.ndarray node_counts
-    cdef public np.ndarray node_dsip
+    cdef public np.ndarray node_disp
 
     # allocate node functions
-    cdef inline int get_index(self, Node* node, Particle* p)
+    cdef inline int get_index(self, int parent_index, Particle* p)
     cdef inline Node* create_child(self, int parent_index, int child_index)
     cdef inline void create_children(self, int parent_index)
 
     # tree build functions
-    #cdef void _build_tree(self, CarrayContainer pc)
-    #cdef void _build_top_tree(self)
+#    #cdef void _build_tree(self, CarrayContainer pc)
+    cdef void _build_top_tree(self)
     cdef void _create_top_tree(self, int node_index, LoadNode* load_parent,
             np.int32_t* node_map)
     cdef int _leaf_index_toptree(self, np.int64_t key)
@@ -111,6 +111,6 @@ cdef class GravityTreeParallel(GravityTree):
     cdef void _update_moments(self, int current, int sibling)
     cdef void _export_import_remote_nodes(self)
     cdef void _update_remote_moments(self, int current)
-
-    # tree walk functions
-    #cdef void _walk(self, Interaction interaction, CarrayContainer pc)
+#
+#    # tree walk functions
+#    #cdef void _walk(self, Interaction interaction, CarrayContainer pc)
