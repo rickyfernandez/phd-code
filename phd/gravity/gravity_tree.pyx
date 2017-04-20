@@ -738,125 +738,170 @@ cdef class GravityTree:
                 for j in range(self.dim):
                     node.p.x[j] /= node.p.mass
 
-#    def walk(self, Interaction interact, CarrayContainer pc):
-#        self._walk(interact, pc)
-#
-#    cdef void _walk(self, Interaction interaction, CarrayContainer pc):
-#        """
-#        Walk the tree calculating interactions. Interactions can be any
-#        calculation between particles.
-#        """
-#        cdef int index
-#        cdef Node *node
-#
-#        # set particles for loop
-#        interaction.initialize_particles(pc)
-#
-#        # loop through each real praticle
-#        while(interaction.process_particle()):
-#
-#            # start at first child of root
-#            index = 0
-#            node = &self.nodes.node_array[index]
-#            index = node.first_child
-#
-#            while(index != -1):
-#
-#                node = &self.nodes.node_array[index]
-#                if(node.leaf != LEAF):
-#                    if(interaction.splitter.split(node)):
-#                        # node opened travel down
-#                        index = node.first_child
-#                    else:
-#                        # interaction: node-particle
-#                        interaction.interact(node)
-#                        index = node.next_sibling
-#                else:
-#                    # interaction: particle-particle
-#                    interaction.interact(node)
-#                    index = node.next_sibling
-#
-#    cdef void _parallel_walk(self, Interaction interaction, CarrayContainer pc):
-#        """
-#        Walk the tree calculating interactions. Interactions can be any
-#        calculation between particles.
-#        """
-#        cdef int index
-#        cdef Node *node
-#
-#        # set particles for loop
-#        interaction.initialize_particles(pc)
-#
-#        # loop through each real praticle
-#        while(interaction.process_particle()):
-#
-#            # start at first child of root
-#            index = 0
-#            node = &self.nodes.node_array[index]
-#            index = node.first_child
-#
-#            while(index != -1):
-#
-#                node = &self.nodes.node_array[index]
-#                if(node.leaf != LEAF):
-#                    if(interaction.splitter.split(node)):
-#                        # node opened travel down
-#                        index = node.first_child
-#                    else:
-#                        # interaction: node-particle
-#                        interaction.interact(node)
-#                        index = node.next_sibling
-#                else:
-#                    if node.pid != self.pid:
-#
-#                        # check if particle has been already flagged
-#                        if pid_array[node.pid]:
-#                            if self.buffer_pid.size + 1 < self.export_num:
-#                                self.buffer_pid.append()
-#                                self.buffer_id.append(i)
-#                            else:
-#                                # export/import remote particles
-#                                self._remote_walk()
-#                    else:
-#                        # interaction: particle-particle
-#                        interaction.interact(node)
-#                        index = node.next_sibling
-#
-#    cdef void _serial_walk(self, Interaction interaction):
-#        """
-#        Walk the tree calculating interactions. Interactions can be any
-#        calculation between particles.
-#        """
-#        cdef int index
-#        cdef Node *node
-#
-#        # set particles for loop
-#        interaction.initialize_particles(pc)
-#
-#        # loop through each real praticle
-#        while(interaction.process_particle()):
-#
-#            # start at first child of root
-#            index = 0
-#            node = &self.nodes.node_array[index]
-#            index = node.first_child
-#
-#            while(index != -1):
-#
-#                node = &self.nodes.node_array[index]
-#                if(node.leaf != LEAF):
-#                    if(interaction.splitter.split(node)):
-#                        # node opened travel down
-#                        index = node.first_child
-#                    else:
-#                        # interaction: node-particle
-#                        interaction.interact(node)
-#                        index = node.next_sibling
-#                else:
-#                    # interaction: particle-particle
-#                    interaction.interact(node)
-#                    index = node.next_sibling
-#
+    def walk(self, Interaction interact, CarrayContainer pc):
+        if self.parallel:
+            self._parallel_walk(interact, pc)
+        else:
+            self._serial_walk(interact, pc)
+
+    cdef void _serial_walk(self, Interaction interaction, CarrayContainer pc):
+        """
+        Walk the tree calculating interactions. Interactions can be any
+        calculation between particles.
+        """
+        cdef int index
+        cdef Node *node
+
+        # set particles for loop
+        interaction.initialize_particles(pc)
+
+        # loop through each real praticle
+        while(interaction.process_particle()):
+
+            # start at first child of root
+            index = 0
+            node = &self.nodes.node_array[index]
+            index = node.first_child
+
+            while(index != -1):
+
+                node = &self.nodes.node_array[index]
+                if(node.leaf != LEAF):
+                    # should node be opened
+                    if(interaction.splitter.split(node)):
+                        index = node.first_child
+                    else:
+                        # interaction: node-particle
+                        interaction.interact(node)
+                        index = node.next_sibling
+                else:
+                    # interaction: particle-particle
+                    interaction.interact(node)
+                    index = node.next_sibling
+
+    cdef void _local_walk(self, Interaction interaction, CarrayContainer pc, int local):
+        """
+        Walk the tree calculating interactions. Interactions can be any
+        calculation between particles.
+        """
+        cdef int index
+        cdef Node *node
+
+        cdef LongArray pid = self.remote_nodes.get_carray("proc")
+
+        # loop through each real praticle
+        while(interaction.process_particle()):
+
+            # start at first child of root
+            index = interaction.start_node_index()
+            node = &self.nodes.node_array[index]
+
+            while(index != -1):
+
+                node = &self.nodes.node_array[index]
+                if(node.leaf != LEAF):
+                    # should node be opened
+                    if(interaction.splitter.split(node)):
+                        index = node.first_child
+                    else:
+                        # interaction: node-particle
+                        interaction.interact(node)
+                        index = node.next_sibling
+                else: # node is leaf can be remote or local
+                    if node.remote:
+                        if local: # for local particles check for export
+                            # check if remote node needs to be open
+                            if(interaction.splitter.split(node)):
+                                # flag for export
+                                self.buffer_pid.append(pid.data[node.index])
+                                self.buffer_id.append(interaction.current)
+
+                                # check if buffer is full, halt walk if true
+                                if self.buffer_pid.length == self.max_export:
+                                    # save node to continue walk
+                                    interaction.particle_not_finished(
+                                            node.next_sibling)
+                                    return # break out of walk
+                                else:
+                                    index = node.next_sibling
+                            else: # interaction: node-particle
+                                interaction.interact(node)
+                                index = node.next_sibling
+                        else: # non-local particle skip node
+                            index = node.next_sibling
+                    else:
+                        # interaction: particle-particle
+                        interaction.interact(node)
+                        index = node.next_sibling
+
+    cdef void _parallel_walk(self, Interactions interaction, CarrayContainer pc):
+        cdef long num_import
+        cdef int local_done, global_done
+
+        interaction.initialize_particles(pc)
+
+        while True:
+
+            # perform walk flagging export particles
+            self._local_walk(interaction, pc, 1):
+
+            # put particles in process order
+            ind = buffer_pid_npy.argsort()
+            self.buffer_id_npy[:]  = self.buffer_id_npy[ind]
+            self.buffer_pid_npy[:] = self.buffer_pid_npy[ind]
+
+            # count how many particles are going to each process
+            for i in range(self.size):
+                self.send_count[i] = 0
+            for i in range(self.buffer_pid.length):
+                self.send_count[self.buffer_pid.data[i]] += 1
+
+            # send number of export to other processors
+            self.load_bal.comm.Alltoall([self.send_count, MPI.INT],
+                    [self.recv_count, MPI.INT])
+
+            # create displacement arrays 
+            for i in range(self.size):
+                num_import = self.recv_count[i]
+
+            self.send_disp[0] = self.recv_disp[0] = 0
+            for i in range(1, self.size):
+                self.send_disp[i] = self.send_count[i-1] + self.send_disp[i-1]
+                self.recv_disp[i] = self.recv_count[i-1] + self.recv_disp[i-1]
+
+            # copy flagged particles in buffer
+            self.export_buffer.copy(pc,
+                    pc.named_group['gravity-walk-export'],
+                    self.buffer_id_npy)
+
+            # resize to fit number of particle incoming
+            self.import_buffer.resize(num_import)
+
+            # send our particles / recieve particles 
+            exchange_particles(self.import_buffer, self.export_buffer,
+                    self.send_counts, self.recv_conts, self.load_bal.comm,
+                    pc.named_groups['gravity-walk-export'])
+
+            # walk import particles
+            self._local_walk(self.import_interaction, self.import_buffer, 0):
+
+            # recieve back our paritcles / send back particles
+            exchange_particles(self.export_buffer, self.import_buffer,
+                    self.recv_counts, self.send_conts, self.load_bal.comm,
+                    pc.named_groups['gravity-walk-import'])
+
+            # copy back our data
+            self.pc.copy(self.export_buffer
+                    pc.named_group['gravity-walk-export'],
+                    self.buffer_id_npy)
+
+            # let all processors know all walks are complete
+            comm.Allreduce(global_done, interaction.done_processing(), MPI.Sum())
+
+            # if all processors tree walks are done exit
+            if global_done == self.size:
+                break
+
     # -- delete later --
     def dump_data(self):
         cdef list data_list = []
@@ -921,92 +966,3 @@ cdef class GravityTree:
                 node.width])
 
         return data_list
-
-
-#    '''
-#    1. process local particles
-#    2. store particle if flagged
-#    3. organize particles for export
-#    4. do you really want to process by processor chunk or as a whole
-#    5. if by chunk then this is easier? just compute for each particle
-#       and send back?
-#
-#    1. sort
-#    2. count data on eac processor
-#    3. allocate buffer
-#    4. copy field to buffers
-#    5. for each processor with data:
-#        mpi buffer sendjjjjjjjjjj
-#    '''
-#    cdef void add_data(int index, int pid):
-#
-#        if self.ind_buffer.length + 1 > self.buffer_size:
-#            self.communicate()
-#            self.flush_buffer()
-#        else:
-#            self.ind_buffer.append(index)
-#            self.pro_buffer.append(pid)
-#
-#    cdef void _walk(self, Interaction interaction, CarrayContainer pc):
-#        """
-#        Walk the tree calculating interactions. Interactions can be any
-#        calculation between particles.
-#        """
-#        cdef int index
-#        cdef Node *node
-#
-#        # set particles for loop
-#        interaction.initialize_particles(pc)
-#
-#        # communicator 
-#        comm.setup_callback_func(self._parallel_walk)
-#        comm.setup_datatype(pc, pc.named_groups['tree-gravity'])
-#
-#        # loop through each real praticle
-#        while(interaction.process_particle()):
-#
-#            # start at first child of root
-#            index = 0
-#            node = &self.nodes.node_array[index]
-#            index = node.first_child
-#
-#            while(index != -1):
-#
-#                comm.flush_send()
-#
-#                node = &self.nodes.node_array[index]
-#                if(node.leaf != LEAF):
-#
-#                    if(interaction.splitter.split(node)):
-#                        # node opened travel down
-#                        index = node.first_child
-#                    else:
-#                        # interaction: node-particle
-#                        interaction.interact(node)
-#                        index = node.next_sibling
-#                else:
-#                    # node on other processor
-#                    if node.pid != pid:
-#
-#                        if self.buffer_pid.size + 1 < comm.buffer_size:
-#                            self.buffer_pid.append(node.pid)
-#                            self.buffer_id.append(i)
-#
-#                        else:
-#
-#                            comm.setup_outgoing_datatype(pc, pc.named_groups['tree-gravity'])
-#                            comm.communicate_data()
-#
-#                            self.parallel_walk(comm.buffer_out)
-#
-#                            comm.setup_outgoing_datatype(pc, pc.named_groups['tree-gravity'])
-#                            comm.communicate_data()
-#
-#                            comm.flush_buffer()
-#
-#                            self.buffer_pid.append(node.pid)
-#                            self.buffer_id.append(i)
-#
-#                    # interaction: particle-particle
-#                    interaction.interact(node)
-#                    index = node.next_sibling
