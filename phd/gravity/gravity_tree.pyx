@@ -257,6 +257,9 @@ cdef class GravityTree:
             self.rank = self.load_bal.rank
             self.size = self.load_bal.size
 
+            self.send_counts = np.zeros(self.size, dtype=np.int32)
+            self.recv_counts = np.zeros(self.size, dtype=np.int32)
+
             state_vars['map']  = 'long'
             state_vars['proc'] = 'long'
             state_vars['mass'] = 'double'
@@ -269,6 +272,15 @@ cdef class GravityTree:
 
             self.remote_nodes = CarrayContainer(var_dict=state_vars)
             self.remote_nodes.named_groups = named_groups
+
+            self.buffer_id = IntArray()
+            self.buffer_pid = IntArray()
+
+            self.buffer_import = CarrayContainer()
+            self.buffer_export = CarrayContainer()
+
+            self.import_interaction # add logic for assigment
+            self.local_interaction
 
     cdef inline int get_index(self, int parent_index, Particle* p):
         """
@@ -792,10 +804,8 @@ cdef class GravityTree:
         # loop through each real praticle
         while(interaction.process_particle()):
 
-            # start at first child of root
+            # start at root or next node from previous walk
             index = interaction.start_node_index()
-            node = &self.nodes.node_array[index]
-
             while(index != -1):
 
                 node = &self.nodes.node_array[index]
@@ -807,12 +817,11 @@ cdef class GravityTree:
                         # interaction: node-particle
                         interaction.interact(node)
                         index = node.next_sibling
-                else: # node is leaf can be remote or local
+                else: # leaf can be remote or local
                     if node.remote:
                         if local: # for local particles check for export
-                            # check if remote node needs to be open
                             if(interaction.splitter.split(node)):
-                                # flag for export
+                                # node opend flag for export
                                 self.buffer_pid.append(pid.data[node.index])
                                 self.buffer_id.append(interaction.current)
 
@@ -829,77 +838,98 @@ cdef class GravityTree:
                                 index = node.next_sibling
                         else: # non-local particle skip node
                             index = node.next_sibling
-                    else:
-                        # interaction: particle-particle
+                    else:# interaction: particle-particle
                         interaction.interact(node)
                         index = node.next_sibling
 
-    cdef void _parallel_walk(self, Interactions interaction, CarrayContainer pc):
+    cdef void _parallel_walk(self, CarrayContainer pc):
         cdef long num_import
         cdef int local_done, global_done
 
-        interaction.initialize_particles(pc)
+        cdef np.ndarray loc_done, glb_done
+        cdef np.ndarray buffer_id_npy, buffer_pid_npy
 
+        loc_done = np.zeros(1, dtype=np.int32)
+        glb_done = np.zeros(1, dtype=np.int32)
+
+        # clear out buffers
+        self.buffer_id.reset()
+        self.buffer_pid.reset()
+
+        # convenience arrays
+        buffer_id_npy  = self.buffer_id.get_npy_array()
+        buffer_pid_npy = self.buffer_pid.get_npy_array()
+
+        # setup local particles for walk
+        self.local_interaction.initialize_particles(pc)
         while True:
 
-            # perform walk flagging export particles
-            self._local_walk(interaction, pc, 1):
+            # perform walk while flagging particles for export
+            # once the buffer is full the walk will hault
+            self._local_walk(self.local_interaction, pc, LOCAL)
 
             # put particles in process order
             ind = buffer_pid_npy.argsort()
-            self.buffer_id_npy[:]  = self.buffer_id_npy[ind]
-            self.buffer_pid_npy[:] = self.buffer_pid_npy[ind]
+            buffer_id_npy[:]  = buffer_id_npy[ind]
+            buffer_pid_npy[:] = buffer_pid_npy[ind]
 
             # count how many particles are going to each process
             for i in range(self.size):
-                self.send_count[i] = 0
+                self.send_counts[i] = 0
             for i in range(self.buffer_pid.length):
-                self.send_count[self.buffer_pid.data[i]] += 1
+                self.send_counts[self.buffer_pid.data[i]] += 1
 
-            # send number of export to other processors
-            self.load_bal.comm.Alltoall([self.send_count, MPI.INT],
-                    [self.recv_count, MPI.INT])
+            # send number of export to all processors
+            self.load_bal.comm.Alltoall([self.send_counts, MPI.INT],
+                    [self.recv_counts, MPI.INT])
+
+            # how many remote particles are incoming
+            num_import = 0
+            for i in range(self.size):
+                num_import += self.recv_counts[i]
 
             # create displacement arrays 
-            for i in range(self.size):
-                num_import = self.recv_count[i]
-
             self.send_disp[0] = self.recv_disp[0] = 0
             for i in range(1, self.size):
-                self.send_disp[i] = self.send_count[i-1] + self.send_disp[i-1]
-                self.recv_disp[i] = self.recv_count[i-1] + self.recv_disp[i-1]
+                self.send_disp[i] = self.send_counts[i-1] + self.send_disp[i-1]
+                self.recv_disp[i] = self.recv_counts[i-1] + self.recv_disp[i-1]
 
-            # copy flagged particles in buffer
-            self.export_buffer.copy(pc,
-                    pc.named_group['gravity-walk-export'],
-                    self.buffer_id_npy)
+            # copy flagged particles into buffer
+            self.buffer_export.copy(pc,
+                    self.buffer_id_npy,
+                    pc.named_group['gravity-walk-export'])
 
             # resize to fit number of particle incoming
             self.import_buffer.resize(num_import)
 
             # send our particles / recieve particles 
-            exchange_particles(self.import_buffer, self.export_buffer,
+            exchange_particles(self.buffer_import, self.buffer_export,
                     self.send_counts, self.recv_conts, self.load_bal.comm,
-                    pc.named_groups['gravity-walk-export'])
+                    pc.named_groups['gravity-walk-export'],
+                    self.send_disp, self.recv_disp)
 
-            # walk import particles
-            self._local_walk(self.import_interaction, self.import_buffer, 0):
+            # walk remote particles
+            self.import_interaction.initialize_particles(self.buffer_import)
+            self._local_walk(self.import_interaction, self.buffer_import, REMOTE)
 
             # recieve back our paritcles / send back particles
-            exchange_particles(self.export_buffer, self.import_buffer,
-                    self.recv_counts, self.send_conts, self.load_bal.comm,
-                    pc.named_groups['gravity-walk-import'])
+            exchange_particles(self.buffer_export, self.buffer_import,
+                    self.send_counts, self.recv_counts, self.load_bal.com,
+                    pc.named_groups['gravity-walk-import'],
+                    self.recv_disp, self.send_disp, self.recv_disp)
 
             # copy back our data
-            self.pc.copy(self.export_buffer
+            pc.insert(self.buffer_export
                     pc.named_group['gravity-walk-export'],
                     self.buffer_id_npy)
 
-            # let all processors know all walks are complete
-            comm.Allreduce(global_done, interaction.done_processing(), MPI.Sum())
+            # let all processors know if walk is complete 
+            glb_done[0] = 0
+            loc_done[0] = interaction.done_processing()
+            comm.Allreduce([loc_done, MPI.INT], [glb_done, MPI.INT], op=MPI.SUM)
 
             # if all processors tree walks are done exit
-            if global_done == self.size:
+            if glb_done[0] == self.size:
                 break
 
     # -- delete later --
