@@ -5,17 +5,19 @@ from ..load_balance.tree cimport Node as LoadNode
 from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
 
-# --- add later to reduce memory overhead ---
-#cdef struct Moments:
-#    double mass
-#    double com[3]
-#    double cmax
-#    double vmax
-#    double hmax
 
-#cdef union Info:
-#    int children[8]
-#    struct Moments mom
+cdef struct NodeInfo:
+
+    double mass
+    double com[3]
+    int first_child
+    int next_sibling
+    int pid
+
+cdef union Info:
+
+    int children[8]
+    NodeInfo n
 
 cdef struct Particle:
 
@@ -24,18 +26,18 @@ cdef struct Particle:
 
 cdef struct Node:
 
-    Particle p
-
-    int leaf           # flag if node is a leaf
+    int flags          # flags
+    int p_index        # index of particle it contains
     double width       # physical width of node
-    int dependant      # if node depends on nodes from another processor
     double center[3]   # physical center of the node
 
-    int children[8]    # array of indicies of children in node array
+    Info u             # union of moment information and children index
 
+    #Particle p
+    #int children[8]    # array of indicies of children in node array
     # for efficient tree walking
-    int first_child
-    int next_sibling
+    #int first_child
+    #int next_sibling
 
 cdef class GravityNodePool:
 
@@ -88,6 +90,9 @@ cdef class GravityTree:
     cdef public DomainLimits domain
     cdef public GravityNodePool nodes
 
+    # pointers for particle position and mass
+    cdef np.float64_t *x[3], *m
+
     # varaibles for parallel run
     cdef int parallel
     cdef public LoadBalance load_bal
@@ -96,16 +101,17 @@ cdef class GravityTree:
     cdef public np.ndarray node_disp
 
     # allocate node functions
-    cdef inline int get_index(self, int parent_index, Particle* p)
+    cdef inline void _create_root(self)
+    cdef inline int get_index(self, int parent_index, np.float64_t x[3])
     cdef inline Node* create_child(self, int parent_index, int child_index)
     cdef inline void create_children(self, int parent_index)
 
     # tree build functions
-#    #cdef void _build_tree(self, CarrayContainer pc)
     cdef void _build_top_tree(self)
     cdef void _create_top_tree(self, int node_index, LoadNode* load_parent,
             np.int32_t* node_map)
     cdef int _leaf_index_toptree(self, np.int64_t key)
+#    #cdef void _build_tree(self, CarrayContainer pc)
 
     # moment calculation functions
     cdef void _update_moments(self, int current, int sibling)
