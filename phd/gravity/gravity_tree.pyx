@@ -3,7 +3,6 @@ cimport numpy as np
 cimport libc.stdlib as stdlib
 
 from mpi4py import MPI
-
 from libc.math cimport sqrt
 
 from ..utils.particle_tags import ParticleTAGS
@@ -20,7 +19,7 @@ cdef int HAS_PARTICLE = 0x02
 cdef int TOP_TREE = 0x04
 cdef int TOP_TREE_LEAF = 0x08
 cdef int TOP_TREE_LEAF_REMOTE = 0x10
-
+cdef int SKIP_BRANCH = 0x20
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
 
@@ -92,7 +91,7 @@ cdef class GravityNodePool:
         """
         cdef int i, num_leaves = 0
         for i in range(self.used):
-            if self.node_array[i].leaf == LEAF:
+            if(self.node_array[i].flags & LEAF):
                 num_leaves += 1
         return num_leaves
 
@@ -133,7 +132,7 @@ cdef class BarnesHut(Splitter):
         cdef double r2 = 0.
 
         for i in range(self.dim):
-            r2 += (self.x[i][self.idp] - node.p.x[i])**2
+            r2 += (self.x[i][self.idp] - node.group.data.com[i])**2
 
         if(node.width*node.width >= r2*self.open_angle*self.open_angle):
             return 1
@@ -171,7 +170,7 @@ cdef class GravityAcceleration(Interaction):
         cdef double fac, r2, dr[3]
 
         # ignore self interaction
-        if node.leaf == LEAF:
+        if(node.flags & LEAF):
             inside = 1
             for i in range(self.dim):
                 if self.x[i][self.current] < node.center[i] - 0.5*node.width:
@@ -186,10 +185,10 @@ cdef class GravityAcceleration(Interaction):
         # distance between particle and center of mass
         r2 = 0.
         for i in range(self.dim):
-            dr[i] = node.p.x[i] - self.x[i][self.current]
+            dr[i] = node.group.data.x[i] - self.x[i][self.current]
             r2 += dr[i]**2
 
-        fac = node.p.mass / (sqrt(r2) * r2)
+        fac = node.group.data.mass / (sqrt(r2) * r2)
         for i in range(self.dim):
             self.a[i][self.current] += fac * dr[i]
 
@@ -232,11 +231,12 @@ cdef class GravityTree:
     algorithm heavily depends on the LoadBalance class.
     The algorithm works in 2d or 3d.
     """
-    def __init__(self, int parallel=0):
+    def __init__(self, int parallel=0, str split_type='barnes-hut'):
 
         #self.domain = domain
         #self.load_bal = load_bal
         self.parallel = parallel
+        self.split_type = split_type
 
     def _initialize(self):
         '''
@@ -251,16 +251,23 @@ cdef class GravityTree:
         self.number_nodes = 2**self.dim
         self.nodes = GravityNodePool(1000)
 
-        if self.parallel:
+        if self.interact_type == 'barnes-hut':
+            splitter = BarnesHutCriteria()
+        elif self.interact_type == 'acceleration':
+            splitter = AccerlationCriteria()
 
-            self.node_disp = np.zeros(self.load_bal.size, dtype=np.int32)
-            self.node_counts = np.zeros(self.load_bal.size, dtype=np.int32)
+        self.import_interaction(splitter)
+
+        if self.parallel:
 
             self.rank = self.load_bal.rank
             self.size = self.load_bal.size
 
-            self.send_counts = np.zeros(self.size, dtype=np.int32)
-            self.recv_counts = np.zeros(self.size, dtype=np.int32)
+            self.send_cnts = np.zeros(self.size, dtype=np.int32)
+            self.send_disp = np.zeros(self.size, dtype=np.int32)
+
+            self.recv_cnts = np.zeros(self.size, dtype=np.int32)
+            self.recv_disp = np.zeros(self.size, dtype=np.int32)
 
             state_vars['map']  = 'long'
             state_vars['proc'] = 'long'
@@ -275,14 +282,13 @@ cdef class GravityTree:
             self.remote_nodes = CarrayContainer(var_dict=state_vars)
             self.remote_nodes.named_groups = named_groups
 
-            self.buffer_id = IntArray()
+            self.buffer_id  = IntArray()
             self.buffer_pid = IntArray()
 
             self.buffer_import = CarrayContainer()
             self.buffer_export = CarrayContainer()
 
-            self.import_interaction # add logic for assigment
-            self.local_interaction
+            self.export_interaction(splitter)
 
     cdef inline int get_index(self, int parent_index, np.float64_t x[3]):
         """
@@ -335,13 +341,13 @@ cdef class GravityTree:
 
         # pass parent info to child
         parent = &self.nodes.node_array[parent_index]
-        parent.children[child_index] = self.nodes.used - 1
+        parent.group.children[child_index] = self.nodes.used - 1
 
         # parent no longer leaf
         parent.flags &= ~LEAF
 
         for i in range(self.number_nodes):
-            child.u.children[i] = NOT_EXIST
+            child.group.children[i] = NOT_EXIST
 
         child.flags = LEAF
         width = .5*parent.width
@@ -349,7 +355,7 @@ cdef class GravityTree:
 
         for i in range(self.dim):
             # create center coords for child
-            if( (child_index >> i) & 1):
+            if((child_index >> i) & 1):
                 child.center[i] = parent.center[i] + .5*width
             else:
                 child.center[i] = parent.center[i] - .5*width
@@ -377,7 +383,7 @@ cdef class GravityTree:
         for i in range(self.number_nodes):
 
             # store child index in node array
-            parent.u.children[i] = start_index + i
+            parent.group.children[i] = start_index + i
             child = &self.nodes.node_array[start_index + i]
 
             child.flags = LEAF
@@ -385,7 +391,7 @@ cdef class GravityTree:
 
             # set children of children to null
             for k in range(self.number_nodes):
-                child.u.children[k] = NOT_EXIST
+                child.group.children[k] = NOT_EXIST
 
             # create center coordinates from parent
             # children are put in z-order
@@ -402,7 +408,7 @@ cdef class GravityTree:
         particles since this tree is common to all processors. Note the
         load balance tree is in hilbert order.
         """
-        cdef int i
+        cdef int i, pid
         cdef np.int32_t *node_ind
 
         cdef Node *node
@@ -427,15 +433,21 @@ cdef class GravityTree:
         # remote nodes are in load balance order, hilbert and processor, this
         # allows for easy communication. Transfer processor id
         for i in range(self.size):
-            self.node_counts[i] = 0
+            self.send_cnts[i] = 0
 
         for i in range(leaf_pid.length):
-            proc.data[i] = leaf_pid.data[i]
-            self.node_counts[leaf_pid.data[i]] += 1
 
-        self.node_disp[0] = 0
+            pid = leaf_pid.data[i]
+            proc.data[i] = pid
+            self.send_cnts[pid] += 1
+
+            if(pid != self.rank):
+                node = &self.nodes.node_array[maps.data[i]]
+                node.flags |= (SKIP_BRANCH|TOP_TREE_LEAF_REMOTE)
+
+        self.send_disp[0] = 0
         for i in range(1, self.size):
-            self.node_disp[i] = self.node_counts[i-1] + self.node_disp[i-1]
+            self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
 
     cdef void _create_top_tree(self, int node_index, LoadNode* load_parent,
             np.int32_t* node_map):
@@ -481,10 +493,10 @@ cdef class GravityTree:
                 # grab next child in z-order
                 index = load_parent.zorder_to_hilbert[i]
                 self._create_top_tree(
-                        parent.children[i], load_parent + load_parent.children_start + index,
+                        parent.group.children[i], load_parent + load_parent.children_start + index,
                         node_map)
 
-    cdef int _leaf_index_toptree(self, np.int64_t key):
+    cdef inline int _leaf_index_toptree(self, np.int64_t key):
         """
         Find index of local tree which coincides with given key
         inside leaf in top tree.
@@ -495,11 +507,16 @@ cdef class GravityTree:
         load_node = self.load_bal.tree.find_leaf(key)
         return maps.data[load_node.array_index]
 
-    cdef void _create_root(self):
+    cdef void create_root(self):
+        """
+        Reset tree if needed and allocate one node for
+        the root and transfer domain information to the
+        root.
+        """
         cdef int k
         cdef Node *root
 
-        # clear out node pool 
+        # clear out node pool
         self.nodes.reset()
 
         # create root with domain information
@@ -512,7 +529,7 @@ cdef class GravityTree:
 
         # set root children to null
         for k in range(self.number_nodes):
-            root.u.children[k] = NOT_EXIST
+            root.group.children[k] = NOT_EXIST
 
     def _build_tree(self, CarrayContainer pc):
         """
@@ -533,14 +550,12 @@ cdef class GravityTree:
         cdef int i, j, k
         cdef double xi[3], xj[3]
 
-        # get pointer to particle position and mass
+        # pointer to particle position and mass
         pc.pointer_groups(self.x, pc.named_groups['position'])
         self.m = mass.get_data_ptr()
 
-        # reset tree if needed and create root node
-        self._create_root()
+        self.create_root()
 
-        # create top tree if parallel run
         if self.parallel:
             self._build_top_tree()
 
@@ -548,75 +563,72 @@ cdef class GravityTree:
         for i in range(pc.get_number_of_items()):
             if tags.data[i] == Real:
 
-                # copy particle
                 for k in range(self.dim):
                     xi[k] = self.x[k][i]
 
-                if self.parallel:
-                    # start at top tree leaf
+                if self.parallel: # start at top tree leaf
                     current = self._leaf_index_toptree(keys.data[i])
-                else:
-                    # start at root
+                else: # start at root
                     current = ROOT
 
                 while True:
                     node = &self.nodes.node_array[current]
-                    if (node.flag & LEAF):
-                        if (node.flag & HAS_PARTICLE):
+                    if (node.flags & LEAF):
+                        if (node.flags & HAS_PARTICLE):
 
-                            # particle living here already
-                            # copy particle 
-                            pj_index = node.u.n.pid
+                            # leaf has particle already
+                            j = node.group.data.pid
                             for k in range(self.dim):
-                                xj[k] = self.x[k][pj_index]
+                                xj[k] = self.x[k][j]
 
                             # reset children to null due to union
                             for k in range(self.number_nodes):
-                                node.u.children[k] = NOT_EXIST
+                                node.group.children[k] = NOT_EXIST
 
                             # node becomes internal node
                             node.flags &= ~(LEAF|HAS_PARTICLE)
 
-                            # create child to store previous particle
-                            # children in parent in union is used
+                            # create child to store leaf particle
                             index = self.get_index(current, xj)
                             child = self.create_child(current, index)
 
-                            # store old particle here
-                            child.flag |= (LEAF|HAS_PARTICLE)
-                            child.u.n.pid = j
+                            # store leaf particle here
+                            child.flags |= (LEAF|HAS_PARTICLE)
+                            child.group.data.pid = j
 
                             # try to insert original particle again
 
                         else:
-                            # store particle here
-                            node.flags |= HAS_PARTICLE
-                            # overwrites children in union
-                            node.u.n.pid = i
-                            break
+                            node.flags |= HAS_PARTICLE # store particle here
+                            node.group.data.pid = i    # overwrites in union
+                            break # particle done
 
                     else:
                         # find child to store particle
                         index = self.get_index(current, xi)
 
-                        # if child does not exist in this slot
-                        # create child and store particle
-                        if node.u.children[index] == NOT_EXIST:
+                        # if child does not exist create child
+                        # and store particle
+                        if node.group.children[index] == NOT_EXIST:
                             child = self.create_child(current, index)
                             child.flags |= (LEAF|HAS_PARTICLE)
-                            child.u.n.pid = i
+                            child.group.data.pid = i
                             break # particle done
 
                         else: # internal node, travel down
-                            current = node.u.children[index]
+                            current = node.group.children[index]
 
         self._update_moments(ROOT, ROOT_SIBLING)
-
         if self.parallel:
             self._export_import_remote_nodes()
 
-        #root = &self.nodes.node_array[0]
-        #print 'rank=', self.rank, 'total root mass:', root.p.mass
+        root = &self.nodes.node_array[0]
+        #print 'rank=', self.rank, 'total root mass:', root.group.data.mass
+        print 'rank:', self.rank, 'total root mass:', root.group.data.mass, 'x:', root.group.data.com[0], 'y:', root.group.data.com[1]
+
+        self.m = NULL
+        for k in range(self.dim):
+            self.x[k] = NULL
 
     cdef void _update_moments(self, int current, int sibling):
         """
@@ -624,77 +636,80 @@ cdef class GravityTree:
         product we collect the first child and sibling of each
         node, which allows for efficient tree walking.
         """
-        cdef int i, j, sib, pid
         cdef Node *node, *child
         cdef double mass, com[3]
+        cdef int i, j, k, sib, pid, skip
 
-        node = &self.nodes.node_array[current]
+        skip = SKIP_BRANCH
 
-        # temp variables because we cant over
-        # write children yet in union
+        # due to union we first save moments
         mass = 0.
         for i in range(self.dim):
             com[i] = 0.
+        node = &self.nodes.node_array[current]
 
-        if((node.flags & LEAF) != LEAF): # internal node
-
-            # sum moments from each child
+        # for non leafs use children
+        if((node.flags & LEAF) != LEAF):
             for i in range(self.number_nodes):
-                if(node.u.children[i] != NOT_EXIST):
+                if(node.group.children[i] != NOT_EXIST):
 
                     # find sibling of child 
                     j = i + 1
-                    while(j < self.number_nodes and node.u.children[j] == NOT_EXIST):
-                        j = j + 1
+                    while(j < self.number_nodes and\
+                            node.group.children[j] == NOT_EXIST):
+                        j += 1
 
                     if(j < self.number_nodes):
-                        sib = node.u.children[j]
+                        sib = node.group.children[j]
                     else:
                         sib = sibling
 
-                    self._update_moments(node.u.children[i], sib)
+                    self._update_moments(node.group.children[i], sib)
+                    child = &self.nodes.node_array[node.group.children[i]]
 
-                    # update node moments
-                    child = &self.nodes.node_array[node.u.children[i]]
-                    mass += child.u.n.mass
-                    for j in range(self.dim):
-                        com[j] += child.u.n.mass*child.u.n.com[j]
+                    # for parallel flag branches to skip during walk
+                    skip &= (child.flags & SKIP_BRANCH)
+
+                    mass += child.group.data.mass
+                    for k in range(self.dim):
+                        com[k] += child.group.data.mass*\
+                                child.group.data.com[k]
 
             # find first child of node
             j = 0
-            while(j < self.number_nodes and node.u.children[j] == NOT_EXIST):
-                j = j + 1
+            while(node.group.children[j] == NOT_EXIST):
+                j += 1
+
+            node.flags |= (skip & SKIP_BRANCH)
 
             # no longer need children array in union
-            node.u.n.first_child = node.u.children[j]
-            node.u.n.next_sibling = sibling
+            node.group.data.first_child = node.group.children[j]
+            node.group.data.next_sibling = sibling
+            node.group.data.mass = mass
 
-            node.u.n.mass = mass
             if(mass):
-                for j in range(self.dim):
-                    node.u.n.com[j] = com[j]/mass
+                for k in range(self.dim):
+                    node.group.data.com[k] = com[k]/mass
             else:
-                for j in range(self.dim):
-                    node.u.n.com[j] = 0.
-
+                for k in range(self.dim):
+                    node.group.data.com[k] = 0.
         else:
 
-            # no longer need children array
-            node.u.n.first_child  = NOT_EXIST
-            node.u.n.next_sibling = sibling
-
-            node.u.n.mass = mass
-            for j in range(self.dim):
-                node.u.n.com[j] = com[j]
+            node.group.data.first_child  = NOT_EXIST
+            node.group.data.next_sibling = sibling
 
             # remote leafs may not have particles
-            if (node.flags & HAS_PARTICLE):
-                pid = node.u.n.pid
+            if(node.flags & HAS_PARTICLE):
+                pid = node.group.data.pid
 
                 # copy particle information
-                node.u.n.mass = self.m[pid]
-                for j in range(self.dim):
-                    node.u.n.com[j] = self.x[pid]
+                node.group.data.mass = self.m[pid]
+                for k in range(self.dim):
+                    node.group.data.com[k] = self.x[k][pid]
+            else:
+                node.group.data.mass = 0.
+                for k in range(self.dim):
+                    node.group.data.com[k] = 0.
 
     cdef void _update_remote_moments(self, int current):
         """
@@ -702,7 +717,7 @@ cdef class GravityTree:
         product we collect the first child and sibling of each
         node. This in turn allows for efficient tree walking.
         """
-        cdef int i, j, index
+        cdef int k, ind, sib
         cdef Node *node, *child
         cdef double mass, com[3]
 
@@ -712,258 +727,294 @@ cdef class GravityTree:
         if((node.flags & TOP_TREE_LEAF) != TOP_TREE_LEAF):
 
             mass = 0.
-            for i in range(self.dim):
-                com[i] = 0.
+            for k in range(self.dim):
+                com[k] = 0.
 
             # sum moments from each child
-            index = node.u.n.first_child
-            while(index != node.u.n.sibling):
+            ind = node.group.data.first_child
+            sib = node.group.data.next_sibling
+            while(ind != sib):
 
                 # update node moments
-                child = &self.nodes.node_array[index]
-                self._update_remote_moments(index)
+                child = &self.nodes.node_array[ind]
+                self._update_remote_moments(ind)
+                mass += child.group.data.mass
+                for k in range(self.dim):
+                    com[k] += child.group.data.mass*\
+                            child.group.data.com[k]
 
-                mass += child.u.n.mass
-                for j in range(self.dim):
-                    com[j] += child.u.n.mass*child.u.n.com[j]
-                index = child.u.n.sibling
+                ind = child.group.data.next_sibling
 
             if(mass):
+                for k in range(self.dim):
+                    com[k] /= mass
+
+            node.group.data.mass = mass
+            for k in range(self.dim):
+                node.group.data.com[k] = com[k]
+
+    cdef void _export_import_remote_nodes(self):
+        cdef int i, j
+        cdef Node *node
+        cdef np.float64_t* comx[3]
+
+        cdef LongArray proc   = self.remote_nodes.get_carray('proc')
+        cdef LongArray maps   = self.remote_nodes.get_carray('map')
+        cdef DoubleArray mass = self.remote_nodes.get_carray('mass')
+
+        self.remote_nodes.pointer_groups(comx,
+                self.remote_nodes.named_groups['com'])
+
+        # collect moments belonging to current processor
+        for i in range(self.remote_nodes.get_number_of_items()):
+            if proc.data[i] == self.rank:
+
+                node = &self.nodes.node_array[maps.data[i]]
                 for j in range(self.dim):
-                    com[j] /= mass
+                    comx[j][i] = node.group.data.com[j]
+                mass.data[i] = node.group.data.mass
 
-            node.u.n.mass = mass
-            for j in range(self.dim):
-                node.u.n.com[j] = com[j]
+        # export local node info and import remote node
+        for field in self.remote_nodes.named_groups['moments']:
+            self.load_bal.comm.Allgatherv(MPI.IN_PLACE,
+                    [self.remote_nodes[field], self.send_cnts,
+                        self.send_disp, MPI.DOUBLE])
 
-#    cdef void _export_import_remote_nodes(self):
-#        cdef int i, j
-#        cdef Node *node
-#        cdef np.float64_t* comx[3]
-#
-#        cdef LongArray proc   = self.remote_nodes.get_carray('proc')
-#        cdef LongArray maps   = self.remote_nodes.get_carray('map')
-#        cdef DoubleArray mass = self.remote_nodes.get_carray('mass')
-#
-#        self.remote_nodes.pointer_groups(comx, self.remote_nodes.named_groups['com'])
-#
-#        # collect moments belonging to current processor
-#        for i in range(self.remote_nodes.get_number_of_items()):
-#            if proc.data[i] == self.rank:
-#
-#                # copy moment information
-#                node = &self.nodes.node_array[maps.data[i]]
-#                for j in range(self.dim):
-#                    comx[j][i] = node.p.x[j]
-#                mass.data[i] = node.p.mass
-#
-#        # export local node info and import remote node
-#        for field in self.remote_nodes.named_groups['moments']:
-#            self.load_bal.comm.Allgatherv(MPI.IN_PLACE,
-#                    [self.remote_nodes[field], self.node_counts, self.node_disp, MPI.DOUBLE])
-#
-#        # copy remote nodes to tree
-#        for i in range(self.remote_nodes.get_number_of_items()):
-#            if proc.data[i] != self.rank:
-#
-#                node = &self.nodes.node_array[maps.data[i]]
-#                for j in range(self.dim):
-#                    node.p.x[j] = comx[j][i]
-#                node.p.mass = mass.data[i]
-#
-#        # update moments
-#        self._update_remote_moments(0)
-#
-#    def walk(self, Interaction interact, CarrayContainer pc):
-#        if self.parallel:
-#            self._parallel_walk(interact, pc)
-#        else:
-#            self._serial_walk(interact, pc)
-#
-#    cdef void _serial_walk(self, Interaction interaction, CarrayContainer pc):
-#        """
-#        Walk the tree calculating interactions. Interactions can be any
-#        calculation between particles.
-#        """
-#        cdef int index
-#        cdef Node *node
-#
-#        # set particles for loop
-#        interaction.initialize_particles(pc)
-#
-#        # loop through each real praticle
-#        while(interaction.process_particle()):
-#
-#            # start at first child of root
-#            index = 0
-#            node = &self.nodes.node_array[index]
-#            index = node.first_child
-#
-#            while(index != -1):
-#
-#                node = &self.nodes.node_array[index]
-#                if(node.leaf != LEAF):
-#                    # should node be opened
-#                    if(interaction.splitter.split(node)):
-#                        index = node.first_child
-#                    else:
-#                        # interaction: node-particle
-#                        interaction.interact(node)
-#                        index = node.next_sibling
-#                else:
-#                    # interaction: particle-particle
-#                    interaction.interact(node)
-#                    index = node.next_sibling
-#
-#    cdef void _local_walk(self, Interaction interaction, CarrayContainer pc, int local):
-#        """
-#        Walk the tree calculating interactions. Interactions can be any
-#        calculation between particles.
-#        """
-#        cdef int index
-#        cdef Node *node
-#
-#        cdef LongArray pid = self.remote_nodes.get_carray("proc")
-#
-#        # loop through each real praticle
-#        while(interaction.process_particle()):
-#
-#            # start at root or next node from previous walk
-#            if local:
-#                index = interaction.start_node_index()
-#            else:
-#                current = self._leaf_index_toptree(keys.data[i])
-#                node = &self.nodes.node_array[current]
-#            while(index != -1):
-#
-#                node = &self.nodes.node_array[index]
-#                if(node.leaf != LEAF):
-#                    if local:
-#                    # should node be opened
-#                        if(interaction.splitter.split(node)):
-#                            index = node.first_child
-#                        else:
-#                            # interaction: node-particle
-#                            interaction.interact(node)
-#                            index = node.next_sibling
-#                    else:
-#                        # if node does not belong in the tree
-#                        if (node.flag & TOP_LEVEL_DEPEND):
-#                            index = node.next_sibling
-#                else: # leaf can be remote or local
-#                    if node.remote:
-#                        if local: # for local particles check for export
-#                            if(interaction.splitter.split(node)):
-#                                # node opend flag for export
-#                                self.buffer_pid.append(pid.data[node.index])
-#                                self.buffer_id.append(interaction.current)
-#
-#                                # check if buffer is full, halt walk if true
-#                                if self.buffer_pid.length == self.max_export:
-#                                    # save node to continue walk
-#                                    interaction.particle_not_finished(
-#                                            node.next_sibling)
-#                                    return # break out of walk
-#                                else:
-#                                    index = node.next_sibling
-#                            else: # interaction: node-particle
-#                                interaction.interact(node)
-#                                index = node.next_sibling
-#                        else: # non-local particle skip node
-#                            index = node.next_sibling
-#                    else:# interaction: particle-particle
-#                        interaction.interact(node)
-#                        index = node.next_sibling
-#
-#    cdef void _parallel_walk(self, CarrayContainer pc):
-#        cdef long num_import
-#        cdef int local_done, global_done
-#
-#        cdef np.ndarray loc_done, glb_done
-#        cdef np.ndarray buffer_id_npy, buffer_pid_npy
-#
-#        loc_done = np.zeros(1, dtype=np.int32)
-#        glb_done = np.zeros(1, dtype=np.int32)
-#
-#        # clear out buffers
-#        self.buffer_id.reset()
-#        self.buffer_pid.reset()
-#
-#        # convenience arrays
-#        buffer_id_npy  = self.buffer_id.get_npy_array()
-#        buffer_pid_npy = self.buffer_pid.get_npy_array()
-#
-#        # setup local particles for walk
-#        self.local_interaction.initialize_particles(pc)
-#        while True:
-#
-#            # perform walk while flagging particles for export
-#            # once the buffer is full the walk will hault
-#            self._local_walk(self.local_interaction, pc, LOCAL)
-#
-#            # put particles in process order
-#            ind = buffer_pid_npy.argsort()
-#            buffer_id_npy[:]  = buffer_id_npy[ind]
-#            buffer_pid_npy[:] = buffer_pid_npy[ind]
-#
-#            # count how many particles are going to each process
-#            for i in range(self.size):
-#                self.send_counts[i] = 0
-#            for i in range(self.buffer_pid.length):
-#                self.send_counts[self.buffer_pid.data[i]] += 1
-#
-#            # send number of export to all processors
-#            self.load_bal.comm.Alltoall([self.send_counts, MPI.INT],
-#                    [self.recv_counts, MPI.INT])
-#
-#            # how many remote particles are incoming
-#            num_import = 0
-#            for i in range(self.size):
-#                num_import += self.recv_counts[i]
-#
-#            # create displacement arrays 
-#            self.send_disp[0] = self.recv_disp[0] = 0
-#            for i in range(1, self.size):
-#                self.send_disp[i] = self.send_counts[i-1] + self.send_disp[i-1]
-#                self.recv_disp[i] = self.recv_counts[i-1] + self.recv_disp[i-1]
-#
-#            # copy flagged particles into buffer
-#            self.buffer_export.copy(pc,
-#                    self.buffer_id_npy,
-#                    pc.named_group['gravity-walk-export'])
-#
-#            # resize to fit number of particle incoming
-#            self.import_buffer.resize(num_import)
-#
-#            # send our particles / recieve particles 
-#            exchange_particles(self.buffer_import, self.buffer_export,
-#                    self.send_counts, self.recv_conts, self.load_bal.comm,
-#                    pc.named_groups['gravity-walk-export'],
-#                    self.send_disp, self.recv_disp)
-#
-#            # walk remote particles
-#            self.import_interaction.initialize_particles(self.buffer_import)
-#            self._local_walk(self.import_interaction, self.buffer_import, REMOTE)
-#
-#            # recieve back our paritcles / send back particles
-#            exchange_particles(self.buffer_export, self.buffer_import,
-#                    self.send_counts, self.recv_counts, self.load_bal.com,
-#                    pc.named_groups['gravity-walk-import'],
-#                    self.recv_disp, self.send_disp, self.recv_disp)
-#
-#            # copy back our data
-#            pc.insert(self.buffer_export
-#                    pc.named_group['gravity-walk-export'],
-#                    self.buffer_id_npy)
-#
-#            # let all processors know if walk is complete 
-#            glb_done[0] = 0
-#            loc_done[0] = interaction.done_processing()
-#            comm.Allreduce([loc_done, MPI.INT], [glb_done, MPI.INT], op=MPI.SUM)
-#
-#            # if all processors tree walks are done exit
-#            if glb_done[0] == self.size:
-#                break
+        # copy remote nodes to tree
+        for i in range(self.remote_nodes.get_number_of_items()):
+            if proc.data[i] != self.rank:
+
+                node = &self.nodes.node_array[maps.data[i]]
+                for j in range(self.dim):
+                    node.group.data.com[j] = comx[j][i]
+                node.group.data.mass = mass.data[i]
+
+        self._update_remote_moments(ROOT)
+
+    def walk(self, CarrayContainer pc):
+        """
+        Walk the tree calculating accerlerations.
+        """
+        self.export_interaction.initialize_particles(pc)
+        if self.parallel:
+            self._parallel_walk(self.export_interaction)
+        else:
+            self._serial_walk(self.export_interaction)
+
+    cdef void _serial_walk(self, Interaction interaction):
+        """
+        Walk the tree calculating interactions. Interactions can be any
+        calculation between particles.
+        """
+        cdef int index
+        cdef Node *node
+
+        # loop through each real praticle
+        while(interaction.process_particle()):
+            index = ROOT
+            while(index != ROOT_SIBLING):
+                node = &self.nodes.node_array[index]
+
+                if(node.flags & LEAF):
+                    # calculate particle particle interaction
+                    interaction.interact(node)
+                    index = node.group.data.next_sibling
+                else:
+                    if(interaction.splitter.split(node)):
+                        # node opened travel down
+                        index = node.group.data.first_child
+                    else:
+                        # calculate node particle interaction
+                        interaction.interact(node)
+                        index = node.group.data.next_sibling
+
+    cdef void _import_walk(self, Interaction interaction):
+        """
+        Walk tree calculating interactions for particle that are
+        imported to this process.
+        """
+        cdef int index
+        cdef Node *node
+
+        # loop through each export praticle
+        while(interaction.process_particle()):
+            index = ROOT
+            while(index != ROOT_SIBLING):
+                node = &self.nodes.node_array[index]
+
+                if(node.flags & LEAF):
+                    if(node.flags & TOP_TREE_LEAF_REMOTE):
+                        # skip remote leaf
+                        index = node.group.data.next_sibling
+
+                    else: # calculate particle particle interaction
+                        interaction.interact(node)
+                        index = node.group.data.next_sibling
+
+                else: # node is not leaf
+                    if(node.flags & SKIP_BRANCH):
+                        # we can skip branch if node only depends
+                        # on remote nodes
+                        index = node.group.data.next_sibling
+
+                    # check if node can be opened
+                    elif(interaction.splitter.split(node)):
+                        # travel down node
+                        index = node.group.data.first_child
+
+                    else: # node not opened particle node interaction
+                        if(node.flags & TOP_TREE):
+                            # skip top tree nodes
+                            index = node.group.data.next_sibling
+                        else:
+                            # calculate node particle interaction
+                            interaction.interact(node)
+                            index = node.group.data.next_sibling
+
+    cdef void _export_walk(self, Interaction interaction):
+        """
+        Walk tree calculating interactions for particle on this
+        process. Particle are also flagged for export.
+        """
+        cdef int index
+        cdef Node *node
+
+        cdef LongArray pid = self.remote_nodes.get_carray("proc")
+
+        # loop through each real praticle
+        while(interaction.process_particle()):
+
+            # start at root or next node from previous walk
+            index = interaction.start_node_index()
+            while(index != -1):
+
+                node = &self.nodes.node_array[index]
+                if(node.flags & LEAF):
+                    if(node.flags & TOP_TREE_LEAF_REMOTE):
+                        if(interaction.splitter.split(node)):
+
+                            # node opened flag for export
+                            self.buffer_pid.append(pid.data[node.index])
+                            self.buffer_id.append(interaction.current)
+
+                            # check if buffer is full, halt walk if true
+                            if self.buffer_pid.length == self.max_export:
+                                # save node to continue walk
+                                interaction.particle_not_finished(
+                                        node.group.data.next_sibling)
+                                return # break out of walk
+                            else:
+                                index = node.group.data.next_sibling
+
+                        else: # node not opened particle node interaction
+                            interaction.interact(node)
+                            index = node.group.data.next_sibling
+
+                    else: # particle particle interaction
+                        interaction.interact(node)
+                        index = node.group.data.next_sibling
+
+                else: # check if node can be opened 
+                    if(interaction.splitter.split(node)):
+                        # travel down node
+                        index = node.group.data.first_child
+
+                    else: # node not opened particle node interaction
+                        interaction.interact(node)
+                        index = node.group.data.next_sibling
+
+    cdef void _parallel_walk(self, CarrayContainer pc):
+        cdef int i
+        cdef long num_import
+        cdef int local_done, global_done
+
+        cdef np.ndarray loc_done, glb_done
+        cdef np.ndarray buffer_id_npy, buffer_pid_npy
+
+        loc_done = np.zeros(1, dtype=np.int32)
+        glb_done = np.zeros(1, dtype=np.int32)
+
+        # clear out buffers
+        self.buffer_id.reset()
+        self.buffer_pid.reset()
+
+        # convenience arrays
+        buffer_id_npy  = self.buffer_id.get_npy_array()
+        buffer_pid_npy = self.buffer_pid.get_npy_array()
+
+        # setup local particles for walk
+        self.local_interaction.initialize_particles(pc)
+        while True:
+
+            # perform walk while flagging particles for export
+            # once the buffer is full the walk will hault
+            self._import_walk(self.local_interaction, pc)
+
+            # put particles in process order
+            ind = buffer_pid_npy.argsort()
+            buffer_id_npy[:]  = buffer_id_npy[ind]
+            buffer_pid_npy[:] = buffer_pid_npy[ind]
+
+            # count how many particles are going to each process
+            for i in range(self.size):
+                self.send_cnts[i] = 0
+                self.recv_cnts[i] = 0
+
+            for i in range(self.buffer_pid.length):
+                self.send_cnts[self.buffer_pid.data[i]] += 1
+
+            # send number of export to all processors
+            self.load_bal.comm.Alltoall([self.send_cnts, MPI.INT],
+                    [self.recv_cnts, MPI.INT])
+
+            # how many remote particles are incoming
+            num_import = 0
+            for i in range(self.size):
+                num_import += self.recv_cnts[i]
+
+            # create displacement arrays 
+            self.send_disp[0] = self.recv_disp[0] = 0
+            for i in range(1, self.size):
+                self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
+                self.recv_disp[i] = self.recv_cnts[i-1] + self.recv_disp[i-1]
+
+            # copy flagged particles into buffer
+            self.buffer_export.copy(pc,
+                    self.buffer_id_npy,
+                    pc.named_group['gravity-walk-export'])
+
+            # resize to fit number of particle incoming
+            self.import_buffer.resize(num_import)
+
+            # send our particles / recieve particles 
+            exchange_particles(self.buffer_import, self.buffer_export,
+                    self.send_counts, self.recv_conts, self.load_bal.comm,
+                    pc.named_groups['gravity-walk-export'],
+                    self.send_disp, self.recv_disp)
+
+            # walk remote particles
+            self.import_interaction.initialize_particles(self.buffer_import)
+            self._remote_walk(self.import_interaction, self.buffer_import
+
+            # recieve back our paritcles / send back particles
+            exchange_particles(self.buffer_export, self.buffer_import,
+                    self.send_cnts, self.recv_cnts, self.load_bal.com,
+                    pc.named_groups['gravity-walk-import'],
+                    self.recv_disp, self.send_disp, self.recv_disp)
+
+            # copy back our data
+            pc.insert(self.buffer_export
+                    pc.named_group['gravity-walk-export'],
+                    self.buffer_id_npy)
+
+            # let all processors know if walk is complete 
+            glb_done[0] = 0
+            loc_done[0] = self.export_interaction.done_processing()
+            comm.Allreduce([loc_done, MPI.INT], [glb_done, MPI.INT], op=MPI.SUM)
+
+            # if all processors tree walks are done exit
+            if glb_done[0] == self.size:
+                break
 
     # -- delete later --
     def dump_data(self):
@@ -973,14 +1024,14 @@ cdef class GravityTree:
         cdef int i
         for i in range(self.nodes.used):
             node = &self.nodes.node_array[i]
-            if node.leaf == LEAF:
+            if (node.flags & LEAF):
                 data_list.append([
                     node.center[0],
                     node.center[1],
                     node.center[2],
-                    node.p.mass,
-                    node.p.x[0],
-                    node.p.x[1],
+                    node.group.data.mass,
+                    node.group.data.com[0],
+                    node.group.data.com[1],
                     node.width])
 
         return data_list
@@ -997,10 +1048,10 @@ cdef class GravityTree:
                 node.center[0],
                 node.center[1],
                 node.center[2],
-                node.p.mass,
-                node.p.x[0],
-                node.p.x[1],
-                node.leaf,
+                node.group.data.mass,
+                node.group.data.com[0],
+                node.group.data.com[1],
+                (node.flags) & LEAF,
                 node.width])
 
         return data_list
@@ -1022,9 +1073,9 @@ cdef class GravityTree:
                 node.center[0],
                 node.center[1],
                 node.center[2],
-                node.p.mass,
-                node.p.x[0],
-                node.p.x[1],
+                node.group.data.mass,
+                node.group.data.com[0],
+                node.group.data.com[1],
                 proc.data[i],
                 node.width])
 
