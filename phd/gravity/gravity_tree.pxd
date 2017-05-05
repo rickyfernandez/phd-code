@@ -1,84 +1,30 @@
 cimport numpy as np
-from ..utils.carray cimport IntArray
+
+from .gravity_pool cimport Node, GravityPool
+
 from ..domain.domain cimport DomainLimits
 from ..load_balance.tree cimport Node as LoadNode
 from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
 
+# tree flags
+cdef int NOT_EXIST = -1
+cdef int ROOT = 0
+cdef int ROOT_SIBLING = -1
+cdef int LEAF = 0x01
+cdef int HAS_PARTICLE = 0x02
+cdef int TOP_TREE = 0x04
+cdef int TOP_TREE_LEAF = 0x08
+cdef int TOP_TREE_LEAF_REMOTE = 0x10
+cdef int SKIP_BRANCH = 0x20
 
-cdef struct Data:
-
-    double mass
-    double com[3]
-    int first_child
-    int next_sibling
-    int pid
-
-cdef union Group:
-
-    int children[8]
-    Data data
-
-cdef struct Node:
-
-    int flags          # flags
-    int p_index        # index of particle it contains
-    double width       # physical width of node
-    double center[3]   # physical center of the node
-
-    Group group             # union of moment information and children index
-
-
-cdef class GravityNodePool:
-
-    cdef int used                     # number of nodes used in the pool
-    cdef int capacity                 # total capacity of the pool
-
-    cdef Node* node_array             # array holding all nodes
-
-    cdef Node* get(self, int count)   # allocate count many nodes
-    cdef void resize(self, int size)  # resize array of nodes to length size
-    cdef void reset(self)             # reset the pool
-    cpdef int number_leaves(self)     # number of leves in tree
-    cpdef int number_nodes(self)      # number of nodes in tree
-
-cdef class Splitter:
-
-    cdef int dim
-    cdef long idp
-
-    cdef void initialize_particles(self, CarrayContainer pc)
-    cdef void process_particle(self, long idp)
-    cdef int split(self, Node* node)
-
-cdef class BarnesHut(Splitter):
-    cdef double open_angle
-    cdef np.float64_t *x[3]
-
-cdef class Interaction:
-
-    cdef int dim
-    cdef long current
-    cdef long num_particles
-
-    cdef IntArray tags
-    cdef Splitter splitter
-
-    cdef void interact(self, Node* node)
-    cdef void initialize_particles(self, CarrayContainer pc)
-    cdef int process_particle(self)
-    cpdef void set_splitter(self, Splitter splitter)
-
-cdef class GravityAcceleration(Interaction):
-    cdef np.float64_t *x[3]
-    cdef np.float64_t *a[3]
 
 cdef class GravityTree:
 
     cdef public int number_nodes
     cdef public int dim, rank, size
     cdef public DomainLimits domain
-    cdef public GravityNodePool nodes
+    cdef public GravityPool nodes
     cdef public Splitter export_interaction
 
     # pointers for particle position and mass
