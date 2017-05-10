@@ -8,15 +8,15 @@ cdef struct Data:
 
 cdef union Group:
 
-    int children[8]    # reference to nodes children
-    Data data          # Data struct
+    int children[8]     # reference to children nodes
+    Data data           # node data struct
 
 cdef struct Node:
 
-    int flags          # flags
-    double width       # physical width of node
-    double center[3]   # physical center of the node
-    Group group        # union of moment information and children index
+    int flags           # flags
+    double width        # physical width of node
+    double center[3]    # physical center of the node
+    Group group         # union of moment information and children index
 
 cdef class GravityPool:
 
@@ -28,5 +28,5 @@ cdef class GravityPool:
     cdef Node* get(self, int count)   # allocate count many nodes
     cdef void resize(self, int size)  # resize array of nodes to length size
     cdef void reset(self)             # reset the pool
-    cpdef int number_leaves(self)     # number of leves in tree
+    cpdef int number_leafs(self)      # number of leafs in tree
     cpdef int number_nodes(self)      # number of nodes in tree

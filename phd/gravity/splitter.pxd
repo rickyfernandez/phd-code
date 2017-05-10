@@ -1,7 +1,7 @@
 cimport numpy as np
 
 from ..containers.containers cimport CarrayContainer
-from .gravity_pool.gravity_pool cimport Node
+from .gravity_pool cimport Node
 
 
 cdef class Splitter:
@@ -14,5 +14,6 @@ cdef class Splitter:
     cdef int split(self, Node* node)
 
 cdef class BarnesHut(Splitter):
+
     cdef double open_angle
     cdef np.float64_t *x[3]

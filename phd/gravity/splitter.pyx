@@ -1,5 +1,7 @@
-
 cdef class Splitter:
+    """
+    Base class for open node criteria.
+    """
     cdef void initialize_particles(self, CarrayContainer pc):
         msg = "Splitter::initialize_particles called!"
         raise NotImplementedError(msg)
@@ -12,15 +14,42 @@ cdef class Splitter:
         raise NotImplementedError(msg)
 
 cdef class BarnesHut(Splitter):
+    """
+    Barnes and Hut criteria to open node.
+    """
     def __init__(self, double open_angle):
+        """
+        Initialize class with opening angle
+
+        Parameters
+        ----------
+        open_angle : double
+            opening angle criteria
+        """
         self.open_angle = open_angle
 
+    def add_fields(self, dict fields, dict named_groups):
+        pass
+
     cdef void initialize_particles(self, CarrayContainer pc):
+        """
+        Create reference to particle positions
+
+        Parameters
+        ----------
+        pc : CarrayContainer
+            Container of particles that are going to walk the tree
+        """
         pc.pointer_groups(self.x, pc.named_groups['position'])
 
     cdef int split(self, Node* node):
         """
         Test if node needs to be open using the Barnes and Hut Criteria.
+
+        Parameters
+        ----------
+        node : *Node
+            Node in gravity tree to test
         """
         cdef int i
         cdef double r2 = 0.

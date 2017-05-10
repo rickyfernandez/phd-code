@@ -1,8 +1,9 @@
 cimport numpy as np
 
-from .gravity_pool cimport Node, GravityPool
-
+from ..utils.carray cimport LongArray
+from .interaction cimport Interaction
 from ..domain.domain cimport DomainLimits
+from .gravity_pool cimport Node, GravityPool
 from ..load_balance.tree cimport Node as LoadNode
 from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
@@ -21,31 +22,36 @@ cdef int SKIP_BRANCH = 0x20
 
 cdef class GravityTree:
 
-    cdef public int number_nodes
+    cdef public CarrayContainer pc              # referecne to particles
+    cdef public int number_nodes                # max number of children nodes
     cdef public int dim, rank, size
-    cdef public DomainLimits domain
-    cdef public GravityPool nodes
-    cdef public Splitter export_interaction
+    cdef public DomainLimits domain             # simulation domain
+
+    cdef public str split_type                  # method to open nodes
+    cdef public GravityPool nodes               # node array for gravity tree
+    cdef public int calc_potential              # flag if potential is calculated
+    cdef public double barnes_angle             # angle to open node in barnes hut
+    cdef public Interaction export_interaction  # acceleration calculator
 
     # pointers for particle position and mass
     cdef np.float64_t *x[3], *m
 
     # varaibles for parallel run
-    cdef int parallel
+    cdef int parallel                           # signal if run is in parallel
 
-    cdef public LoadBalance load_bal
-    cdef public Splitter import_interaction
-    cdef public CarrayContainer remote_nodes
+    cdef public LoadBalance load_bal            # reference to load balance
+    cdef public Interaction import_interaction  # acceleration calculator
+    cdef public CarrayContainer remote_nodes    # container of remote nodes
 
-    cdef public buffer_id
-    cdef public buffer_pid
-    cdef public buffer_import
-    cdef public buffer_export
+    cdef public LongArray buffer_id             # particle id for export particle
+    cdef public LongArray buffer_pid            # processor to send export particle 
+    cdef public CarrayContainer buffer_export   # container of particles to import
+    cdef public CarrayContainer buffer_import   # container of particles to export
 
-    cdef public np.ndarray send_cnts
-    cdef public np.ndarray send_disp
-    cdef public np.ndarray recv_cnts
-    cdef public np.ndarray recv_disp
+    cdef public np.ndarray send_cnts            # send counts for mpi
+    cdef public np.ndarray send_disp            # send displacments for mpi
+    cdef public np.ndarray recv_cnts            # receive counts for mpi
+    cdef public np.ndarray recv_disp            # receive counts for mpi
 
     # allocate node functions
     cdef inline void create_root(self)

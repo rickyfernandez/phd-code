@@ -5,9 +5,11 @@ cimport libc.stdlib as stdlib
 from mpi4py import MPI
 from libc.math cimport sqrt
 
+from .splitter cimport Splitter, BarnesHut
+from .interaction cimport GravityAcceleration
 from ..utils.particle_tags import ParticleTAGS
-from ..utils.carray cimport DoubleArray, IntArray, LongArray, LongLongArray
 from ..load_balance.tree cimport TreeMemoryPool as Pool
+from ..utils.carray cimport DoubleArray, IntArray, LongArray, LongLongArray
 
 cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
@@ -15,16 +17,19 @@ cdef int Ghost = ParticleTAGS.Ghost
 cdef class GravityTree:
     """
     Solves gravity by barnes and hut algorithm in serial or
-    parallel. Should only be used for parallel runs. This
-    algorithm heavily depends on the LoadBalance class.
-    The algorithm works in 2d or 3d.
+    parallel. The algorithm heavily depends on the LoadBalance
+    class if run in parallel. The algorithm works in 2d or 3d.
     """
-    def __init__(self, int parallel=0, str split_type='barnes-hut'):
+    def __init__(self, str split_type='barnes-hut',  double barnes_angle=0.3, int calc_potential=0,
+            int parallel=0):
 
         #self.domain = domain
         #self.load_bal = load_bal
+        #self.pc = pc
         self.parallel = parallel
         self.split_type = split_type
+        self.barnes_angle = barnes_angle
+        self.calc_potential = calc_potential
 
     def _initialize(self):
         '''
@@ -32,6 +37,7 @@ cdef class GravityTree:
         remote nodes are allocated as well dimension of the tree.
         '''
         cdef str axis
+        cdef Splitter splitter
         cdef dict state_vars = {}
         cdef dict named_groups = {}
 
@@ -39,12 +45,13 @@ cdef class GravityTree:
         self.number_nodes = 2**self.dim
         self.nodes = GravityPool(1000)
 
-        if self.interact_type == 'barnes-hut':
-            splitter = BarnesHutCriteria()
-        elif self.interact_type == 'acceleration':
-            splitter = AccerlationCriteria()
+        if self.split_type == 'barnes-hut':
+            splitter = BarnesHut(self.barnes_angle)
+        else:
+            raise RuntimeError("Unrecognized splitter in gravity")
 
-        self.import_interaction(splitter)
+        self.export_interaction = GravityAcceleration(self.pc,
+                self.domain, splitter, 1, self.calc_potential)
 
         if self.parallel:
 
@@ -70,13 +77,21 @@ cdef class GravityTree:
             self.remote_nodes = CarrayContainer(var_dict=state_vars)
             self.remote_nodes.named_groups = named_groups
 
+            # particle id and send processors buffers
             self.buffer_id  = IntArray()
             self.buffer_pid = IntArray()
 
-            self.buffer_import = CarrayContainer()
-            self.buffer_export = CarrayContainer()
+            # particle buffers for parallel tree walk
+            self.buffer_import = CarrayContainer(0)
+            self.buffer_export = CarrayContainer(0)
 
-            self.export_interaction(splitter)
+            # add the fields that will be communicated
+            for field in self.export_interaction.fields:
+                self.buffer_import(0, field, 'double')
+                self.buffer_export(0, field, 'double')
+
+            self.import_interaction = GravityAcceleration(self.pc,
+                    self.domain, splitter, 0, self.calc_potential)
 
     cdef inline int get_index(self, int parent_index, np.float64_t x[3]):
         """
@@ -163,7 +178,7 @@ cdef class GravityTree:
         child = self.nodes.get(self.number_nodes)          # reference of first child
         start_index = self.nodes.used - self.number_nodes  # index of first child
 
-        parent = &self.nodes._array[parent_index]
+        parent = &self.nodes.array[parent_index]
         width = .5*parent.width                            # box width of children
         parent.flags &= ~LEAF                              # parent no longer leaf
 
@@ -213,7 +228,7 @@ cdef class GravityTree:
         self.nodes.resize(pool.number_nodes())
 
         # resize container to hold leaf data 
-        self.remote_nodes.resize(pool.number_leaves())
+        self.remote_nodes.resize(pool.number_leafs())
 
         # copy global partial tree in z-order, collect leaf index for mapping 
         self._create_top_tree(ROOT, load_root, maps.get_data_ptr())
@@ -319,7 +334,7 @@ cdef class GravityTree:
         for k in range(self.number_nodes):
             root.group.children[k] = NOT_EXIST
 
-    def _build_tree(self, CarrayContainer pc):
+    def _build_tree(self):
         """
         Build local gravity tree by inserting real particles.
         This method is non-recursive and only adds real particles.
@@ -327,9 +342,9 @@ cdef class GravityTree:
         parallel tree builds because the top tree will have leafs
         without any particles.
         """
-        cdef IntArray tags = pc.get_carray('tag')
-        cdef DoubleArray mass = pc.get_carray('mass')
-        cdef LongLongArray keys = pc.get_carray('key')
+        cdef IntArray tags = self.pc.get_carray('tag')
+        cdef DoubleArray mass = self.pc.get_carray('mass')
+        cdef LongLongArray keys = self.pc.get_carray('key')
 
         cdef double width
         cdef int index, current
@@ -339,7 +354,7 @@ cdef class GravityTree:
         cdef double xi[3], xj[3]
 
         # pointer to particle position and mass
-        pc.pointer_groups(self.x, pc.named_groups['position'])
+        self.pc.pointer_groups(self.x, self.pc.named_groups['position'])
         self.m = mass.get_data_ptr()
 
         self.create_root()
@@ -348,7 +363,7 @@ cdef class GravityTree:
             self._build_top_tree()
 
         # add real particles to tree
-        for i in range(pc.get_number_of_items()):
+        for i in range(self.pc.get_number_of_items()):
             if tags.data[i] == Real:
 
                 for k in range(self.dim):
@@ -791,7 +806,7 @@ cdef class GravityTree:
 #                    self.recv_disp, self.send_disp, self.recv_disp)
 #
 #            # copy back our data
-#            pc.insert(self.buffer_export
+#            pc.paste(self.buffer_export
 #                    pc.named_group['gravity-walk-export'],
 #                    self.buffer_id_npy)
 #
