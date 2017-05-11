@@ -28,7 +28,7 @@ cdef class BarnesHut(Splitter):
         """
         self.open_angle = open_angle
 
-    def add_fields(self, dict fields, dict named_groups):
+    def add_fields_to_interaction(self, dict fields, dict named_groups):
         pass
 
     cdef void initialize_particles(self, CarrayContainer pc):

@@ -17,7 +17,7 @@ cdef class Interaction:
         self.dim = domain.dim
         self.splitter = splitter
 
-    def add_fields(self, CarrayContainer pc):
+    def add_fields_to_container(self, CarrayContainer pc):
         """
         Add needed fields for interaction computation
         to particle container. Note if fields present this
@@ -88,13 +88,18 @@ cdef class GravityAcceleration(Interaction):
         self.fields = {}
         self.named_groups = {}
 
+        self.fields['mass'] = 'double'
+        self.named_groups['position'] = []
         self.named_groups['acceleration'] = []
+
         for axis in 'xyz'[:self.dim]:
+            self.fields['position-' + axis] = 'double'
             self.fields['acceleration-' + axis] = 'double'
+            self.named_groups['position'].append('position-' + axis)
             self.named_groups['acceleration'].append('acceleration-' + axis)
 
         self.named_groups['gravity-walk-export'] = ['mass'] + pc.named_groups['position']
-        self.named_groups['gravity-walk-import'] = self.named_groups['acceleration']
+        self.named_groups['gravity-walk-import'] = list(self.named_groups['acceleration'])
 
         if self.calc_potential:
             self.fields['potential'] = 'double'
@@ -102,11 +107,11 @@ cdef class GravityAcceleration(Interaction):
                     + ['potential']
 
         # if splitter has fields add as well 
-        self.splitter.add_fields(self.fields, self.named_groups)
+        self.splitter.add_fields_to_interaction(self.fields, self.named_groups)
 
         # add new fields to container
         if add_fields:
-            self.add_fields(pc)
+            self.add_fields_to_container(pc)
 
     cdef void initialize_particles(self, CarrayContainer pc):
         """
@@ -164,7 +169,7 @@ cdef class GravityAcceleration(Interaction):
         r2 = 0.
         for i in range(self.dim):
             # distance between particle and center of mass
-            dr[i] = node.group.data.x[i] - self.x[i][self.current]
+            dr[i] = node.group.data.com[i] - self.x[i][self.current]
             r2 += dr[i]**2
 
         # particle acceleration
