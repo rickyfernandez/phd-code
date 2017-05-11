@@ -20,7 +20,8 @@ cdef class GravityTree:
     parallel. The algorithm heavily depends on the LoadBalance
     class if run in parallel. The algorithm works in 2d or 3d.
     """
-    def __init__(self, str split_type='barnes-hut',  double barnes_angle=0.3, int calc_potential=0,
+    def __init__(self, str split_type='barnes-hut',  double barnes_angle=0.3,
+            int calculate_potential=0,
             int parallel=0):
 
         #self.domain = domain
@@ -29,7 +30,7 @@ cdef class GravityTree:
         self.parallel = parallel
         self.split_type = split_type
         self.barnes_angle = barnes_angle
-        self.calc_potential = calc_potential
+        self.calc_potential = calculate_potential
 
     def _initialize(self):
         '''
@@ -78,17 +79,20 @@ cdef class GravityTree:
             self.remote_nodes.named_groups = named_groups
 
             # particle id and send processors buffers
-            self.buffer_id  = IntArray()
-            self.buffer_pid = IntArray()
+            self.buffer_id  = LongArray()
+            self.buffer_pid = LongArray()
 
             # particle buffers for parallel tree walk
             self.buffer_import = CarrayContainer(0)
             self.buffer_export = CarrayContainer(0)
 
-            # add the fields that will be communicated
-            for field in self.export_interaction.fields:
-                self.buffer_import(0, field, 'double')
-                self.buffer_export(0, field, 'double')
+            # add fields that will be communicated
+            for field in self.pc.named_groups['gravity-walk-export']:
+                self.buffer_export.register_property(0, field,
+                        self.export_interaction.fields[field])
+            for field in self.pc.named_groups['gravity-walk-import']:
+                self.buffer_import.register_property(0, field,
+                        self.export_interaction.fields[field])
 
             self.import_interaction = GravityAcceleration(self.pc,
                     self.domain, splitter, 0, self.calc_potential)
@@ -594,43 +598,49 @@ cdef class GravityTree:
 
         self._update_remote_moments(ROOT)
 
-#    def walk(self, CarrayContainer pc):
-#        """
-#        Walk the tree calculating accerlerations.
-#        """
-#        self.export_interaction.initialize_particles(pc)
-#        if self.parallel:
-#            self._parallel_walk(self.export_interaction)
-#        else:
-#            self._serial_walk(self.export_interaction)
-#
-#    cdef void _serial_walk(self, Interaction interaction):
-#        """
-#        Walk the tree calculating interactions. Interactions can be any
-#        calculation between particles.
-#        """
-#        cdef int index
-#        cdef Node *node
-#
-#        # loop through each real praticle
-#        while(interaction.process_particle()):
-#            index = ROOT
-#            while(index != ROOT_SIBLING):
-#                node = &self.nodes.array[index]
-#
-#                if(node.flags & LEAF):
-#                    # calculate particle particle interaction
-#                    interaction.interact(node)
-#                    index = node.group.data.next_sibling
-#                else:
-#                    if(interaction.splitter.split(node)):
-#                        # node opened travel down
-#                        index = node.group.data.first_child
-#                    else:
-#                        # calculate node particle interaction
-#                        interaction.interact(node)
-#                        index = node.group.data.next_sibling
-#
+    def walk(self):
+        """
+        Walk the tree calculating accerlerations.
+        """
+        self.export_interaction.initialize_particles(self.pc)
+        if self.parallel:
+            pass
+            #self._parallel_walk(self.export_interaction)
+        else:
+            self._serial_walk(self.export_interaction)
+
+    cdef void _serial_walk(self, Interaction interaction):
+        """
+        Walk the tree calculating interactions. Interactions can be any
+        calculation between particles.
+
+        Parameters
+        ----------
+        interaction : Interaction
+            Computation for particle and node
+        """
+        cdef int index
+        cdef Node *node
+
+        # loop through each real praticle
+        while(interaction.process_particle()):
+            index = ROOT
+            while(index != ROOT_SIBLING):
+                node = &self.nodes.array[index]
+
+                if(node.flags & LEAF):
+                    # calculate particle particle interaction
+                    interaction.interact(node)
+                    index = node.group.data.next_sibling
+                else:
+                    if(interaction.splitter.split(node)):
+                        # node opened travel down
+                        index = node.group.data.first_child
+                    else:
+                        # calculate node particle interaction
+                        interaction.interact(node)
+                        index = node.group.data.next_sibling
+
 #    cdef void _import_walk(self, Interaction interaction):
 #        """
 #        Walk tree calculating interactions for particle that are

@@ -9,16 +9,16 @@ from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
 
 # tree flags
-cdef int NOT_EXIST = -1
-cdef int ROOT = 0
-cdef int ROOT_SIBLING = -1
-cdef int LEAF = 0x01
-cdef int HAS_PARTICLE = 0x02
-cdef int TOP_TREE = 0x04
-cdef int TOP_TREE_LEAF = 0x08
-cdef int TOP_TREE_LEAF_REMOTE = 0x10
-cdef int SKIP_BRANCH = 0x20
-
+cdef enum:
+    NOT_EXIST = -1
+    ROOT = 0
+    ROOT_SIBLING = -1
+    LEAF = 0x01
+    HAS_PARTICLE = 0x02
+    TOP_TREE = 0x04
+    TOP_TREE_LEAF = 0x08
+    TOP_TREE_LEAF_REMOTE = 0x10
+    SKIP_BRANCH = 0x20
 
 cdef class GravityTree:
 
@@ -71,5 +71,5 @@ cdef class GravityTree:
     cdef void _export_import_remote_nodes(self)
     cdef void _update_remote_moments(self, int current)
 
-#    # tree walk functions
-#    #cdef void _walk(self, Interaction interaction, CarrayContainer pc)
+    # tree walk functions
+    cdef void _serial_walk(self, Interaction interaction)
