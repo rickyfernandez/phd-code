@@ -17,7 +17,7 @@ cdef class BarnesHut(Splitter):
     """
     Barnes and Hut criteria to open node.
     """
-    def __init__(self, double open_angle):
+    def __init__(self, int dim, double open_angle):
         """
         Initialize class with opening angle
 
@@ -26,6 +26,7 @@ cdef class BarnesHut(Splitter):
         open_angle : double
             opening angle criteria
         """
+        self.dim = dim
         self.open_angle = open_angle
 
     def add_fields_to_interaction(self, dict fields, dict named_groups):

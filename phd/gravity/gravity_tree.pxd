@@ -1,4 +1,5 @@
 cimport numpy as np
+from libcpp.map cimport map
 
 from ..utils.carray cimport LongArray
 from .interaction cimport Interaction
@@ -7,6 +8,7 @@ from .gravity_pool cimport Node, GravityPool
 from ..load_balance.tree cimport Node as LoadNode
 from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
+
 
 # tree flags
 cdef enum:
@@ -38,11 +40,15 @@ cdef class GravityTree:
 
     # varaibles for parallel run
     cdef int parallel                           # signal if run is in parallel
+    cdef public int max_buffer_size             # max number of particles in buffer
+
+    cdef map[int, int]  node_index_to_array
 
     cdef public LoadBalance load_bal            # reference to load balance
     cdef public Interaction import_interaction  # acceleration calculator
     cdef public CarrayContainer remote_nodes    # container of remote nodes
 
+    cdef public np.ndarray flag_pid             # flag if particle is export to processor
     cdef public LongArray buffer_id             # particle id for export particle
     cdef public LongArray buffer_pid            # processor to send export particle 
     cdef public CarrayContainer buffer_export   # container of particles to import
@@ -73,3 +79,6 @@ cdef class GravityTree:
 
     # tree walk functions
     cdef void _serial_walk(self, Interaction interaction)
+    cdef void _parallel_walk(self, Interaction interaction)
+    cdef void _import_walk(self, Interaction interaction)
+    cdef void _export_walk(self, Interaction interaction)

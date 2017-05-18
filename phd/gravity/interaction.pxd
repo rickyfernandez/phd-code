@@ -10,7 +10,10 @@ from ..containers.containers cimport CarrayContainer
 cdef class Interaction:
     cdef int dim                    # spatial dimension of the problem
     cdef long current               # index of particle to compute on
+    cdef int has_ghost
+    cdef long current_node          # current node in tree walk for particle
     cdef long num_particles         # total number of particles
+    cdef int particle_done          # flag to know particle is done walking
 
     cdef public dict fields         # fields to use in computation
     cdef public dict named_groups   # vector of fields for ease
@@ -19,8 +22,11 @@ cdef class Interaction:
     cdef Splitter splitter          # criteria to open node
 
     cdef void interact(self, Node* node)
-    cdef void initialize_particles(self, CarrayContainer pc)
+    cdef void initialize_particles(self, CarrayContainer pc, int has_ghost=*)
     cdef int process_particle(self)
+    cdef void particle_not_finished(self, long node_index)
+    cdef void particle_finished(self)
+    cdef long start_node_index(self)
 
 cdef class GravityAcceleration(Interaction):
     cdef int calc_potential  # flag to include gravity potential
