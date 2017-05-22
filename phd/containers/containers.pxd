@@ -20,3 +20,5 @@ cdef class CarrayContainer:
     cpdef remove_tagged_particles(self, np.int8_t tag)
     cpdef CarrayContainer extract_items(self, LongArray index_array, list fields=*)
     cpdef int append_container(self, CarrayContainer carray)
+    cpdef copy(self, CarrayContainer container, LongArray indices, list properties):
+    cpdef paste(self, CarrayContainer container, LongArray indices, list properties):
