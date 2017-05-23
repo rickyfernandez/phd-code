@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from utils.carray import DoubleArray, IntArray, LongArray, LongLongArray
+from phd.utils.carray import IntArray, DoubleArray, LongArray, LongLongArray
 
 class TestDoubleArray(unittest.TestCase):
     """Tests for the DoubleArray class."""
@@ -169,14 +169,33 @@ class TestDoubleArray(unittest.TestCase):
         """Tests the copy values function."""
         da1 = DoubleArray(5)
         da2 = DoubleArray(5)
+        indices = LongArray(5)
 
         for i in range(5):
             da1[i] = i
             da2[i] = 0
+            indices[i] = i
 
-        da1.copy_values(np.arange(5), da2)
+        da1.copy_values(indices, da2)
         self.assertEqual(np.allclose(da1.get_npy_array(), da2.get_npy_array()), True)
 
+    def test_paste_values(self):
+        """Tests the paste values function."""
+        da1 = DoubleArray(3)
+        da1_array = da1.get_npy_array()
+        da1_array[:] = 2.0
+
+        da2 = DoubleArray(6)
+        da2_array = da2.get_npy_array()
+        da2_array[:] = 0.0
+
+        indices = LongArray(3)
+        ind_array = indices.get_npy_array()
+        ind_array[:] = [0, 2, 4]
+
+        da1.paste_values(indices, da2)
+        for i in indices:
+            self.assertTrue(da2[i] == 2.0)
 
 class TestIntArray(unittest.TestCase):
     """Tests for the DoubleArray class."""
@@ -335,13 +354,33 @@ class TestIntArray(unittest.TestCase):
         """Tests the copy values function."""
         ia1 = IntArray(5)
         ia2 = IntArray(5)
+        indices = LongArray(5)
 
         for i in range(5):
             ia1[i] = i
             ia2[i] = 0
+            indices[i] = i
 
-        ia1.copy_values(np.arange(5), ia2)
+        ia1.copy_values(indices, ia2)
         self.assertEqual(np.allclose(ia1.get_npy_array(), ia2.get_npy_array()), True)
+
+    def test_paste_values(self):
+        """Tests the paste values function."""
+        ia1 = IntArray(3)
+        ia1_array = ia1.get_npy_array()
+        ia1_array[:] = 2
+
+        ia2 = IntArray(6)
+        ia2_array = ia2.get_npy_array()
+        ia2_array[:] = 0
+
+        indices = LongArray(3)
+        ind_array = indices.get_npy_array()
+        ind_array[:] = [0, 2, 4]
+
+        ia1.paste_values(indices, ia2)
+        for i in indices:
+            self.assertTrue(ia2[i] == 2)
 
 class TestLongArray(unittest.TestCase):
     """Tests for the DoubleArray class."""
@@ -500,14 +539,33 @@ class TestLongArray(unittest.TestCase):
         """Tests the copy values function."""
         la1 = LongArray(5)
         la2 = LongArray(5)
+        indices = LongArray(5)
 
         for i in range(5):
             la1[i] = i
             la2[i] = 0
+            indices[i] = i
 
-        la1.copy_values(np.arange(5), la2)
+        la1.copy_values(indices, la2)
         self.assertEqual(np.allclose(la1.get_npy_array(), la2.get_npy_array()), True)
 
+    def test_paste_values(self):
+        """Tests the paste values function."""
+        la1 = LongArray(3)
+        la1_array = la1.get_npy_array()
+        la1_array[:] = 2
+
+        la2 = LongArray(6)
+        la2_array = la2.get_npy_array()
+        la2_array[:] = 0
+
+        indices = LongArray(3)
+        ind_array = indices.get_npy_array()
+        ind_array[:] = [0, 2, 4]
+
+        la1.paste_values(indices, la2)
+        for i in indices:
+            self.assertTrue(la2[i] == 2)
 
 class TestLongLongArray(unittest.TestCase):
     """Tests for the LongLongArray class."""
@@ -666,10 +724,30 @@ class TestLongLongArray(unittest.TestCase):
         """Tests the copy values function."""
         lla1 = LongLongArray(5)
         lla2 = LongLongArray(5)
+        indices = LongArray(5)
 
         for i in range(5):
             lla1[i] = i
             lla2[i] = 0
+            indices[i] = i
 
-        lla1.copy_values(np.arange(5), lla2)
+        lla1.copy_values(indices, lla2)
         self.assertEqual(np.allclose(lla1.get_npy_array(), lla2.get_npy_array()), True)
+
+    def test_paste_values(self):
+        """Tests the paste values function."""
+        lla1 = LongLongArray(3)
+        lla1_array = lla1.get_npy_array()
+        lla1_array[:] = 2
+
+        lla2 = LongLongArray(6)
+        lla2_array = lla2.get_npy_array()
+        lla2_array[:] = 0
+
+        indices = LongArray(3)
+        ind_array = indices.get_npy_array()
+        ind_array[:] = [0, 2, 4]
+
+        lla1.paste_values(indices, lla2)
+        for i in indices:
+            self.assertTrue(lla2[i] == 2)
