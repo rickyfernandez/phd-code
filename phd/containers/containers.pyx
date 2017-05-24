@@ -256,13 +256,26 @@ cdef class CarrayContainer:
         cdef BaseArray dst_prop_array, src_prop_array
 
         # resize array
-        self.resize(indices.length)
+        #self.resize(indices.length)
 
         # copy the required indices for each property
         for prop in properties:
             dst_prop_array = self.get_carray(prop)
             src_prop_array = container.get_carray(prop)
             src_prop_array.paste_values(indices, dst_prop_array)
+
+    cpdef add(self, CarrayContainer container, LongArray indices, list properties):
+        cdef str prop
+        cdef BaseArray dst_prop_array, src_prop_array
+
+        # resize array
+        #self.resize(indices.length)
+
+        # copy the required indices for each property
+        for prop in properties:
+            dst_prop_array = self.get_carray(prop)
+            src_prop_array = container.get_carray(prop)
+            src_prop_array.add_values(indices, dst_prop_array)
 
     cpdef remove_tagged_particles(self, np.int8_t tag):
         """Remove particles that have the given tag.
