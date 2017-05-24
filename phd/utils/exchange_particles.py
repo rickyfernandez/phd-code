@@ -1,6 +1,7 @@
 import numpy as np
 
-def exchange_particles(particles, send_data, send_particles, recv_particles, disp, comm, fields=None):
+def exchange_particles(particles, send_data, send_particles, recv_particles, disp, comm, fields=None,
+        offset_se=None, offset_re=None):
     """Exchange particles between processes. Note you have allocate the appropriate space for
     incoming particles in the particle container.
 
@@ -29,12 +30,13 @@ def exchange_particles(particles, send_data, send_particles, recv_particles, dis
     else:
         export_fields = particles.properties.keys()
 
-    # displacements for the send and reveive buffers
-    offset_se = np.zeros(size, dtype=np.int32)
-    offset_re = np.zeros(size, dtype=np.int32)
-    for i in xrange(1,size):
-        offset_se[i] = send_particles[i-1] + offset_se[i-1]
-        offset_re[i] = recv_particles[i-1] + offset_re[i-1]
+    if offset_se is None or offset_re is None:
+        # displacements for the send and reveive buffers
+        offset_se = np.zeros(size, dtype=np.int32)
+        offset_re = np.zeros(size, dtype=np.int32)
+        for i in xrange(1,size):
+            offset_se[i] = send_particles[i-1] + offset_se[i-1]
+            offset_re[i] = recv_particles[i-1] + offset_re[i-1]
 
     ptask = 0
     while size > (1<<ptask):
