@@ -24,8 +24,9 @@ cdef class Interaction:
     cdef void interact(self, Node* node)
     cdef void initialize_particles(self, CarrayContainer pc, int has_ghost=*)
     cdef int process_particle(self)
+    cdef int done_processing(self)
     cdef void particle_not_finished(self, long node_index)
-    cdef void particle_finished(self)
+    cdef int particle_finished(self)
     cdef long start_node_index(self)
 
 cdef class GravityAcceleration(Interaction):

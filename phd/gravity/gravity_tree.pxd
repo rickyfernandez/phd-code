@@ -9,6 +9,9 @@ from ..load_balance.tree cimport Node as LoadNode
 from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
 
+cdef extern from "stdlib.h":
+    void qsort(void *array, size_t count, size_t size,
+            int (*compare)(const void *, const void *))
 
 # tree flags
 cdef enum:
@@ -21,6 +24,12 @@ cdef enum:
     TOP_TREE_LEAF = 0x08
     TOP_TREE_LEAF_REMOTE = 0x10
     SKIP_BRANCH = 0x20
+
+cdef struct PairId:
+    int index
+    int proc
+
+cdef int proc_compare(const void *a, const void *b)
 
 cdef class GravityTree:
 
@@ -40,7 +49,6 @@ cdef class GravityTree:
 
     # varaibles for parallel run
     cdef int parallel                           # signal if run is in parallel
-    cdef public int max_buffer_size             # max number of particles in buffer
 
     cdef map[int, int]  node_index_to_array
 
@@ -49,8 +57,12 @@ cdef class GravityTree:
     cdef public CarrayContainer remote_nodes    # container of remote nodes
 
     cdef public np.ndarray flag_pid             # flag if particle is export to processor
-    cdef public LongArray buffer_id             # particle id for export particle
-    cdef public LongArray buffer_pid            # processor to send export particle 
+    cdef public int max_buffer_size             # max number of particles in buffer
+    cdef public int buffer_size
+    cdef PairId* buffer_ids
+
+    cdef public LongArray indices
+
     cdef public CarrayContainer buffer_export   # container of particles to import
     cdef public CarrayContainer buffer_import   # container of particles to export
 

@@ -62,9 +62,16 @@ cdef class Interaction:
         self.particle_done = 0
         self.current_node = node_index
 
-    cdef void particle_finished(self):
+    cdef int done_processing(self):
         """
-        Flag current particle to be finished with walk
+        """
+        if self.current < self.num_particles:
+            return 0
+        else:
+            return 1
+
+    cdef int particle_finished(self):
+        """
         """
         self.particle_done = 1
 
@@ -197,8 +204,9 @@ cdef class GravityAcceleration(Interaction):
 
         # ignore self interaction
         if(node.flags & LEAF):
-            if(node.group.data.pid == self.current):
-                return
+            if(self.has_ghost): # need better flag because doubles for remote
+                if(node.group.data.pid == self.current):
+                    return
 
         r2 = 0.
         for i in range(self.dim):
