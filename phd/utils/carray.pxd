@@ -26,6 +26,7 @@ cdef class BaseArray:
     cpdef str get_c_type(self)
     cpdef copy_values(self, LongArray indices, BaseArray dest)
     cpdef paste_values(self, LongArray indices, BaseArray dest)
+    cpdef add_values(self, LongArray indices, BaseArray dest)
 
 cdef class DoubleArray(BaseArray):
     """This class defines a managed array of np.float64_t"""
@@ -48,6 +49,7 @@ cdef class DoubleArray(BaseArray):
     cpdef str get_c_type(self)
     cpdef copy_values(self, LongArray indices, BaseArray dest)
     cpdef paste_values(self, LongArray indices, BaseArray dest)
+    cpdef add_values(self, LongArray indices, BaseArray dest)
 
 cdef class IntArray(BaseArray):
     """This class defines a managed array of np.int8_t"""
@@ -70,6 +72,7 @@ cdef class IntArray(BaseArray):
     cpdef str get_c_type(self)
     cpdef copy_values(self, LongArray indices, BaseArray dest)
     cpdef paste_values(self, LongArray indices, BaseArray dest)
+    cpdef add_values(self, LongArray indices, BaseArray dest)
 
 cdef class LongArray(BaseArray):
     """This class defines a managed array of np.int32_t"""
@@ -92,6 +95,7 @@ cdef class LongArray(BaseArray):
     cpdef str get_c_type(self)
     cpdef copy_values(self, LongArray indices, BaseArray dest)
     cpdef paste_values(self, LongArray indices, BaseArray dest)
+    cpdef add_values(self, LongArray indices, BaseArray dest)
 
 cdef class LongLongArray(BaseArray):
     """This class defines a managed array of np.int64_t"""
@@ -114,3 +118,4 @@ cdef class LongLongArray(BaseArray):
     cpdef str get_c_type(self)
     cpdef copy_values(self, LongArray indices, BaseArray dest)
     cpdef paste_values(self, LongArray indices, BaseArray dest)
+    cpdef add_values(self, LongArray indices, BaseArray dest)

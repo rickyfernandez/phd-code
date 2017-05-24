@@ -74,6 +74,9 @@ cdef class BaseArray:
     cpdef paste_values(self, LongArray indices, BaseArray dest):
         """"Copy values of particles from self to dest at indices."""
 
+    cpdef add_values(self, LongArray indices, BaseArray dest):
+        """"Copy values of particles from self to dest at indices."""
+
     def __len__(self):
         return self.length
 
@@ -321,6 +324,17 @@ cdef class DoubleArray(BaseArray):
         for i in range(indices.length):
             dest_array.data[indices.data[i]] = self.data[i]
 
+    cpdef add_values(self, LongArray indices, BaseArray dest):
+        """
+        Copy values from self to dest, stored at indices. Note
+        indices has to be a subset of dest indices.
+        """
+        cdef DoubleArray dest_array = <DoubleArray>dest
+        cdef int i
+
+        for i in range(indices.length):
+            dest_array.data[indices.data[i]] += self.data[i]
+
 cdef class IntArray(BaseArray):
     """Represents an array of 8 bit integers."""
 
@@ -536,11 +550,22 @@ cdef class IntArray(BaseArray):
         Copy values from self to dest, stored at indices. Note
         indices has to be a subset of dest indices.
         """
-        cdef DoubleArray dest_array = <IntArray>dest
+        cdef IntArray dest_array = <IntArray>dest
         cdef int i
 
         for i in range(indices.length):
             dest_array.data[indices.data[i]] = self.data[i]
+
+    cpdef add_values(self, LongArray indices, BaseArray dest):
+        """
+        Copy values from self to dest, stored at indices. Note
+        indices has to be a subset of dest indices.
+        """
+        cdef IntArray dest_array = <IntArray>dest
+        cdef int i
+
+        for i in range(indices.length):
+            dest_array.data[indices.data[i]] += self.data[i]
 
 cdef class LongArray(BaseArray):
     """Represents an array of np.int32_t."""
@@ -757,11 +782,22 @@ cdef class LongArray(BaseArray):
         Copy values from self to dest, stored at indices. Note
         indices has to be a subset of dest indices.
         """
-        cdef DoubleArray dest_array = <LongArray>dest
+        cdef LongArray dest_array = <LongArray>dest
         cdef int i
 
         for i in range(indices.length):
             dest_array.data[indices.data[i]] = self.data[i]
+
+    cpdef add_values(self, LongArray indices, BaseArray dest):
+        """
+        Copy values from self to dest, stored at indices. Note
+        indices has to be a subset of dest indices.
+        """
+        cdef LongArray dest_array = <LongArray>dest
+        cdef int i
+
+        for i in range(indices.length):
+            dest_array.data[indices.data[i]] += self.data[i]
 
 cdef class LongLongArray(BaseArray):
     """Represents an array of np.int64_t."""
@@ -978,8 +1014,19 @@ cdef class LongLongArray(BaseArray):
         Copy values from self to dest, stored at indices. Note
         indices has to be a subset of dest indices.
         """
-        cdef DoubleArray dest_array = <LongLongArray>dest
+        cdef LongLongArray dest_array = <LongLongArray>dest
         cdef int i
 
         for i in range(indices.length):
             dest_array.data[indices.data[i]] = self.data[i]
+
+    cpdef add_values(self, LongArray indices, BaseArray dest):
+        """
+        Copy values from self to dest, stored at indices. Note
+        indices has to be a subset of dest indices.
+        """
+        cdef LongLongArray dest_array = <LongLongArray>dest
+        cdef int i
+
+        for i in range(indices.length):
+            dest_array.data[indices.data[i]] += self.data[i]
