@@ -17,6 +17,10 @@ cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
 
 cdef int proc_compare(const void *a, const void *b):
+    """
+    Comparison function for sorting PairId struct
+    in processor order.
+    """
     if( (<PairId*>a).proc < (<PairId*>b).proc ):
         return -1
     if( (<PairId*>a).proc > (<PairId*>b).proc ):
@@ -45,7 +49,7 @@ cdef class GravityTree:
     def _initialize(self):
         '''
         Initialize variables for the gravity tree. Tree pool and
-        remote nodes are allocated as well dimension of the tree.
+        toptree nodes are allocated as well dimension of the tree.
         '''
         cdef str axis
         cdef Splitter splitter
@@ -87,8 +91,8 @@ cdef class GravityTree:
                 named_groups['com'].append('com-' + axis)
             named_groups['moments'] = ['mass'] + named_groups['com']
 
-            self.remote_nodes = CarrayContainer(var_dict=state_vars)
-            self.remote_nodes.named_groups = named_groups
+            self.toptree_leafs = CarrayContainer(var_dict=state_vars)
+            self.toptree_leafs.named_groups = named_groups
 
             # particle id and send processors buffers
             self.buffer_ids = <PairId*> stdlib.malloc(
@@ -125,7 +129,7 @@ cdef class GravityTree:
             self.import_interaction = GravityAcceleration(self.pc,
                     self.domain, splitter, 0, self.calc_potential)
 
-    cdef inline int get_index(self, int parent_index, np.float64_t x[3]):
+    cdef inline int _get_index(self, int parent_index, np.float64_t x[3]):
         """
         Return index of child from parent node with node_index. Children
         are laid out in z-order.
@@ -149,7 +153,7 @@ cdef class GravityTree:
                 index += (1 << i)
         return index
 
-    cdef inline Node* create_child(self, int parent_index, int child_index):
+    cdef inline Node* _create_child(self, int parent_index, int child_index):
         '''
         Create child node given parent index and child index. Note parent_index
         refers to memory pool and child_index refers to [0,3] in 2d or [0,7]
@@ -197,9 +201,9 @@ cdef class GravityTree:
 
         return child
 
-    cdef inline void create_children(self, int parent_index):
+    cdef inline void _create_children(self, int parent_index):
         """
-        Given a parent node, subdivide domain into (4-2d, 8-3d) children. The algorithm
+        Given a parent node, subdivide node into (4-2d, 8-3d) children. The algorithm
         is independent of dimension.
         """
         cdef double width
@@ -237,7 +241,7 @@ cdef class GravityTree:
                 else:
                     child.center[k] = parent.center[k] - .5*width
 
-    cdef void _build_top_tree(self):
+    cdef void _build_toptree(self):
         """
         Copy the load balance tree. The tree is the starting point to add
         particles since this tree is common to all processors. Note the
@@ -252,35 +256,41 @@ cdef class GravityTree:
         cdef Pool pool = self.load_bal.tree.mem_pool
 
         cdef LongArray leaf_pid = self.load_bal.leaf_pid
-        cdef LongArray maps = self.remote_nodes.get_carray('map')
-        cdef LongArray proc = self.remote_nodes.get_carray('proc')
+        cdef LongArray maps = self.toptree_leafs.get_carray('map')
+        cdef LongArray proc = self.toptree_leafs.get_carray('proc')
 
         # resize memory pool to hold tree - this only allocates available
         # memory it does not create nodes
         self.nodes.resize(pool.number_nodes())
 
-        # resize container to hold leaf data 
-        self.remote_nodes.resize(pool.number_leaves())
+        # resize container to hold load leaf data 
+        self.toptree_leafs.resize(pool.number_leaves())
 
-        # copy global partial tree in z-order, collect leaf index for mapping 
-        self._create_top_tree(ROOT, load_root, maps.get_data_ptr())
+        # copy global top tree in z-order, collect load leaf index for mapping 
+        self._create_toptree(ROOT, load_root, maps.get_data_ptr())
 
-        self.node_index_to_array.clear()
+        # reset top tree leaf to toptree container map
+        self.toptree_leaf_map.clear()
 
-        # remote nodes are in load balance order, hilbert and processor, this
-        # allows for easy communication. Transfer processor id
+        # top tree leafs are in load balance order, hilbert and processor,
+        # this allows for easy communication.
         for i in range(self.size):
             self.send_cnts[i] = 0
 
+        # loop over load leafs
         for i in range(leaf_pid.length):
 
-            pid = leaf_pid.data[i]
-            proc.data[i] = pid
+            pid = leaf_pid.data[i]     # processor that owns leaf
+            proc.data[i] = pid         # store processor info
+
+            # bin leafs to processor - our processor is bined
+            # because we comunicate IN_PLACE in mpi
             self.send_cnts[pid] += 1
 
-            # reverse mapping for leafs
-            self.node_index_to_array[maps.data[i]] = i
+            # mapping toptree leaf index -> toptree leaf container 
+            self.toptree_leaf_map[maps.data[i]] = i
 
+            # flag leafs that don't belong to this processor
             if(pid != self.rank):
                 node = &self.nodes.array[maps.data[i]]
                 node.flags |= (SKIP_BRANCH|TOP_TREE_LEAF_REMOTE)
@@ -289,7 +299,7 @@ cdef class GravityTree:
         for i in range(1, self.size):
             self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
 
-    cdef void _create_top_tree(self, int node_index, LoadNode* load_parent,
+    cdef void _create_toptree(self, int node_index, LoadNode* load_parent,
             np.int32_t* node_map):
         """
         Copys the load balance tree. The tree is the starting point to add
@@ -297,9 +307,9 @@ cdef class GravityTree:
         load balance tree is in hilbert order, so care is taken to put
         the gravity tree in z-order. Note the leafs of the top tree are
         the objects used for the load balance. The leafs are stored in
-        the remote_nodes container and are in hilbert and processor order.
-        The map array is used to map from remote_nodes to nodes in the gravity
-        tree. All nodes will be labeled to belong to the top tree.
+        toptree_leafs container and are in hilbert and processor order.
+        The map array is used to map from toptree_leafs to nodes in the
+        gravity tree. All nodes will be labeled to belong to the top tree.
 
         Parameters
         ----------
@@ -308,7 +318,7 @@ cdef class GravityTree:
         load_parent : LoadNode*
             node pointer to load balance tree
         node_map : np.int32_t*
-            array to map remote nodes to leafs in gravity tree
+            array to map container index to toptree leaf
         """
         cdef int index, i
         cdef Node* parent = &self.nodes.array[node_index]
@@ -322,7 +332,7 @@ cdef class GravityTree:
         else: # non leaf copy
 
             # create children in z-order
-            self.create_children(node_index)
+            self._create_children(node_index)
 
             # create children could of realloc
             parent = &self.nodes.array[node_index]
@@ -332,7 +342,7 @@ cdef class GravityTree:
 
                 # grab next child in z-order
                 index = load_parent.zorder_to_hilbert[i]
-                self._create_top_tree(
+                self._create_toptree(
                         parent.group.children[i], load_parent + load_parent.children_start + index,
                         node_map)
 
@@ -342,12 +352,12 @@ cdef class GravityTree:
         inside leaf in top tree.
         """
         cdef LoadNode* load_node
-        cdef LongArray maps = self.remote_nodes.get_carray('map')
+        cdef LongArray maps = self.toptree_leafs.get_carray('map')
 
         load_node = self.load_bal.tree.find_leaf(key)
         return maps.data[load_node.array_index]
 
-    cdef void create_root(self):
+    cdef inline void _create_root(self):
         """
         Reset tree if needed and allocate one node for
         the root and transfer domain information to the
@@ -394,10 +404,10 @@ cdef class GravityTree:
         self.pc.pointer_groups(self.x, self.pc.named_groups['position'])
         self.m = mass.get_data_ptr()
 
-        self.create_root()
+        self._create_root()
 
         if self.parallel:
-            self._build_top_tree()
+            self._build_toptree()
 
         # add real particles to tree
         for i in range(self.pc.get_number_of_items()):
@@ -429,8 +439,8 @@ cdef class GravityTree:
                             node.flags &= ~(LEAF|HAS_PARTICLE)
 
                             # create child to store leaf particle
-                            index = self.get_index(current, xj)
-                            child = self.create_child(current, index)
+                            index = self._get_index(current, xj)
+                            child = self._create_child(current, index)
 
                             # store leaf particle here
                             child.flags |= (LEAF|HAS_PARTICLE)
@@ -445,12 +455,12 @@ cdef class GravityTree:
 
                     else:
                         # find child to store particle
-                        index = self.get_index(current, xi)
+                        index = self._get_index(current, xi)
 
                         # if child does not exist create child
                         # and store particle
                         if node.group.children[index] == NOT_EXIST:
-                            child = self.create_child(current, index)
+                            child = self._create_child(current, index)
                             child.flags |= (LEAF|HAS_PARTICLE)
                             child.group.data.pid = i
                             break # particle done
@@ -464,7 +474,7 @@ cdef class GravityTree:
         if self.parallel:
             # export top tree leaf moments and
             # recalculate node moments
-            self._export_import_remote_nodes()
+            self._exchange_toptree_leafs()
 
         self.m = NULL
         for k in range(self.dim):
@@ -538,7 +548,7 @@ cdef class GravityTree:
             node.group.data.first_child  = NOT_EXIST
             node.group.data.next_sibling = sibling
 
-            # remote leafs may not have particles
+            # toptree leafs may not have particles
             if(node.flags & HAS_PARTICLE):
                 pid = node.group.data.pid
 
@@ -551,11 +561,12 @@ cdef class GravityTree:
                 for k in range(self.dim):
                     node.group.data.com[k] = 0.
 
-    cdef void _update_remote_moments(self, int current):
+    cdef void _update_toptree_moments(self, int current):
         """
-        Recursively update moments of each local node. As a by
-        product we collect the first child and sibling of each
-        node. This in turn allows for efficient tree walking.
+        Recursively update toptree moments. Only toptree
+        moments are calculated because bottom tree moments
+        are correct because they only depend on local
+        particles.
         """
         cdef int k, ind, sib
         cdef Node *node, *child
@@ -577,12 +588,13 @@ cdef class GravityTree:
 
                 # update node moments
                 child = &self.nodes.array[ind]
-                self._update_remote_moments(ind)
+                self._update_toptree_moments(ind)
                 mass += child.group.data.mass
                 for k in range(self.dim):
                     com[k] += child.group.data.mass*\
                             child.group.data.com[k]
 
+                # next child
                 ind = child.group.data.next_sibling
 
             if(mass):
@@ -593,44 +605,52 @@ cdef class GravityTree:
             for k in range(self.dim):
                 node.group.data.com[k] = com[k]
 
-    cdef void _export_import_remote_nodes(self):
+    cdef void _exchange_toptree_leafs(self):
+        """
+        Initially toptree moments are incorrect after local
+        tree construction and moment calculation. To finalize
+        the tree exchange toptree leaf moments and recalculate
+        toptree moments.
+        """
         cdef int i, j
         cdef Node *node
         cdef np.float64_t* comx[3]
 
-        cdef LongArray proc   = self.remote_nodes.get_carray('proc')
-        cdef LongArray maps   = self.remote_nodes.get_carray('map')
-        cdef DoubleArray mass = self.remote_nodes.get_carray('mass')
+        cdef LongArray proc   = self.toptree_leafs.get_carray('proc')
+        cdef LongArray maps   = self.toptree_leafs.get_carray('map')
+        cdef DoubleArray mass = self.toptree_leafs.get_carray('mass')
 
-        self.remote_nodes.pointer_groups(comx,
-                self.remote_nodes.named_groups['com'])
+        self.toptree_leafs.pointer_groups(comx,
+                self.toptree_leafs.named_groups['com'])
 
-        # collect moments belonging to current processor
-        for i in range(self.remote_nodes.get_number_of_items()):
+        # collect toptree leaf moments belonging to our processor
+        for i in range(self.toptree_leafs.get_number_of_items()):
             if proc.data[i] == self.rank:
 
+                # copy our moments
                 node = &self.nodes.array[maps.data[i]]
                 for j in range(self.dim):
                     comx[j][i] = node.group.data.com[j]
                 mass.data[i] = node.group.data.mass
 
-        # export local node info and import remote node
-        for field in self.remote_nodes.named_groups['moments']:
+        # exchange toptree leaf moments
+        for field in self.toptree_leafs.named_groups['moments']:
             self.load_bal.comm.Allgatherv(MPI.IN_PLACE,
-                    [self.remote_nodes[field], self.send_cnts,
+                    [self.toptree_leafs[field], self.send_cnts,
                         self.send_disp, MPI.DOUBLE])
 
-        # copy remote nodes to tree
-        for i in range(self.remote_nodes.get_number_of_items()):
+        # copy imported toptree leaf moments to tree
+        for i in range(self.toptree_leafs.get_number_of_items()):
             if proc.data[i] != self.rank:
 
+                # update moments
                 node = &self.nodes.array[maps.data[i]]
                 for j in range(self.dim):
                     node.group.data.com[j] = comx[j][i]
                 node.group.data.mass = mass.data[i]
 
-        # recalculate moments
-        self._update_remote_moments(ROOT)
+        # recalculate toptree moments
+        self._update_toptree_moments(ROOT)
 
     def walk(self):
         """
@@ -690,7 +710,8 @@ cdef class GravityTree:
 
                 if(node.flags & LEAF):
                     if(node.flags & TOP_TREE_LEAF_REMOTE):
-                        # skip remote leaf
+                        # skip toptree leaf that does not belong
+                        # to this processor
                         index = node.group.data.next_sibling
 
                     else: # calculate particle particle interaction
@@ -700,7 +721,7 @@ cdef class GravityTree:
                 else: # node is not leaf
                     if(node.flags & SKIP_BRANCH):
                         # we can skip branch if node only depends
-                        # on remote nodes
+                        # on nodes from other processors
                         index = node.group.data.next_sibling
 
                     # check if node can be opened
@@ -725,7 +746,7 @@ cdef class GravityTree:
         cdef Node *node
         cdef int index, i, node_pid
 
-        cdef LongArray pid = self.remote_nodes.get_carray("proc")
+        cdef LongArray pid = self.toptree_leafs.get_carray("proc")
 
         # loop through each real praticle
         while(interaction.process_particle()):
@@ -744,7 +765,7 @@ cdef class GravityTree:
                         if(interaction.splitter.split(node)):
 
                             # node opend check if particle alreay flagged
-                            node_pid = pid.data[self.node_index_to_array[index]]
+                            node_pid = pid.data[self.toptree_leaf_map[index]]
                             if self.flag_pid[node_pid]:
                                 index = node.group.data.next_sibling
                             else:
@@ -841,7 +862,7 @@ cdef class GravityTree:
             self.load_bal.comm.Alltoall([self.send_cnts, MPI.INT],
                     [self.recv_cnts, MPI.INT])
 
-            # how many remote particles are incoming
+            # how many incoming particles
             num_import = 0
             for i in range(self.size):
                 num_import += self.recv_cnts[i]
@@ -862,7 +883,7 @@ cdef class GravityTree:
                     self.pc.named_groups['gravity-walk-export'],
                     self.send_disp, self.recv_disp)
 
-            # walk remote particles
+            # walk imported particles
             self.import_interaction.initialize_particles(self.buffer_import, 0)
             self._import_walk(self.import_interaction)
 
@@ -951,10 +972,10 @@ cdef class GravityTree:
         cdef int i, j
         cdef Node* node
         cdef list data_list = []
-        cdef LongArray maps = self.remote_nodes.get_carray('map')
-        cdef LongArray proc = self.remote_nodes.get_carray('proc')
+        cdef LongArray maps = self.toptree_leafs.get_carray('map')
+        cdef LongArray proc = self.toptree_leafs.get_carray('proc')
 
-        for i in range(self.remote_nodes.get_number_of_items()):
+        for i in range(self.toptree_leafs.get_number_of_items()):
             j = maps.data[i]
             node = &self.nodes.array[j]
             data_list.append([

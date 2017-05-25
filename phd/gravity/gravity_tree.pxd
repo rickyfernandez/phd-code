@@ -26,8 +26,8 @@ cdef enum:
     SKIP_BRANCH = 0x20
 
 cdef struct PairId:
-    int index
-    int proc
+    int index                                  # particle index
+    int proc                                   # processor to export to
 
 cdef int proc_compare(const void *a, const void *b)
 
@@ -50,11 +50,11 @@ cdef class GravityTree:
     # varaibles for parallel run
     cdef int parallel                           # signal if run is in parallel
 
-    cdef map[int, int]  node_index_to_array
+    cdef map[int, int] toptree_leaf_map         # map node index to leaf container
 
     cdef public LoadBalance load_bal            # reference to load balance
     cdef public Interaction import_interaction  # acceleration calculator
-    cdef public CarrayContainer remote_nodes    # container of remote nodes
+    cdef public CarrayContainer toptree_leafs   # container of top tree leafs
 
     cdef public np.ndarray flag_pid             # flag if particle is export to processor
     cdef public int max_buffer_size             # max number of particles in buffer
@@ -72,22 +72,22 @@ cdef class GravityTree:
     cdef public np.ndarray recv_disp            # receive counts for mpi
 
     # allocate node functions
-    cdef inline void create_root(self)
-    cdef inline int get_index(self, int parent_index, np.float64_t x[3])
-    cdef inline Node* create_child(self, int parent_index, int child_index)
-    cdef inline void create_children(self, int parent_index)
+    cdef inline void _create_root(self)
+    cdef inline int _get_index(self, int parent_index, np.float64_t x[3])
+    cdef inline Node* _create_child(self, int parent_index, int child_index)
+    cdef inline void _create_children(self, int parent_index)
 
-    # tree build functions
-    cdef void _build_top_tree(self)
-    cdef void _create_top_tree(self, int node_index, LoadNode* load_parent,
+    # build tree functions
+    cdef void _build_toptree(self)
+    cdef void _create_toptree(self, int node_index, LoadNode* load_parent,
             np.int32_t* node_map)
     cdef inline int _leaf_index_toptree(self, np.int64_t key)
     #cdef void _build_tree(self, CarrayContainer pc)
 
     # moment calculation functions
     cdef void _update_moments(self, int current, int sibling)
-    cdef void _export_import_remote_nodes(self)
-    cdef void _update_remote_moments(self, int current)
+    cdef void _exchange_toptree_leafs(self)
+    cdef void _update_toptree_moments(self, int current)
 
     # tree walk functions
     cdef void _serial_walk(self, Interaction interaction)
