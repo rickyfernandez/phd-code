@@ -807,8 +807,8 @@ cdef class GravityTree:
                         interaction.interact(node)
                         index = node.group.data.next_sibling
 
+            # ready for next particle
             interaction.particle_finished()
-        interaction.done_processing()
 
     cdef void _parallel_walk(self, Interaction interaction):
         cdef int i
