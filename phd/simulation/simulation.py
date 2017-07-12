@@ -108,9 +108,9 @@ class Simulation(object):
 
     def _create_components_from_dict(self, cl_dict):
         for comp_name, (cl_name, cl_param) in cl_dict.iteritems():
-            x = getattr(self, comp_name)
             cl = getattr(phd, cl_name)
             x = cl(**cl_param)
+            setattr(self, comp_name, x)
 
     def _create_components_timeshot(self):
         dict_output = {}
@@ -165,7 +165,7 @@ class Simulation(object):
 
         self.gamma = self.integrator.riemann.gamma
         self.dimensions = 'xyz'[:self.mesh.dim]
-    #@profile
+
     def solve(self):
         """Main solver"""
 
@@ -202,21 +202,6 @@ class Simulation(object):
             if (current_time + dt > tf ):
                 dt = tf - current_time
 
-            # print total number of bytes
-            sum_bytes = 0.
-            for prop in pc.properties.keys():
-                sum_bytes += pc[prop].nbytes
-            for prop in integrator.flux.properties.keys():
-                sum_bytes += integrator.flux[prop].nbytes
-            for prop in integrator.left_state.properties.keys():
-                sum_bytes += integrator.left_state[prop].nbytes
-            for prop in integrator.right_state.properties.keys():
-                sum_bytes += integrator.right_state[prop].nbytes
-            for prop in mesh.faces.properties.keys():
-                sum_bytes += mesh.faces[prop].nbytes
-
-            print 'iteration:', iteration_count, 'time:', current_time, 'dt:', dt, 'Mb:', sum_bytes/1024**2
-
             if ( (time_counter + dt) > self.tfreq ):
                 dt = self.tfreq - time_counter
                 self._save(iteration_count, current_time+dt, dt)
@@ -250,36 +235,36 @@ class Simulation(object):
 
         self.output += 1
 
-    def _compute_primitives(self):
-        pc = self.pc
-
-        vol  = pc['volume']
-        mass = pc['mass']
-        ener = pc['energy']
-
-        # update primitive variables
-        velocity_sq = 0
-        pc['density'][:] = mass/vol
-        for axis in self.dimensions:
-            pc['velocity-' + axis][:] = pc['momentum-' + axis]/mass
-            velocity_sq += pc['velocity-' + axis]**2
-
-        pc['pressure'][:] = (ener/vol - 0.5*pc['density']*velocity_sq)*(self.gamma-1.0)
-
-
-    def _set_initial_state_from_primitive(self):
-        pc = self.pc
-
-        vol  = pc['volume']
-        mass = pc['density']*vol
-
-        velocity_sq = 0
-        pc['mass'][:] = mass
-        for axis in self.dimensions:
-            pc['momentum-' + axis][:] = pc['velocity-' + axis]*mass
-            velocity_sq += pc['velocity-' + axis]**2
-
-        pc['energy'][:] = (0.5*pc['density']*velocity_sq + pc['pressure']/(self.gamma-1.0))*vol
+#    def _compute_primitives(self):
+#        pc = self.pc
+#
+#        vol  = pc['volume']
+#        mass = pc['mass']
+#        ener = pc['energy']
+#
+#        # update primitive variables
+#        velocity_sq = 0
+#        pc['density'][:] = mass/vol
+#        for axis in self.dimensions:
+#            pc['velocity-' + axis][:] = pc['momentum-' + axis]/mass
+#            velocity_sq += pc['velocity-' + axis]**2
+#
+#        pc['pressure'][:] = (ener/vol - 0.5*pc['density']*velocity_sq)*(self.gamma-1.0)
+#
+#
+#    def _set_initial_state_from_primitive(self):
+#        pc = self.pc
+#
+#        vol  = pc['volume']
+#        mass = pc['density']*vol
+#
+#        velocity_sq = 0
+#        pc['mass'][:] = mass
+#        for axis in self.dimensions:
+#            pc['momentum-' + axis][:] = pc['velocity-' + axis]*mass
+#            velocity_sq += pc['velocity-' + axis]**2
+#
+#        pc['energy'][:] = (0.5*pc['density']*velocity_sq + pc['pressure']/(self.gamma-1.0))*vol
 
 
     def _relax_geometry(self, num_iterations):
@@ -406,13 +391,13 @@ class SimulationParallel(Simulation):
 
     def add_communicator(self, cl):
         if isinstance(cl, MPI.Intracomm):
-            self.boundary = cl
+            self.comm = cl
         else:
             raise RuntimeError("%s component not type Intracomm" % cl.__class__.__name__)
 
     def add_loadbalance(self, cl):
         if isinstance(cl, phd.LoadBalance):
-            self.boundary = cl
+            self.load_balance = cl
         else:
             raise RuntimeError("%s component not type LoadBalance" % cl.__class__.__name__)
 
@@ -440,7 +425,8 @@ class SimulationParallel(Simulation):
             self._relax_geometry(self.relax_num_iterations)
 
         # convert primitive values to conserative
-        self._set_initial_state_from_primitive()
+        #self._set_initial_state_from_primitive()
+        integrator.conserative_from_primitive()
 
         # main solver iteration
         time_counter = dt = 0.0
@@ -451,7 +437,8 @@ class SimulationParallel(Simulation):
                 load_balance.decomposition(pc)
 
             mesh.build_geometry(pc)
-            self._compute_primitives()
+            #self._compute_primitives()
+            integrator.primitive_from_conserative()
 
             # I/O
             if iteration_count % self.pfreq == 0:
@@ -481,7 +468,8 @@ class SimulationParallel(Simulation):
             boundary.migrate_boundary_particles(pc)
 
         mesh.build_geometry(pc)
-        self._compute_primitives()
+        #self._compute_primitives()
+        integrator.primitive_from_conserative()
 
         # final output
         self._save(iteration_count, current_time, dt)
