@@ -56,12 +56,13 @@ cdef class IntegrateBase:
     def conserative_from_primitive(self):
 
         cdef DoubleArray m = self.pc.get_carray("mass")
-        cdef DoubleArray e = self.pc.get_carray("energy")
         cdef DoubleArray r = self.pc.get_carray("density")
+        cdef DoubleArray e = self.pc.get_carray("energy")
         cdef DoubleArray p = self.pc.get_carray("pressure")
         cdef DoubleArray vol = self.pc.get_carray("volume")
 
-        cdef double vs_sq
+        cdef i, k
+        cdef np.float64_t vs_sq
         cdef np.float64_t *v[3], *mv[3]
 
         self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
@@ -79,18 +80,20 @@ cdef class IntegrateBase:
                 v_sq    += v[k][i]*v[k][i]
 
             # total energy in cell
-            e.data[i] = (0.5*r.data[i]*v_sq + p.data[i]/(self.gamma-1.))*vol.data[i]
+            e.data[i] = (.5*r.data[i]*v_sq + p.data[i]/(self.gamma-1.))*vol.data[i]
 
     def primitive_from_conserative(self):
 
         cdef DoubleArray m = self.pc.get_carray("mass")
-        cdef DoubleArray e = self.pc.get_carray("energy")
         cdef DoubleArray r = self.pc.get_carray("density")
+        cdef DoubleArray e = self.pc.get_carray("energy")
         cdef DoubleArray p = self.pc.get_carray("pressure")
         cdef DoubleArray vol = self.pc.get_carray("volume")
 
-        cdef double vs_sq
+        cdef i, k
+        cdef np.float64_t vs_sq
         cdef np.float64_t *v[3], *mv[3]
+
         self.pc.pointer_groups(v,  self.pc.named_groups['velocity'])
         self.pc.pointer_groups(mv, self.pc.named_groups['momentum'])
 
@@ -106,7 +109,18 @@ cdef class IntegrateBase:
                 v_sq    += v[k][i]*v[k][i]
 
             # pressure in cell
-            p.data[i] = (e.data[i]/vol.data[i] - 0.5*r.data[i]*v_sq)*(self.gamma-1.)
+            p.data[i] = (e.data[i]/vol.data[i] - .5*r.data[i]*v_sq)*(self.gamma-1.)
+
+#    def _compute_time_step(self):
+#        #local_dt  = np.zeros(1)
+#        #global_dt = np.zeros(1)
+#
+#        self.local_dt[0] = self.cfl*self.integrator.compute_time_step()
+#
+#        if self.parallel_run:
+#            self.comm.Allreduce(sendbuf=local_dt, recvbuf=global_dt, op=MPI.MIN)
+#            return self.global_dt[0]
+#        return self.local_dt[0]
 
 cdef class MovingMesh(IntegrateBase):
     def __init__(self, int regularize = 0, double eta = 0.25, **kwargs):
