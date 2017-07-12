@@ -16,8 +16,12 @@ from phd.load_balance.load_balance import \
         LoadBalance
 
 from phd.gravity.gravity_tree import \
-        GravityTree, \
-        GravityAcceleration, \
+        GravityTree
+
+from phd.gravity.interaction import \
+        GravityAcceleration
+
+from phd.gravity.splitter import \
         BarnesHut
 
 from phd.mesh.mesh import \

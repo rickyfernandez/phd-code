@@ -2,10 +2,14 @@
 cdef class DomainLimits:
 
     # only square boxes for now
-    def __init__(self, int dim=2, double xmin=0, double xmax=1.0,
-            is_periodic=False, is_outflow=False, is_wall=True, **kwargs):
+    def __init__(self, int dim=2, double xmin=0, double xmax=1.0, **kwargs):
+            #is_periodic=False, is_outflow=False, is_wall=True, **kwargs):
 
         self._check_limits(xmin, xmax)
+
+        self.xmin = xmin
+        self.xmax = xmax
+
         for i in range(dim):
             self.bounds[0][i] = xmin
             self.bounds[1][i] = xmax
@@ -15,9 +19,9 @@ cdef class DomainLimits:
         self.min_length = xmax - xmin
 
         # Indicateds if the domain is periodic or outflow
-        self.is_periodic = is_periodic
-        self.is_outflow = is_outflow
-        self.is_wall = is_wall
+        #self.is_periodic = is_periodic
+        #self.is_outflow = is_outflow
+        #self.is_wall = is_wall
 
         # store the dimension
         self.dim = dim

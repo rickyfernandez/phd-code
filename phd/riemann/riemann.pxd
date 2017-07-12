@@ -20,8 +20,8 @@ cdef class RiemannBase:
 
 cdef class HLL(RiemannBase):
 
-    cdef void get_waves(self, double d_l, double u_l, double p_l,
-            double d_r, double u_r, double p_r,
+    cdef inline void get_waves(self, double dl, double ul, double pl,
+            double dr, double ur, double pr,
             double gamma, double *sl, double *sc, double *sr)
 
 cdef class HLLC(HLL):
@@ -29,7 +29,20 @@ cdef class HLLC(HLL):
 
 cdef class Exact(RiemannBase):
 
-    cdef p_guess(self, double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma)
-    cdef p_func(self, double d, double u, double p, double gamma, double p_old)
-    cdef p_func_deriv(self, double d, double u, double p, double gamma, double p_old)
-    cdef get_pstar(self, double d_l, double u_l, double p_l, double d_r, double u_r, double p_r, double gamma)
+    cdef inline double p_guess(self, double dl, double ul, double pl, double cl,
+            double dr, double ur, double pr, double cr, double gamma) nogil
+
+    cdef inline double p_func(self, double d, double u, double p,
+            double c, double gamma, double p_old) nogil
+
+    cdef inline double p_func_deriv(self, double d, double u, double p,
+            double c, double gamma, double p_old) nogil
+
+    cdef inline double get_pstar(self, double dl, double ul, double pl, double cl,
+            double dr, double ur, double pr, double cr, double gamma) nogil
+
+    cdef inline void vacuum(self,
+            double dl, double vl[3], double pl, double vnl, double cl,
+            double dr, double vr[3], double pr, double vnr, double cr,
+            double *d, double  v[3], double *p, double *vn, double *vsq,
+            double gamma, double n[3], int dim) nogil
