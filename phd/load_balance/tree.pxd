@@ -25,7 +25,8 @@ cdef struct Node:
     int array_index             # index of global array that stores leaf data
     int children_start          # first child offset form parent for pointer arithmetic
 
-    int children_index[8]       # index to point to the right child
+    #int children_index[8]       # index to point to the right child
+    int zorder_to_hilbert[8]    # map zorder to hilbert 
 
 cdef class TreeMemoryPool:
 
