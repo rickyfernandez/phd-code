@@ -25,7 +25,13 @@ def class IntegrateBase(object):
         #self.pc = None
         #self.mesh = None
         #self.riemann = None
-        pass
+        self.pc = self.mesh = self.domain = self.riemann = None
+        self.boundary = self.integrator = self.reconstruction = None
+        self.load_balance = None
+
+        # mesh relaxation
+        self.output_relax = output_relax
+        self.relax_num_iterations = relax_num_iterations
 
     def _initialize(self):
         """Constructor for the Integrator"""
@@ -49,6 +55,41 @@ def class IntegrateBase(object):
 
         self.right_state = CarrayContainer(var_dict=state_vars)
         self.right_state.named_groups['velocity'] = self.pc.named_groups['velocity']
+
+    def _initialize_and_link(self):
+        """
+        """
+        self._check_component()
+
+        # load balance for parallel runs
+        if self.parallel_run:
+            self.load_balance.comm = self.comm
+            self.load_balance.domain = self.domain
+            self.load_balance._initialize()
+
+        # spatial boundary conditions
+        if self.parallel_run:
+            self.boundary.comm = self.comm
+            self.boundary.load_bal = self.load_balance
+        self.boundary.domain = self.domain
+        self.boundary._initialize()
+
+        self.mesh.boundary = self.boundary
+        self.mesh._initialize()
+
+        self.reconstruction.pc = self.pc
+        self.reconstruction.mesh = self.mesh
+        self.reconstruction._initialize()
+
+        self.riemann.reconstruction = self.reconstruction
+
+        self.integrator.pc = self.pc
+        self.integrator.mesh = self.mesh
+        self.integrator.riemann = self.riemann
+        self.integrator._initialize()
+
+        self.gamma = self.integrator.riemann.gamma
+        self.dimensions = 'xyz'[:self.mesh.dim]
 
     def finished(self):
         return self.time >= self.final_time or self.iteration >= self.max_iteration
