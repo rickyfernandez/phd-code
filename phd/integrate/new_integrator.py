@@ -1,207 +1,247 @@
+import logging
 import numpy as np
 
+from ..utils.tools import check_class
 
-from ..mesh.mesh cimport Mesh
-from ..riemann.riemann cimport RiemannBase
-from ..utils.particle_tags import ParticleTAGS
-from ..containers.containers cimport CarrayContainer
-from ..utils.carray cimport DoubleArray, IntArray, LongLongArray, LongArray
+from ..mesh.mesh import Mesh
+from ..boundary.boundary import Boundary
+from ..domain.domain import DomainLimits
+from ..riemann.riemann import RiemannBase
+from ..containers.containers import CarrayContainer
+from ..reconstruction.reconstruction import ReconstructionBase
+
+phdLogger = logging.getLogger('phd')
 
 callbacks = []
 
-def check_class(cl):
-    def wrapper(func):
-        def checked(cl_check):
-            if not isinstance(cl_check, cl):
-                raise RuntimeError("%s component not type %s" %\
-                        cl_check.__class__.__name__, cl.__class__.__name__)
-            return cl_check
-        return checked
-    return wrapper
+class Eos(object):
+    pass
 
-def class IntegrateBase(object):
-    def __init__(self, **kwargs):
+class NewIntegrateBase(object):
+    def __init__(self, time=0, final_time=1.0, iteration=0,
+            max_iteration=100000,**kwargs):
         """Constructor for the Integrator"""
-        #self.pc = None
-        #self.mesh = None
-        #self.riemann = None
-        self.pc = self.mesh = self.domain = self.riemann = None
-        self.boundary = self.integrator = self.reconstruction = None
         self.load_balance = None
+        self.particles = self.eos = None
+        self.reconstruction = self.riemann = None
+        self.mesh = self.domain = self.boundary = None
 
-        # mesh relaxation
-        self.output_relax = output_relax
-        self.relax_num_iterations = relax_num_iterations
+        # simulation time
+        self.time = time
+        self.final_time = final_time
 
-    def _initialize(self):
-        """Constructor for the Integrator"""
+        # for paralel runs
+        self.is_parallel = False
+        self.loc_dt = np.zeros(1)
+        self.glb_dt = np.zeros(1)
 
-        self.dim = self.mesh.dim
-        self.gamma = self.riemann.gamma
+        # integration iteration number
+        self.iteration = iteration
+        self.max_iteration = max_iteration
 
-        cdef str field
-        cdef dict flux_vars = {}
-        for field in self.pc.named_groups['conserative']:
-            flux_vars[field] = 'double'
-        self.flux = CarrayContainer(var_dict=flux_vars)
-        self.flux.named_groups['momentum'] = self.pc.named_groups['momentum']
-
-        cdef dict state_vars = {}
-        for field in self.pc.named_groups['primitive']:
-            state_vars[field] = 'double'
-
-        self.left_state  = CarrayContainer(var_dict=state_vars)
-        self.left_state.named_groups['velocity'] = self.pc.named_groups['velocity']
-
-        self.right_state = CarrayContainer(var_dict=state_vars)
-        self.right_state.named_groups['velocity'] = self.pc.named_groups['velocity']
-
-    def _initialize_and_link(self):
+    def initialize_and_link(self):
         """
         """
         self._check_component()
 
-        # load balance for parallel runs
-        if self.parallel_run:
+        # add load balance if in parallel 
+        self.domain_manager = DomainManager(self.is_paralell)
+        if self.is_parallel:
+
+            # load balance
+            self.load_balance = LoadBalance()
             self.load_balance.comm = self.comm
             self.load_balance.domain = self.domain
             self.load_balance._initialize()
 
-        # spatial boundary conditions
-        if self.parallel_run:
+            # boundary
             self.boundary.comm = self.comm
             self.boundary.load_bal = self.load_balance
+
+        # boundary class
         self.boundary.domain = self.domain
         self.boundary._initialize()
 
+        # mesh class
         self.mesh.boundary = self.boundary
         self.mesh._initialize()
 
-        self.reconstruction.pc = self.pc
+        # reconstruction class
         self.reconstruction.mesh = self.mesh
+        self.reconstruction.particles = self.particles
         self.reconstruction._initialize()
 
+        # riemann class
         self.riemann.reconstruction = self.reconstruction
 
-        self.integrator.pc = self.pc
-        self.integrator.mesh = self.mesh
-        self.integrator.riemann = self.riemann
-        self.integrator._initialize()
+    def compute_time_step(self):
+        '''
+        Compute time step for current state of the simulation.
+        Works in serial and parallel.
+        '''
+        self.loc_dt[0] = self.riemann.compute_time_step()
 
-        self.gamma = self.integrator.riemann.gamma
-        self.dimensions = 'xyz'[:self.mesh.dim]
+        # if in parallel find smallest dt across
+        # all meshes 
+        if self.is_parallel:
+            self.comm.Allreduce(sendbuf=local_dt,
+                    recvbuf=global_dt, op=MPI.MIN)
+            return self.glb_dt[0]
+        return self.loc_dt[0]
 
     def finished(self):
-        return self.time >= self.final_time or self.iteration >= self.max_iteration
-
-    def compute_time_step(self):
-        #local_dt  = np.zeros(1)
-        #global_dt = np.zeros(1)
-
-        self.local_dt[0] = self.cfl*self.integrator.compute_time_step()
-
-        if self.parallel_run:
-            self.comm.Allreduce(sendbuf=local_dt, recvbuf=global_dt, op=MPI.MIN)
-            return self.global_dt[0]
-        return self.local_dt[0]
+        '''
+        Check if the simulation has reached its final time or
+        reached max iteration number.
+        '''
+        return self.time >= self.final_time or\
+                self.iteration >= self.max_iteration
 
     def evolve_timestep(self):
         msg = "IntegrateBase::evolve_timestep called!"
         raise NotImplementedError(msg)
 
-    @check_class(phd.CarrayContainer)
-    def add_particles(self, cl):
-        self.pc = cl
+    def set_parallel(self, is_parallel):
+        '''Set parallel flag'''
+        self.is_parallel = is_parallel
 
-    @check_class(phd.DomainLimits)
-    def add_domain(self, cl):
+    def set_comm(self, comm):
+        '''Set mpi communicator'''
+        self.comm = comm
+
+    @check_class(Eos)
+    def set_eos(self, cl):
+        '''Set equation of state for gas'''
+        self.equation_state = cl
+
+    @check_class(CarrayContainer)
+    def set_particles(self, cl):
+        '''Set particles to simulate'''
+        self.particles = cl
+
+    @check_class(DomainLimits)
+    def set_domain(self, cl):
+        '''Set spatial domain exten'''
         self.domain = cl
 
-    @check_class(phd.Boundary)
-    def add_boundary(self, cl):
+    @check_class(Boundary)
+    def set_boundary(self, cl):
+        '''Set boundary generator'''
         self.boundary = cl
 
-    @check_class(phd.Mesh)
-    def add_mesh(self, cl):
+    @check_class(Mesh)
+    def set_mesh(self, cl):
+        '''Set spatial mesh'''
         self.mesh = cl
 
-    @check_class(phd.ReconstructionBase)
-    def add_reconstruction(self, cl):
+    @check_class(ReconstructionBase)
+    def set_reconstruction(self, cl):
+        '''Set reconstruction method'''
         self.reconstruction = cl
 
-    @check_class(phd.RiemannBase)
-    def add_riemann(self, cl):
+    @check_class(RiemannBase)
+    def set_riemann(self, cl):
+        '''Set riemann solver'''
         self.riemann = cl
 
-    @check_class(phd.IntegrateBase)
-    def add_integrator(self, cl):
-        self.integrator = cl
+class StaticMesh(NewIntegrateBase):
+    '''
+    Static mesh integrator. Once the mesh is created in `begin_loop` method
+    the mesh will stay static throughout the simulation.
+    '''
+    def __init__(self, time=0, final_time=1.0, iteration=0,
+            max_iteration=100000,**kwargs):
 
+        # call super
+        super(StaticMesh, self).__init__(time, final_time,
+                iteration, max_iteration,**kwargs)
 
-class StaticMesh(IntegrateBase):
-    def __init__(self, int regularize = 0, double eta = 0.25, **kwargs):
-        """Constructor for the Integrator"""
+    def begin_loop(self, simulation):
+        '''
+        Build initial mesh, the mesh is only built once.
+        '''
 
-        super(StaticMesh, self).__init__(**kwargs)
-
-    def begin_loop(self):
-
-        # initial load balance
+        # ignored if in serial 
         self.domain_manager.parition()
-        self.mesh.build_geometry()
+
+        # build mesh and geometric quantities
+        self.mesh.build_geometry(self.particles)
+
+        # relax mesh if needed
+        if self.mesh.relax_mesh and not simulation.restart:
+            for i in range(self.mesh.num_relax_iteration):
+
+                # lloyd relaxation
+                self.mesh.relax(self.particles)
+
+                # save data if requested
+                if simulation.save_mesh_relaxation:
+                    simulation.output_data()
+
+        # compute density, velocity, pressure, ...
+        self.equation_state.compute_primitive(self.particles)
 
         # assign velocities to mesh cells and faces 
-        self.mesh.assign_mesh_generator_velocities()
+        self.mesh.assign_mesh_generator_velocities(self.particles)
         self.mesh.assign_face_velocities()
+
+    def evolve_timestep(self):
+        '''
+        Solve the compressible gas equations
+        '''
+        phdLogger.info('Begining integration...')
+
+        # solve the riemann problem at each face
+        self.reconstruction.compute_states(self.particles)
+        self.riemann.compute_fluxes(self.particles, self.reconstruction)
+        self.mesh.update_from_fluxes(self.particles, self.riemann)
+
+        # setup the mesh for the next setup 
+        self.eos.primitive_from_conserative(self.particles)
+        self.iteration_count += 1; current_time += dt
+
+        phdLogger.info('Finished integration')
 
     def after_loop(self):
         pass
 
-    def evolve_timestep(self):
+class MovingMesh(StaticMesh):
+    '''
+    Moving mesh integrator.
+    '''
+    def __init__(self, time=0, final_time=1.0, iteration=0,
+            max_iteration=100000,**kwargs):
 
-        logger.info('Begining iteration')
-
-        # solve the riemann problem at each face
-        self.reconstruction.compute_states()
-        self.riemann.compute_fluxes()
-        self.mesh.update_from_fluxes()
-
-        # setup the mesh for the next setup 
-        self.eos.primitive_from_conserative()
-        self.iteration_count += 1; current_time += dt
-
-        logger.info('iteration')
-
-class MovingMesh(IntegrateBase):
-    def __init__(self, int regularize = 0, double eta = 0.25, **kwargs):
-        """Constructor for the Integrator"""
-
-        super(MovingMesh, self).__init__(**kwargs)
-        self.regularize = regularize
-        self.eta = eta
+        # call super
+        super(StaticMesh, self).__init__(time, final_time,
+                iteration, max_iteration,**kwargs)
 
     def evolve_timestep(self):
+        '''
+        Solve the compressible gas equations
+        '''
+        phdLogger.info('Begining integration...')
 
-        logger.info('Begining iteration')
-
-        self.domain_manager.parition()
+        # ignored if serial run
+        if self.domain_manager.check_for_partion():
+            self.domain_manager.partion()
 
         # assign velocities to mesh cells and faces 
-        self.mesh.assign_mesh_generator_velocities()
+        self.mesh.assign_mesh_generator_velocities(self.particles)
         self.mesh.assign_face_velocities()
 
         # solve the riemann problem at each face
-        self.reconstruction.compute_states()
-        self.riemann.compute_fluxes()
-        self.mesh.update_from_fluxes()
+        self.reconstruction.compute_states(self.particles)
+        self.riemann.compute_fluxes(self.particles, self.reconstruction)
+        self.mesh.update_from_fluxes(self.particles, self.riemann)
 
         # update mesh generator positions
-        self.mesh.move_mesh_generators()
-        self.domain_manager.migrate_boundary_particles()
+        self.mesh.move_generators(self.particles)
+        self.domain_manager.migrate_boundary_particles(self.particles)
 
         # setup the mesh for the next setup 
-        self.mesh.build_geometry()
-        self.eos.primitive_from_conserative()
+        self.mesh.build_geometry(self.particles)
+        self.eos.primitive_from_conserative(self.particles)
 
         self.iteration_count += 1; current_time += dt
-        logger.info('iteration')
+        phdLogger.info('Finished integration')
