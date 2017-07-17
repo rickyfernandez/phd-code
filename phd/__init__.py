@@ -8,6 +8,9 @@ from phd.containers.containers import \
 from phd.domain.domain import \
         DomainLimits
 
+from phd.integrate.new_integrator import \
+        NewIntegrateBase
+
 from phd.integrate.integrator import \
         IntegrateBase, \
         MovingMesh
@@ -41,6 +44,11 @@ from phd.riemann.riemann import \
 from phd.simulation.simulation import \
         Simulation, SimulationParallel
 
+
+# hack delete later
+from phd.simulation.new_simulation import \
+        NewSimulation
+
 from phd.utils.particle_tags import \
         ParticleTAGS
 
@@ -52,3 +60,6 @@ from phd.utils.store_class import \
 
 from phd.utils.particle_creator import \
         HydroParticleCreator
+
+from phd.utils.logger import \
+        phdLogger
