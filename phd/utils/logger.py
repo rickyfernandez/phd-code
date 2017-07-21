@@ -1,5 +1,7 @@
+import phd
 import logging
 import copy
+
 
 # taken from yt and included a change to change file logs
 # https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
@@ -45,3 +47,15 @@ sh_handler.emit = add_coloring_to_emit_ansi(sh_handler.emit)
 logging.SUCCESS = 25
 logging.addLevelName(logging.SUCCESS, 'SUCCESS')
 phdLogger.success = lambda msg, *args, **kwargs: phdLogger.log(logging.SUCCESS, msg, *args, **kwargs)
+
+# make sure only processor zero logs
+phdLogger.debug    = lambda msg, *args, **kwargs: phdLogger.log(logging.DEBUG, msg, *args, **kwargs)\
+        if phd._rank == 0 else None
+phdLogger.info     = lambda msg, *args, **kwargs: phdLogger.log(logging.INFO, msg, *args, **kwargs)\
+        if phd._rank == 0 else None
+phdLogger.success  = lambda msg, *args, **kwargs: phdLogger.log(logging.SUCCESS, msg, *args, **kwargs)\
+        if phd._rank == 0 else None
+phdLogger.warning  = lambda msg, *args, **kwargs: phdLogger.log(logging.WARNING, msg, *args, **kwargs)\
+        if phd._rank == 0 else None
+phdLogger.critical = lambda msg, *args, **kwargs: phdLogger.log(logging.CRITICAL, msg, *args, **kwargs)\
+        if phd._rank == 0 else None

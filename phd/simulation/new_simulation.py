@@ -6,14 +6,6 @@ from ..utils.logo import logo_str
 from ..utils.tools import check_class, class_dict
 from ..utils.logger import phdLogger, ufstring, original_emitter
 
-bar = '-'*30
-
-try:
-    import mpi4py.MPI as mpi
-    _found_mpi = True
-except ImportError:
-    _found_mpi = False
-
 
 class NewSimulation(object):
     """Marshalls the simulation."""
@@ -59,6 +51,7 @@ class NewSimulation(object):
         """
         # integrator uses a setter 
         self.integrator = None
+        self.simulation_time = None
 
         # time step parameters
         self.cfl = cfl
@@ -71,7 +64,7 @@ class NewSimulation(object):
 
         # create direcotry to store outputs
         self.simulation_name = simulation_name
-        self.output_directory = self.simulation_name + '_output'
+        self.output_directory = self.simulation_name + "_output"
 
         # parallel parameters
         self.rank = 0
@@ -79,14 +72,13 @@ class NewSimulation(object):
         self.num_procs = 1
 
         # if mpi4py is available
-        if _found_mpi:
-            self.comm = mpi.COMM_WORLD
+        if phd._has_mpi:
+            self.comm = phd._comm
             self.num_procs = self.comm.Get_size()
             self.rank = self.comm.Get_rank()
-            self.parallel_run = self.num_procs > 1
 
         # create log file
-        self.log_filename = self.simulation_name + '.log'
+        self.log_filename = self.simulation_name + ".log"
         file_handler = logging.FileHandler(self.log_filename)
         file_handler.setFormatter(logging.Formatter(ufstring))
         phdLogger.addHandler(file_handler)
@@ -109,77 +101,91 @@ class NewSimulation(object):
         """
         self.integrator = integrator
 
-#    def solve(self):
-#        """
-#        Main driver to evolve the equations. Responsible for advancing
-#        the simulation while outputting data to disk at appropriate
-#        times.
-#        """
-#        self.integrate.initialize()
-#        self.start_up_message()
-#
-#        # output initial state of simulation
-#        self.integrate.before_loop(self)
-#        self.logs('info', 'Writting initial output...')
-#        self.output_data()
-#
-#        # evolve the simulation
-#        self.logs('Beginning integration loop')
-#        while not self.integrator.finished():
-#
-#            self.logs('info', 'Starting iteration: %d time: %f dt: %f' %\
-#                    (self.integrator.iteration,
-#                     self.integrator.time,
-#                     self.integrator.dt))
-#
-#            # advance one time step
-#            self.integrator.evolve_timestep()
-#            self.logs('success', 'Finished iteration: %d time: %f dt: %f' %\
-#                    self.integrator.iteration)
-#
-#            # compute new time step
-#            self.integrator.compute_timestep()
-#            self.modify_timestep() # if needed
-#
-#            # output if needed
-#            if self.check_for_output():
-#                self.logs('info',
-#                        'Writting output at time %g, iteration %d, dt %g: %s' %\
-#                        (self.integrator.iteration,
-#                        self.integrator.time,
-#                        self.integrator.dt))
-#                self.ouput_data()
-#
-#        self.after_loop(self)
-#        self.logs('success', 'Simulation succesfully finished!')
+    def set_simulationtime(self, simulation_time):
+        """
+        Set time outputer for data outputs
+        """
+        self.simulation_time = simulation_time
+
+    def solve(self):
+        """
+        Main driver to evolve the equations. Responsible for advancing
+        the simulation while outputting data to disk at appropriate
+        times.
+        """
+        integrate = self.integrate
+        simulation_time = self.simulation_time
+
+        integrate.initialize()
+        self.start_up_message()
+
+        # output initial state of simulation
+        integrate.before_loop(self)
+        phdLogger.info("Writting initial output...")
+        self.output_data()
+
+        # evolve the simulation
+        phdLogger.info("Beginning integration loop")
+        while not simulation_time.finish(integration):
+
+            phdLogger.info("Starting iteration: "
+                    "%d time: %f dt: %f" %\
+                    (integrator.iteration,
+                     integrator.time,
+                     integrator.dt))
+
+            # advance one time step
+            integrator.evolve_timestep()
+            phdLogger.success("Finished iteration: "
+                    "%d time: %f dt: %f" %\
+                    integrator.iteration)
+
+            # compute new time step
+            integrator.compute_timestep()
+            self.modify_timestep() # if needed
+
+            # output if needed
+            if simulation_time.outputs(integrator):
+                phdLogger.info(
+                        "Writting output at time %g, "
+                        "iteration %d, dt %g: %s" %\
+                        (integrator.iteration,
+                         integrator.time,
+                         integrator.dt))
+                self.ouput_data()
+
+        # clean up or last calculations
+        integrator.after_loop(self)
+        phdLogger.success("Simulation successfully finished!")
 
     def start_up_message(self):
-        message = '\n' + logo_str
-        message += '\nSimulation Information\n' + bar
+        '''
+        Print out welcome message with details of the simulation
+        '''
+        bar = "-"*30
+        message = "\n" + logo_str
+        message += "\nSimulation Information\n" + bar
 
         # print if serial or parallel run
-        if self.parallel_run:
-            message += '\nRunning in parallel: number of processors = %d' %\
-                    self.num_procs
+        if phd._in_parallel:
+            message += "\nRunning in parallel: number of " +\
+                "processors = %d" % self.num_procs
         else:
-            message += '\nRunning in serial'
+            message += "\nRunning in serial"
 
-        message += '\nProblem solving: %s' % self.simulation_name
-        message += '\nOutput data will be saved at: %s\n' % self.output_directory
+        # simulation name and output directory
+        message += "\nProblem solving: %s" % self.simulation_name
+        message += "\nOutput data will be saved at: %s\n" %\
+                self.output_directory
 
         # print which classes are used in simulation
         cldict = class_dict(self.integrator)
-        message += '\nClasses used in the simulation\n' + bar + '\n'
+        message += "\nClasses used in the simulation\n" + bar + "\n"
         for key, val in cldict.iteritems():
-            message += key + ': ' + val + '\n'
+            message += key + ": " + val + "\n"
 
         # log message
-        self.logs('info', message)
-        self.logs('debug', 'No densities zero')
-        self.logs('info', 'Output completed')
-        self.logs('success', 'Riemann fluxes completed')
-        self.logs('warning', 'Density exceding 10^10')
-        self.logs('critical', 'Pressure less than zero dectected')
+        phdLogger.info(message)
 
     def modify_timestep(self):
         '''
@@ -198,7 +204,7 @@ class NewSimulation(object):
         self.old_dt = dt
 
         # ensure the simulation stops at final time
-        if self.integrator.time + dt > self.integrator.final_time:
+        if self.integrator.time + dt > self.time_outputer.final_time:
             dt = self.final_time - self.integrator.time
         self.integrator.set_dt(dt)
 
@@ -228,20 +234,5 @@ class NewSimulation(object):
 #        self._barrier()
 
     def barrier(self):
-        if self.parallel_run:
+        if phd._in_parallel:
             self.comm.barrier()
-
-    def logs(self, log_type, msg):
-        if self.rank == 0:
-            if log_type == 'debug':
-                phdLogger.debug(msg)
-            elif log_type == 'info':
-                phdLogger.info(msg)
-            elif log_type == 'success':
-                phdLogger.success(msg)
-            elif log_type == 'warning':
-                phdLogger.warning(msg)
-            elif log_type == 'error':
-                phdLogger.error(msg)
-            elif log_type == 'critical':
-                phdLogger.critical(msg)

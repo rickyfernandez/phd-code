@@ -8,6 +8,7 @@ from phd.containers.containers import \
 from phd.domain.domain import \
         DomainLimits
 
+# -------- hack delete later --------------
 from phd.integrate.new_integrator import \
         NewIntegrateBase
 
@@ -44,8 +45,7 @@ from phd.riemann.riemann import \
 from phd.simulation.simulation import \
         Simulation, SimulationParallel
 
-
-# hack delete later
+# -------- hack delete later --------------
 from phd.simulation.new_simulation import \
         NewSimulation
 
@@ -63,3 +63,26 @@ from phd.utils.particle_creator import \
 
 from phd.utils.logger import \
         phdLogger
+
+from phd.io.simulation_time import \
+        SimulationTime, \
+        Iteration, \
+        IterationInterval, \
+        Time, \
+        TimeInterval, \
+        SelectedTimes
+
+try:
+    import mpi4py.MPI as mpi
+    _has_mpi = True
+except ImportError:
+    _has_mpi = False
+
+if _has_mpi:
+    _comm = mpi.COMM_WORLD
+    _rank = _comm.Get_rank()
+    _in_parallel = _comm.Get_size() > 1
+else:
+    _comm = None
+    _rank = 0
+    _in_parallel = False
