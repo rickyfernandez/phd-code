@@ -7,7 +7,7 @@ from ..utils.tools import check_class, class_dict
 from ..utils.logger import phdLogger, ufstring, original_emitter
 
 
-class NewSimulation(object):
+class Simulation(object):
     """Marshalls the simulation."""
     def __init__(
         self, param_max_dt_change=1.e33, param_initial_timestep_factor=1.0,
