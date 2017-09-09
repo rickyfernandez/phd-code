@@ -43,11 +43,7 @@ from phd.riemann.riemann import \
         Exact
 
 from phd.simulation.simulation import \
-        Simulation, SimulationParallel
-
-# -------- hack delete later --------------
-from phd.simulation.new_simulation import \
-        NewSimulation
+        Simulation
 
 from phd.utils.particle_tags import \
         ParticleTAGS
@@ -81,8 +77,10 @@ except ImportError:
 if _has_mpi:
     _comm = mpi.COMM_WORLD
     _rank = _comm.Get_rank()
+    _size = _comm.Get_size()
     _in_parallel = _comm.Get_size() > 1
 else:
     _comm = None
     _rank = 0
+    _size = 1
     _in_parallel = False

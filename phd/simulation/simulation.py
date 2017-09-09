@@ -1,515 +1,198 @@
 import os
-import json
-import h5py
-import numpy as np
-from mpi4py import MPI
-
 import phd
-from ..utils.particle_tags import ParticleTAGS
+import logging
+
+from ..utils.logo import logo_str
+from ..utils.tools import check_class, class_dict
+from ..utils.logger import phdLogger, ufstring, original_emitter
 
 
-class Simulation(object):
+class NewSimulation(object):
     """Marshalls the simulation."""
     def __init__(
-        self, tf=1.0, cfl=0.5, pfreq=100, tfreq=100., relax_num_iterations=0, output_relax=False,
-        fname='simulation', outdir=None):
-        """Constructor
+        self, param_max_dt_change=1.e33, param_initial_timestep_factor=1.0,
+        param_simulation_name='simulation', param_colored_logs=True, param_log_level='debug'):
+        """Constructor for simulation.
 
         Parameters:
         -----------
+        param_max_dt_change : float
+            Largest change allowed of dt relative to old_dt (max_dt_change*old_dt)
 
-        mesh : phd.mesh.mesh
-           tesselation
+        param_initial_timestep_factor : float
+            For dt at the first iteration, reduce by this factor
 
-        tf : double
-            Final time
+        param_simulation_name : str
+           Name of problem solving, this name prefixs output data.
 
-        pfreq : int
-            Output printing frequency
+        param_output_relax : bool
+            Write out data at each mesh relaxation
 
-        tfreq : double
-            Output time frequency
+        param_output_type : str
+            Format which data is written to disk
 
-        fname : str
-            Output file base name
+        param_log_level : str
+            Level which logger is outputted
 
-        iteration_count : int
-            Simulation iteration counter. Initialize with non-zero for a restart
-
-        current_time : double
-            Simulation time. Initialize with non-zero for a restart
+        param_colored_logs : bool
+            Output colored logs to screen if True otherwise revmove color
         """
-        self.pc = self.mesh = self.domain = self.riemann = None
-        self.boundary = self.integrator = self.reconstruction = None
+        # integrator uses a setter 
+        self.integrator = None
+        self.simulation_time = None
 
-        self.cfl = cfl
-        self.pfreq = pfreq
-        self.tfreq = tfreq
-        self.tf = tf
+        # time step parameters
+        self.param_max_dt_change = param_max_dt_change
+        self.param_initial_timestep_factor = param_initial_timestep_factor
 
-        self.output = 0
-        self.output_relax = output_relax
+        # parallel parameters
+        self.rank = 0
+        self.comm = None
+        self.num_procs = 1
 
-        # iteration iteration_counter and time
-        self.relax_num_iterations = relax_num_iterations
-        self.iteration_count = 0
-        self.current_time = 0.0
+        # if mpi4py is available
+        if phd._in_parallel:
+            self.comm = phd._comm
+            self.num_procs = self.comm.Get_size()
+            self.rank = self.comm.Get_rank()
 
-        self.fname = fname
+        self.param_simulation_name = param_simulation_name
+        self.param_output_directory = self.param_simulation_name + "_output"
 
-        if not outdir:
-            outdir = self.fname + '_output'
+        # create log file
+        self.log_filename = self.param_simulation_name + ".log"
+        file_handler = logging.FileHandler(self.log_filename)
+        file_handler.setFormatter(logging.Formatter(ufstring))
+        phdLogger.addHandler(file_handler)
 
-        # save the path where we want to dump output
-        self.path = os.path.abspath(outdir)
-        os.makedirs(self.path)
+        # set logger level
+        if param_log_level == 'debug':
+            phdLogger.setLevel(logging.DEBUG)
+        elif param_log_level == 'info':
+            phdLogger.setLevel(logging.INFO)
+        elif param_log_level == 'success':
+            phdLogger.setLevel(logging.SUCCESS)
+        elif param_log_level == 'warning':
+            phdLogger.setLevel(logging.WARNING)
+        self.param_log_level = param_log_level
 
-    def add_particles(self, cl):
-        if isinstance(cl, phd.CarrayContainer):
-            self.pc = cl
-        else:
-            raise RuntimeError("%s component not type CarrayContainer" % cl.__class__.__name__)
+        if not param_colored_logs:
+            sh = phdLogger.handlers[0]
+            sh.setFormatter(logging.Formatter(ufstring))
+            sh.emit = original_emitter
 
-    def add_domain(self, cl):
-        if isinstance(cl, phd.DomainLimits):
-            self.domain = cl
-        else:
-            raise RuntimeError("%s component not type DomainLimits" % cl.__class__.__name__)
+        # create directory to store outputs
+        if self.rank == 0:
+            if os.path.isdir(self.param_output_directory):
+                phdLogger.warning("Directory %s already exists, "
+                        "files maybe over written!"  % self.param_output_directory)
+            else:
+                os.mkdir(self.param_output_directory)
 
-    def add_boundary(self, cl):
-        if isinstance(cl, phd.Boundary):
-            self.boundary = cl
-        else:
-            raise RuntimeError("%s component not type Boundary" % cl.__class__.__name__)
+    @check_class(phd.IntegrateBase)
+    def set_integrator(self, integrator):
+        """
+        Set integrator to evolve the simulation.
+        """
+        self.integrator = integrator
 
-    def add_mesh(self, cl):
-        if isinstance(cl, phd.Mesh):
-            self.mesh = cl
-        else:
-            raise RuntimeError("%s component not type Mesh" % cl.__class__.__name__)
-
-    def add_reconstruction(self, cl):
-        if isinstance(cl, phd.ReconstructionBase):
-            self.reconstruction = cl
-        else:
-            raise RuntimeError("%s component not type ReconstructionBase" % cl.__class__.__name__)
-
-    def add_riemann(self, cl):
-        if isinstance(cl, phd.RiemannBase):
-            self.riemann = cl
-        else:
-            raise RuntimeError("%s component not type RiemannBase" % cl.__class__.__name__)
-
-    def add_integrator(self, cl):
-        if isinstance(cl, phd.IntegrateBase):
-            self.integrator = cl
-        else:
-            raise RuntimeError("%s component not type IntegratorBase" % cl.__class__.__name__)
-
-    def _create_components_from_dict(self, cl_dict):
-        for comp_name, (cl_name, cl_param) in cl_dict.iteritems():
-            cl = getattr(phd, cl_name)
-            x = cl(**cl_param)
-            setattr(self, comp_name, x)
-
-    def _create_components_timeshot(self):
-        dict_output = {}
-        for attr_name, cl in self.__dict__.iteritems():
-
-            comp = getattr(self, attr_name)
-
-            # ignore parameters
-            if isinstance(comp, (int, float, str)):
-                continue
-
-            # store components
-            d = {}
-            for i in dir(cl):
-                x = getattr(cl, i)
-                if isinstance(x, (int, float, str)):
-                    d[i] = x
-
-            dict_output[attr_name] = (cl.__class__.__name__, d)
-
-        return dict_output
-
-    def _check_component(self):
-
-        for attr_name, cl in self.__dict__.iteritems():
-            comp = getattr(self, attr_name)
-            if isinstance(comp, (int, float, str)):
-                continue
-            if comp == None:
-                raise RuntimeError("Component: %s not set." % attr_name)
-
-    def _initialize(self):
-
-        self._check_component()
-
-        self.boundary.domain = self.domain
-        self.boundary._initialize()
-
-        self.mesh.boundary = self.boundary
-        self.mesh._initialize()
-
-        self.reconstruction.pc = self.pc
-        self.reconstruction.mesh = self.mesh
-        self.reconstruction._initialize()
-
-        self.riemann.reconstruction = self.reconstruction
-
-        self.integrator.pc = self.pc
-        self.integrator.mesh = self.mesh
-        self.integrator.riemann = self.riemann
-        self.integrator._initialize()
-
-        self.gamma = self.integrator.riemann.gamma
-        self.dimensions = 'xyz'[:self.mesh.dim]
+    @check_class(phd.SimulationTime)
+    def set_simulationtime(self, simulation_time):
+        """
+        Set time outputer for data outputs
+        """
+        self.simulation_time = simulation_time
 
     def solve(self):
-        """Main solver"""
-
-        self._initialize()
-
-        tf = self.tf
-        mesh = self.mesh; boundary = self.boundary; integrator = self.integrator
-        current_time = self.current_time; iteration_count = self.iteration_count
-        domain = self.domain; pc = self.pc
-
-        # create initial tessellation - including ghost particles
-        mesh.build_geometry(pc)
-
-        if self.relax_num_iterations != 0:
-            self._relax_geometry(self.relax_num_iterations)
-
-        # convert primitive values to conserative
-        integrator.conserative_from_primitive()
-
-        # main solver iteration
-        time_counter = dt = 0.0
-        while current_time < tf:
-
-            mesh.build_geometry(pc)
-            integrator.primitive_from_conserative()
-
-            # I/O
-            if iteration_count % self.pfreq == 0:
-                self._save(iteration_count, current_time, dt)
-
-            # calculate the time step and adjust if necessary
-            dt = self.cfl*integrator.compute_time_step()
-
-            if (current_time + dt > tf ):
-                dt = tf - current_time
-
-            if ( (time_counter + dt) > self.tfreq ):
-                dt = self.tfreq - time_counter
-                self._save(iteration_count, current_time+dt, dt)
-                time_counter -= dt
-
-            # integrate with the corrected time step
-            integrator.integrate(dt, current_time, iteration_count)
-
-            iteration_count += 1; current_time += dt
-            time_counter += dt
-
-            boundary.migrate_boundary_particles(pc)
-
-        mesh.build_geometry(pc)
-        integrator.primitive_from_conserative()
-
-        # final output
-        self._save(iteration_count, current_time, dt)
-        self.current_time = current_time
-
-    def _save(self, iteration_count, current_time, dt):
-
-        f = h5py.File(self.path + '/' + self.fname + '_' + `self.output`.zfill(4) + '.hdf5', 'w')
-        for prop in self.pc.properties.keys():
-            f["/" + prop] = self.pc[prop]
-
-        f.attrs['iteration_count'] = iteration_count
-        f.attrs['time'] = current_time
-        f.attrs['dt'] = dt
-        f.close()
-
-        self.output += 1
-
-#    def _compute_primitives(self):
-#        pc = self.pc
-#
-#        vol  = pc['volume']
-#        mass = pc['mass']
-#        ener = pc['energy']
-#
-#        # update primitive variables
-#        velocity_sq = 0
-#        pc['density'][:] = mass/vol
-#        for axis in self.dimensions:
-#            pc['velocity-' + axis][:] = pc['momentum-' + axis]/mass
-#            velocity_sq += pc['velocity-' + axis]**2
-#
-#        pc['pressure'][:] = (ener/vol - 0.5*pc['density']*velocity_sq)*(self.gamma-1.0)
-#
-#
-#    def _set_initial_state_from_primitive(self):
-#        pc = self.pc
-#
-#        vol  = pc['volume']
-#        mass = pc['density']*vol
-#
-#        velocity_sq = 0
-#        pc['mass'][:] = mass
-#        for axis in self.dimensions:
-#            pc['momentum-' + axis][:] = pc['velocity-' + axis]*mass
-#            velocity_sq += pc['velocity-' + axis]**2
-#
-#        pc['energy'][:] = (0.5*pc['density']*velocity_sq + pc['pressure']/(self.gamma-1.0))*vol
-
-
-    def _relax_geometry(self, num_iterations):
-        for i in range(num_iterations):
-
-            # move real particles towards center of mass
-            real = self.pc['tag'] == ParticleTAGS.Real
-            for axis in self.dimensions:
-                self.pc['position-' + axis][real] += self.pc['dcom-' + axis][real]
-
-            # some real particles may have left domain
-            self.boundary.migrate_boundary_particles(self.pc)
-
-            self.mesh.build_geometry(self.pc)
-            if self.output_relax:
-                self._save(-1, self.current_time, 0)
-
-class SimulationParallel(Simulation):
-    """Marshalls simulation in parallel."""
-    def __init__(
-        self, load_balance_freq=5, tf=1.0, cfl=0.5, pfreq=100, tfreq=100,
-        relax_num_iterations=0, output_relax=False, fname='simulation',
-        outdir=None, iteration_count=0, current_time=0):
-        """Constructor
-
-        Parameters:
-        -----------
-
-        mesh : phd.mesh.mesh
-           tesselation
-
-        tf, dt : double
-            Final time and default time-step
-
-        pfreq : int
-            Output printing frequency
-
-        tfreq : int
-            Output time frequency
-
-        fname : str
-            Output file base name
-
-        iteration_count : int
-            Simulation iteration counter. Initialize with non-zero for a restart
-
-        current_time : double
-            Simulation time. Initialize with non-zero for a restart
-
-        conservation_check : bool
-            Perform total energy check at start and end
         """
-        self.pc = self.mesh = self.domain = self.riemann = None
-        self.boundary = self.integrator = self.reconstruction = None
-        self.comm = self.load_balance = None
+        Main driver to evolve the equations. Responsible for advancing
+        the simulation while outputting data to disk at appropriate
+        times.
+        """
+        integrator = self.integrator
+        simulation_time = self.simulation_time
 
-        self.cfl = cfl
-        self.pfreq = pfreq
-        self.tfreq = tfreq
-        self.tf = tf
+        integrator.initialize()
+        self.start_up_message()
 
-        self.output = 0
-        self.output_relax = output_relax
+        # output initial state of simulation
+        integrator.before_loop(self)
+        phdLogger.info("Writting initial output...")
+        simulation_time.outputs(integrator)
 
-        # iteration iteration_counter and time
-        self.relax_num_iterations = relax_num_iterations
-        self.iteration_count = iteration_count
-        self.current_time = current_time
+        # evolve the simulation
+        phdLogger.info("Beginning integration loop")
+        while not simulation_time.finish(integration):
 
-        self.fname = fname
+            phdLogger.info("Starting iteration: "
+                    "%d time: %f dt: %f" %\
+                    (integrator.iteration,
+                     integrator.time,
+                     integrator.dt))
 
-        if not outdir:
-            outdir = self.fname + '_output'
+            # advance one time step
+            integrator.evolve_timestep()
+            phdLogger.success("Finished iteration: "
+                    "%d time: %f dt: %f" %\
+                    integrator.iteration)
 
-        #save the path where we want to dump output
-        self.path = os.path.abspath(outdir)
+            # compute new time step
+            integrator.compute_timestep()
+            self.modify_timestep() # if needed
 
-        #self.load_balance = load_balance
-        self.load_balance_freq = load_balance_freq
+            # output if needed
+            simulation_time.outputs(integrator)
 
-    def _initialize(self):
+        # clean up or last calculations
+        integrator.after_loop(self)
+        phdLogger.success("Simulation successfully finished!")
 
-        self._check_component()
+    def start_up_message(self):
+        '''
+        Print out welcome message with details of the simulation
+        '''
+        bar = "-"*30
+        message = "\n" + logo_str
+        message += "\nSimulation Information\n" + bar
 
-        # distribute particles among processors
-        self.load_balance.comm = self.comm
-        self.load_balance.domain = self.domain
-        self.load_balance._initialize()
-
-        # boundary conditions - relect, periodic, or mixture
-        self.boundary.comm = self.comm
-        self.boundary.domain = self.domain
-        self.boundary.load_bal = self.load_balance
-        self.boundary._initialize()
-
-        # algorithm to construct voronoi mesh
-        self.mesh.boundary = self.boundary
-        self.mesh._initialize()
-
-        # create states at face for riemann solver
-        self.reconstruction.pc = self.pc
-        self.reconstruction.mesh = self.mesh
-        self.reconstruction._initialize()
-
-        # riemann solver
-        self.riemann.reconstruction = self.reconstruction
-
-        # how are the equations advance in time
-        self.integrator.pc = self.pc
-        self.integrator.mesh = self.mesh
-        self.integrator.riemann = self.riemann
-        self.integrator._initialize()
-
-        self.rank = self.comm.Get_rank()
-        self.size = self.comm.Get_size()
-
-        self.gamma = self.integrator.riemann.gamma
-        self.dimensions = 'xyz'[:self.mesh.dim]
-
-        if self.rank == 0:
-            if not os.path.isdir(self.path):
-                os.makedirs(self.path)
-        self.comm.barrier()
-
-    def add_communicator(self, cl):
-        if isinstance(cl, MPI.Intracomm):
-            self.comm = cl
+        # print if serial or parallel run
+        if phd._in_parallel:
+            message += "\nRunning in parallel: number of " +\
+                "processors = %d" % self.num_procs
         else:
-            raise RuntimeError("%s component not type Intracomm" % cl.__class__.__name__)
+            message += "\nRunning in serial"
 
-    def add_loadbalance(self, cl):
-        if isinstance(cl, phd.LoadBalance):
-            self.load_balance = cl
+        message += "\nLog file saved at: %s" % self.log_filename
+
+        # simulation name and output directory
+        message += "\nProblem solving: %s" % self.param_simulation_name
+        message += "\nOutput data will be saved at: %s\n" %\
+                self.param_output_directory
+
+        # print which classes are used in simulation
+        cldict = class_dict(self.integrator)
+        message += "\nClasses used in the simulation\n" + bar + "\n"
+        for key, val in cldict.iteritems():
+            message += key + ": " + val + "\n"
+
+        # log message
+        phdLogger.info(message)
+
+    def modify_timestep(self):
+        '''
+        Compute time step for the next iteration. First the integrator time step
+        is called. Then it is modified by the simulation as to ensure it is
+        constrained.
+        '''
+        dt = self.integrator.dt
+        if self.integrator.iteration == 0:
+            # shrink if first iteration
+            dt = self.param_initial_timestep_factor*dt
         else:
-            raise RuntimeError("%s component not type LoadBalance" % cl.__class__.__name__)
+            # constrain rate of change
+            dt = min(self.param_max_dt_change*self.old_dt, dt)
+        self.old_dt = dt
 
-    def solve(self, **kwargs):
-        """Main solver"""
-
-        self._initialize()
-
-        tf = self.tf
-        mesh = self.mesh; boundary = self.boundary; integrator = self.integrator
-        current_time = self.current_time; iteration_count = self.iteration_count
-        domain = self.domain; pc = self.pc; load_balance = self.load_balance
-        comm = self.comm
-
-        local_dt  = np.zeros(1)
-        global_dt = np.zeros(1)
-
-        # create initial tessellation
-        load_balance.decomposition(pc)
-
-        # create initial tessellation - including ghost particles
-        mesh.build_geometry(pc)
-
-        if self.relax_num_iterations != 0:
-            self._relax_geometry(self.relax_num_iterations)
-
-        # convert primitive values to conserative
-        #self._set_initial_state_from_primitive()
-        integrator.conserative_from_primitive()
-
-        # main solver iteration
-        time_counter = dt = 0.0
-        while current_time < tf:
-
-            # check if load balance is needed
-            if iteration_count % self.load_balance_freq == 0:
-                load_balance.decomposition(pc)
-
-            mesh.build_geometry(pc)
-            #self._compute_primitives()
-            integrator.primitive_from_conserative()
-
-            # I/O
-            if iteration_count % self.pfreq == 0:
-                self._save(iteration_count, current_time, dt)
-
-            # calculate the time step and adjust if necessary this has to be a mpi call
-            local_dt[0] = self.cfl*integrator.compute_time_step()
-            comm.Allreduce(sendbuf=local_dt, recvbuf=global_dt, op=MPI.MIN)
-            dt = global_dt[0]
-
-            if (current_time + dt > tf):
-                dt =  tf - current_time
-
-            if self.rank == 0:
-                print 'iteration:', iteration_count, 'time:', current_time, 'dt:', dt
-
-            if ( (time_counter + dt) > self.tfreq ):
-                dt = self.tfreq - time_counter
-                self._save(iteration_count, current_time+dt, dt)
-                time_counter = -dt
-
-            # integrate with the corrected time step
-            integrator.integrate(dt, current_time, iteration_count)
-            iteration_count += 1; current_time += dt
-            time_counter += dt
-
-            boundary.migrate_boundary_particles(pc)
-
-        mesh.build_geometry(pc)
-        #self._compute_primitives()
-        integrator.primitive_from_conserative()
-
-        # final output
-        self._save(iteration_count, current_time, dt)
-        self.current_time = current_time
-
-    def _save(self, iteration_count, current_time, dt):
-
-        output_dir = self.path + "/" + self.fname + "_" + `self.output`.zfill(4)
-
-        if self.rank == 0:
-            #if not os.path.isdir(self.path):
-            os.mkdir(output_dir)
-        self.comm.barrier()
-
-        f = h5py.File(output_dir + "/" + "data" + `self.output`.zfill(4)
-                + '_cpu' + `self.rank`.zfill(4) + ".hdf5", "w")
-
-        for prop in self.pc.properties.keys():
-            f["/" + prop] = self.pc[prop]
-
-        f.attrs["iteration_count"] = iteration_count
-        f.attrs["time"] = current_time
-        f.attrs["dt"] = dt
-        f.close()
-
-        self.output += 1
-
-    def _relax_geometry(self, num_iterations):
-        for i in range(num_iterations):
-
-            # move real particles towards center of mass
-            real = self.pc['tag'] == ParticleTAGS.Real
-            for axis in self.dimensions:
-                self.pc['position-' + axis][real] += self.pc['dcom-' + axis][real]
-
-            # some real particles may have left domain
-            self.boundary.migrate_boundary_particles(self.pc)
-            self.load_balance.decomposition(self.pc)
-
-            # generate new ghost particles
-            self.mesh.build_geometry(self.pc)
-            if self.output_relax:
-                self._save(-1, self.current_time, 0)
+        # ensure the simulation outputs and finishes at selected time
+        dt = min(self.simulation_time.modify_timestep(dt), dt)
+        self.integrator.set_dt(dt)
