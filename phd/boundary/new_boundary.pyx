@@ -1,164 +1,6 @@
 import numpy as np
 cimport numpy as np
 
-from libcpp.vector cimport vector
-from ..utils.particle_tags import ParticleTAGS
-from ..utils.exchange_particles import exchange_particles
-from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
-
-cdef int Real = ParticleTAGS.Real
-cdef int Ghost = ParticleTAGS.Ghost
-cdef int Exterior = ParticleTAGS.Exterior
-cdef int Interior = ParticleTAGS.Interior
-
-
-
-
-
-
-
-class Periodic(BoundaryBase):
-    def __init__(self):
-        pass
-
-    cdef bint create_ghost_particle_serial(ImageParticle *p, DomainManager domain_manager)
-        """
-        Create periodic ghost particles in the simulation. Should only be used in
-        """
-        cdef DoubleArray r = particles.get_carray("radius")
-
-        cdef np.ndarray nbrs_pid_npy
-        cdef LongArray nbrs_pid = LongArray()
-        cdef LongArray indices = LongArray()
-
-
-        cdef double xs[3]
-        cdef np.float64_t* xg[3]
-
-        cdef int dim = particles.info["dim"]
-        cdef int num_shifts = 3**dim
-        cdef int k, num_neighbors, index[3]
-
-        # check if particle intersects global domain
-        if in_box(p.x, p.new_radius, domain_manager.domain.bounds, dim):
-
-            # shift particle coordinates to create periodic ghost
-            for k in range(num_shifts):
-
-                # create shift indices
-                index[0] = k%3; index[1] = (k/3)%3; index[2] = k/9
-                if (k == 4 and dim == 2) or (k == 13 and dim == 3):
-                    # skip no shift
-                    continue
-
-                # shifted position
-                for j in range(dim):
-                    xs[j] = p.x[j] + (index[j]-1)*domain_manager.domain.translate[j]
-
-                # find if shifted particle intersects
-                if in_box(xs, p.new_radius, domain_manager.domain.bounds, dim):
-                    if in_box(xs, p.new_radius, domain_manager.domain.bounds, dim):
-                        ghost_particle.push_back(ImageParticle(xs, vp, pid, dim))
-                        return True
-
-    cdef create_ghost_particle_parallel(CarrayContainer pc, CarrayContainer ghost, DomainLimits domain,
-            Tree glb_tree, LongArray leaf_pid, LongArray buffer_ids, LongArray buffer_pid,
-            int num_real_particles, int rank):
-        """
-        Create periodic ghost particles in the simulation. Should only be used in
-        """
-        cdef DoubleArray r = particles.get_carray("radius")
-
-        cdef np.ndarray nbrs_pid_npy
-        cdef LongArray nbrs_pid = LongArray()
-
-        cdef LongArray indices = LongArray()
-
-        cdef CarrayContainer exterior_ghost
-        cdef IntArray tags
-        cdef IntArray types
-
-        cdef vector[Particle] ghost_particle
-        cdef Particle *p
-
-        cdef double xp[3], vp[3]
-        cdef double xs[3]
-        cdef np.float64_t* x[3]
-        cdef np.float64_t* xg[3]
-
-        cdef int dim = domain.dim
-        cdef int num_shifts = 3**dim
-        cdef int i, j, m, num_neighbors, index[3]
-
-
-        particles.pointer_groups(x, particles.named_groups['position'])
-
-        # velocities not needed set to zero
-        for j in range(dim):
-            vp[j] = 0
-
-        for j in range(dim):
-            xp[j] = x[j][i]
-
-        # check if particle intersects global domain
-        if in_box(xp, r.data[i], domain.bounds, dim):
-
-            # shift particle coordinates to create periodic ghost
-            for k in range(num_shifts):
-
-                # create shift indices
-                index[0] = k%3; index[1] = (k/3)%3; index[2] = k/9
-                if (k == 4 and dim == 2) or (k == 13 and dim == 3):
-                    # skip no shift
-                    continue
-
-                # shifted position
-                for j in range(dim):
-                    xs[j] = xp[j] + (index[j]-1)*domain.translate[j]
-
-                domain_manager.processor_intersection(
-                        xs, radius1, radius2, nbrs, rank)
-
-                if nbrs.size():
-                    partice_fail = True
-                    # this particle found more processors to be
-                    # sent too
-                    for j in range(nbrs_pid.length):
-
-                        # store particle, particle id and processor
-                        buffers.push_back(IdPair())
-                        ghost_particle.push_back(Particle(xs, vp, dim))
-
-        return particle_fail
-
-
-cdef class BoundaryType:
-    Reflective = 0
-    Periodic = 1
-
-cdef bint inline in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], int dim):
-    """
-    Check if particle bounding box overlaps with a box defined by bounds.
-
-    Parameters
-    ----------
-    x : array[3]
-        Particle position
-    r : np.float64_t
-        Particle radius
-    bounds : array[2][3]
-        min/max of bounds in each dimension
-    dim : int
-        Problem dimension
-    """
-    cdef int i
-    for i in range(dim):
-        if x[i] + r < bounds[0][i]:
-            return False
-        if x[i] - r > bounds[1][i]:
-            return False
-    return True
-
 cdef inline flagged_processor(xs, r, ghost_particle, buffer_ids, buffer_pid,
         nbrs_pid, glb_tree, leaf_pid, rank):
 
@@ -187,6 +29,242 @@ cdef inline flagged_processor(xs, r, ghost_particle, buffer_ids, buffer_pid,
                 buffer_pid.append(nbrs_pid_npy[j])   # store export processor id
                 ghost_particle.push_back(Particle(xs, vp, dim))
 
+
+cdef bint inline in_box(np.float64_t x[3], np.float64_t r, np.float64_t bounds[2][3], int dim):
+    """
+    Check if particle bounding box overlaps with a box defined by bounds.
+
+    Parameters
+    ----------
+    x : array[3]
+        Particle position
+    r : np.float64_t
+        Particle radius
+    bounds : array[2][3]
+        min/max of bounds in each dimension
+    dim : int
+        Problem dimension
+    """
+    cdef int i
+    for i in range(dim):
+        if x[i] + r < bounds[0][i]:
+            return False
+        if x[i] - r > bounds[1][i]:
+            return False
+    return True
+
+cdef class Reflective(BoundaryBase):
+    cdef bint create_ghost_particle_serial(ImageParticle *p, DomainManager domain_manager)
+        """
+        Create reflective ghost particles in the simulation. Can be used in non-parallel
+        and parallel runs. Ghost particles are appended right after real particles in
+        the container. Particle container should only have real particles when used.
+
+        Parameters
+        ----------
+        """
+
+        cdef double xp[3], vp[3]
+        cdef np.float64_t *xg[3], *vg[3]
+        cdef np.float64_t *x[3], *v[3], *mv[3]
+
+        cdef int i, j, k
+        cdef dim = domain.dim
+
+        # extract real particle
+        for j in range(dim):
+
+            # lower boundary
+            # does particle radius leave global boundary 
+            if p.x[j] - p.new_radius < domain.bounds[0][j]:
+
+                # copy particle information
+                for k in range(dim):
+                    xp[k] = p.x[k]
+                    vp[k] = p.v[k]
+
+                # reflect particle position and velocity 
+                xp[j] =  xp[j] - 2*(xp[j] - domain.bounds[0][j])
+                vp[j] = -vp[j]
+
+                domain_manager.ghost_particle.push_back(
+                        ImageParticle(xs, vp,
+                            p.index, 0, dim))
+
+            # upper boundary
+            # does particle radius leave global boundary 
+            if domain.bounds[1][j] < p.x[j] + p.new_radius:
+
+                # copy particle information
+                for k in range(dim):
+                    xp[k] = p.x[k]
+                    vp[k] = p.v[k]
+
+                # reflect particle position and velocity
+                xp[j] =  xp[j] - 2*(xp[j] - domain.bounds[1][j])
+                vp[j] = -vp[j]
+
+                domain_manager.ghost_particle.push_back(
+                        ImageParticle(xs, vp,
+                            p.index, 0, dim))
+
+                return False
+
+    cdef bint create_ghost_particle_parallel(ImageParticle *p, DomainManager domain_manager)
+        """
+        Create reflective ghost particles in the simulation. Can be used in non-parallel
+        and parallel runs. Ghost particles are appended right after real particles in
+        the container. Particle container should only have real particles when used.
+
+        Parameters
+        ----------
+        """
+
+        cdef double xp[3], vp[3]
+        cdef np.float64_t *xg[3], *vg[3]
+        cdef np.float64_t *x[3], *v[3], *mv[3]
+
+        cdef int i, j, k
+        cdef dim = domain.dim
+
+        # extract real particle
+        for j in range(dim):
+
+            # lower boundary
+            # does particle radius leave global boundary 
+            if p.x[j] - p.new_radius < domain.bounds[0][j]:
+
+                # copy particle information
+                for k in range(dim):
+                    xp[k] = p.x[k]
+                    vp[k] = p.v[k]
+
+                # reflect particle position and velocity 
+                xp[j] =  xp[j] - 2*(xp[j] - domain.bounds[0][j])
+                vp[j] = -vp[j]
+
+                # find processor neighbors
+                domain_manager.processor_intersection(
+                        xs, radius1, radius2, nbrs, first_attempt)
+
+                if domain_manger.processor_nbrs.size():
+                    for i in range(domain_manager.processor_nbrs.size()):
+                        domain_manager.ghost_particle.push_back(
+                                ImageParticle(
+                                    xs, p.vp,
+                                    p.index,
+                                    domain_manager.processor_nbrs[i],
+                                    dim))
+
+            # upper boundary
+            # does particle radius leave global boundary 
+            if domain.bounds[1][j] < p.x[j] + p.new_radius:
+
+                # copy particle information
+                for k in range(dim):
+                    xp[k] = p.x[k]
+                    vp[k] = p.v[k]
+
+                # reflect particle position and velocity
+                xp[j] =  xp[j] - 2*(xp[j] - domain.bounds[1][j])
+                vp[j] = -vp[j]
+
+                # find processor neighbors
+                domain_manager.processor_intersection(
+                        xs, radius1, radius2, nbrs, first_attempt)
+
+                if domain_manger.processor_nbrs.size():
+                    for i in range(domain_manager.processor_nbrs.size()):
+                        domain_manager.ghost_particle.push_back(
+                                ImageParticle(
+                                    xs, p.vp,
+                                    p.index,
+                                    domain_manager.processor_nbrs[i],
+                                    dim))
+
+                return False
+
+class Periodic(BoundaryBase):
+    cdef bint create_ghost_particle_serial(ImageParticle *p, DomainManager domain_manager)
+        """
+        Create periodic ghost particles in the simulation. Should only be used in
+        """
+        cdef int j, k
+        cdef double xs[3]
+        cdef int index[3]
+        cdef int num_shifts = 3**dim
+        cdef int dim = domain_manager.dim
+
+        # check if particle intersects global domain
+        if in_box(p.x, p.new_radius,
+                domain_manager.domain.bounds, dim):
+
+            # shift particle coordinates
+            for k in range(num_shifts):
+
+                # create shift indices
+                index[0] = k%3; index[1] = (k/3)%3; index[2] = k/9
+                if (k == 4 and dim == 2) or (k == 13 and dim == 3):
+                    continue # skip no shift
+
+                # shifted position
+                for j in range(dim):
+                    xs[j] = p.x[j] +\
+                            (index[j]-1)*domain_manager.domain.translate[j]
+
+                # find if shifted particle intersects domain
+                if in_box(xs, p.new_radius,
+                        domain_manager.domain.bounds, dim):
+
+                    # store ghost
+                    domain_manager.ghost_particle.push_back(
+                            ImageParticle(xs, p.vp,
+                                p.index, 0, dim))
+
+                    # don't flag
+                    return False
+
+    cdef bint create_ghost_particle_serial(ImageParticle *p, DomainManager domain_manager)
+        """
+        Create periodic ghost particles in the simulation. Should only be used in
+        """
+        cdef int j, k
+        cdef double xs[3]
+        cdef int index[3]
+        cdef int num_shifts = 3**dim
+        cdef int dim = domain_manager.dim
+
+        # shift particle coordinates
+        for k in range(num_shifts):
+
+            # create shift indices
+            index[0] = k%3; index[1] = (k/3)%3; index[2] = k/9
+            if (k == 4 and dim == 2) or (k == 13 and dim == 3):
+                continue # skip no shift
+
+            # shifted position
+            for j in range(dim):
+                xs[j] = p.x[j] +\
+                        (index[j]-1)*domain_manager.domain.translate[j]
+
+            # find processor neighbors
+            domain_manager.processor_intersection(
+                    xs, radius1, radius2, nbrs, first_attempt)
+
+            if domain_manger.processor_nbrs.size():
+                for j in range(domain_manager.processor_nbrs.size()):
+                    domain_manager.ghost_particle.push_back(
+                            ImageParticle(
+                                xs, p.vp,
+                                p.index,
+                                domain_manager.processor_nbrs[j],
+                                dim))
+
+                # flag particle 
+                return True
+
+
+
 cdef class BoundaryBase:
     cdef create_ghost_particles_serial(CarrayContainer particles, CarrayContainer ghost_particles,
             DomainManager domain_manager, int num_real_particles):
@@ -203,119 +281,6 @@ cdef class BoundaryBase:
         msg = "IntegrateBase::evolve_timestep called!"
         raise NotImplementedError(msg)
 
-cdef class Reflective(BoundaryBase):
-    cdef create_ghost_particles_serial(CarrayContainer particles, CarrayContainer ghost_particles,
-            DomainManager domain_manager, LongArray particles_indices):
-        """
-        Create reflective ghost particles in the simulation. Can be used in non-parallel
-        and parallel runs. Ghost particles are appended right after real particles in
-        the container. Particle container should only have real particles when used.
-
-        Parameters
-        ----------
-        particles : CarrayContainer
-            Particle data
-        ghost_particles : CarrayContainer
-            Ghost particle data
-        domanin_manager : DomainManager
-            Information of domain
-        particles_indices : LongArray
-            Indicies flagged for boundary ghost particles
-        """
-        cdef DoubleArray r = particles.get_carray("radius")
-
-        cdef IntArray tags
-        cdef IntArray types
-        cdef LongArray maps
-        cdef DoubleArray mass
-
-        cdef Particle *p
-        cdef vector[Particle] ghost_particle
-
-        cdef double xp[3], vp[3]
-        cdef np.float64_t *xg[3], *vg[3]
-        cdef np.float64_t *x[3], *v[3], *mv[3]
-
-        cdef int i, j, k
-        cdef dim = domain.dim
-        cdef LongArray indices = LongArray()
-
-        particles.pointer_groups(x, particles.named_groups['position'])
-        particles.pointer_groups(v, particles.named_groups['velocity'])
-
-        exterior_ghost = particles.extract_items(particle_indices)
-
-        for ip in range(particle_indices.size()):
-
-            # extract real particle
-            i = particle_indices[ip]
-            for j in range(dim):
-
-                # lower boundary
-                # does particle radius leave global boundary 
-                if x[j][i] - r.data[i] < domain.bounds[0][j]:
-
-                    # copy particle information
-                    for k in range(dim):
-                        xp[k] = x[k][i]
-                        vp[k] = v[k][i]
-
-                    # reflect particle position and velocity 
-                    xp[j] =  x[j][i] - 2*(x[j][i] - domain.bounds[0][j])
-                    vp[j] = -v[j][i]
-
-                    # store new ghost position/velocity and image index
-                    ghost_particle.push_back(Particle(xp, vp, dim))
-                    ghost_indices.append(i)
-
-                # upper boundary
-                # does particle radius leave global boundary 
-                if domain.bounds[1][j] < x[j][i] + r.data[i]:
-
-                    # copy particle information
-                    for k in range(dim):
-                        xp[k] = x[k][i]
-                        vp[k] = v[k][i]
-
-                    # reflect particle position and velocity
-                    xp[j] =  x[j][i] - 2*(x[j][i] - domain.bounds[1][j])
-                    vp[j] = -v[j][i]
-
-                    # store new ghost position/velocity and image index
-                    ghost_particle.push_back(Particle(xp, vp, dim))
-                    ghost_indices.append(i)
-
-           # create ghost particles from flagged particles
-        exterior_ghost = particles.extract_items(indices)
-
-        # references to new ghost data
-        exterior_ghost.pointer_groups(xg, particles.named_groups['position'])
-        exterior_ghost.pointer_groups(vg, particles.named_groups['velocity'])
-
-        maps = exterior_ghost.get_carray("map")
-        tags = exterior_ghost.get_carray("tag")
-        types = exterior_ghost.get_carray("type")
-
-        mass = exterior_ghost.get_carray("mass")
-        exterior_ghost.pointer_groups(mv, particles.named_groups['momentum'])
-
-        # transfer new data to ghost 
-        for i in range(exterior_ghost.get_number_of_items()):
-
-            maps.data[i] = indices.data[i]  # reference to image
-            tags.data[i] = Ghost            # ghost label
-            types.data[i] = Exterior        # exterior ghost label
-
-            # update new position/velocity
-            p = &ghost_particle[i]
-            for j in range(dim):
-
-                xg[j][i] = p.x[j]
-                vg[j][i] = p.v[j]
-                mv[j][i] = mass.data[i]*p.v[j]
-
-        # add new ghost to particle container
-        ghost_particle.append_container(exterior_ghost)
 
     cdef create_ghost_particles_parallel(CarrayContainer particles, CarrayContainer ghost_particles,
         """

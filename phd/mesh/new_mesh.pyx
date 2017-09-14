@@ -113,17 +113,23 @@ cdef class MeshBase:
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
         num_real_particles = particles.get_number_of_items()
 
-        # grab position and radius 
+        # reference position and radius 
         rp = r.get_data_ptr()
         particles.pointer_groups(xp, particles.named_groups["position"])
+
+        # flag all particle for ghost creation 
+        self.domain_manager.flag_initial_ghost_particles(particles)
 
         # first attempt of the mesh 
         fail = self.tess.build_initial_tess(xp, rp, num_real_particles, 1.0E33)
         assert(fail != -1)
+
+        first_attempt = True
+
         while True:
 
             # add ghost particles untill mesh is complete
-            self.domain_manager.create_ghost_particles(particles)
+            self.domain_manager.create_ghost_particles(particles, first_attempt)
             if self.domain_manager.ghost_not_complete():
                 break
 
