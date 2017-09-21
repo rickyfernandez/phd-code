@@ -1,22 +1,32 @@
 cimport numpy as np
 
 from ..mesh.mesh cimport Mesh
+from ..domain.domain_manager cimport DomainManager
 from ..containers.containers cimport CarrayContainer, CarrayContainer
 
 cdef class ReconstructionBase:
-    cdef public CarrayContainer pc
-    cdef public Mesh mesh
 
-    cdef _compute(self, CarrayContainer pc, CarrayContainer faces, CarrayContainer left_faces,
-            CarrayContainer right_faces, Mesh mesh, double gamma, double dt, int boost)
+    cdef bint do_colors
+    cdef np.float64_t** col
+    cdef np.float64_t** coll
+    cdef np.float64_t** colr
+
+    cdef public DomainManager domain_manager
+
+    cdef public dict reconstruct_fields
+    cdef public dict reconstruct_field_groups
+    cdef public dict reconstruct_grad_groups
+
+    cpdef compute_states(self, CarrayContainer particles, MeshBase mesh, EquationStateBase eos,
+            RiemannBase riemann, double dt)
 
 cdef class PieceWiseConstant(ReconstructionBase):
     pass
 
 cdef class PieceWiseLinear(ReconstructionBase):
 
+    cdef public int param_limiter
     cdef public CarrayContainer grad
-    cdef public int limiter
 
     cdef np.float64_t** prim_ptr
     cdef np.float64_t** grad_ptr
@@ -27,4 +37,4 @@ cdef class PieceWiseLinear(ReconstructionBase):
     cdef np.float64_t* alpha
     cdef np.float64_t* df
 
-    cdef _compute_gradients(self, CarrayContainer pc, CarrayContainer faces, Mesh mesh)
+    cdef compute_gradients(self, CarrayContainer pc, CarrayContainer faces, Mesh mesh)
