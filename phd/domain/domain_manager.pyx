@@ -1,7 +1,9 @@
 import phd
 
 cdef class DomainManager:
-    def __init__(self):
+    def __init__(self, double param_box_fraction):
+
+        self.param_box_fraction = param_box_fraction
 
         self.domain = None
         self.load_balance = None
@@ -78,7 +80,7 @@ cdef class DomainManager:
             if phd._in_parallel:
                 raise NotImplemented("filter_radius called")
 #                if r.data[i] < 0.:
-#                    r.data[i] = self.box_fraction*\
+#                    r.data[i] = self.param_box_fraction*\
 #                            self.load_balance.get_node_width(keys.data[i])
             else:
                 if r.data[i] < 0.:

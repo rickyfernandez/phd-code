@@ -22,6 +22,8 @@ cdef class DomainManager:
     cdef public LoadBalance load_balance
     cdef public BoundaryConditionBase boundary_condition
 
+    cdef public double param_box_fraction
+
     # flag interior particles
     cdef vector[int] old_interior_flagged
     cdef vector[int] new_interior_flagged
