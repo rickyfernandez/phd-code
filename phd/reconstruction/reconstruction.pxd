@@ -15,8 +15,8 @@ cdef class ReconstructionBase:
     cdef public CarrayContainer left_states
     cdef public CarrayContainer right_states
 
-#    cdef public dict reconstruct_fields
-#    cdef public dict reconstruct_field_groups
+    cdef public dict reconstruct_fields
+    cdef public dict reconstruct_field_groups
 #    cdef public dict reconstruct_grad_groups
 
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
