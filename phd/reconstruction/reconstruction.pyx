@@ -20,19 +20,6 @@ cdef class ReconstructionBase:
         msg = "Reconstruction::initialize called!"
         raise NotImplementedError(msg)
 
-    cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
-            RiemannBase riemann, DomainManager domain_manager, double dt, int dim):
-        """
-        Perform reconstruction from cell center to face center of each face in
-        mesh.
-        """
-        msg = "Reconstruction::compute called!"
-        raise NotImplementedError(msg)
-
-cdef class PieceWiseConstant(ReconstructionBase):
-    def __init__(self):
-        super(PieceWiseConstant, self).__init__()
-
     def set_fields_to_reconstruct(CarrayContainer particles):
         """
         Create lists of variables to reconstruct and setup containers for
@@ -55,10 +42,25 @@ cdef class PieceWiseConstant(ReconstructionBase):
                          dtype)
             field_types[field] = "double"
 
+        named_groups["velocity"] = particles.named_groups["velocity"]
+
         # store fields info
         self.registered_fields = True
         self.reconstruct_fields = field_types
         self.reconstruct_field_groups = named_groups
+
+    cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
+            RiemannBase riemann, DomainManager domain_manager, double dt, int dim):
+        """
+        Perform reconstruction from cell center to face center of each face in
+        mesh.
+        """
+        msg = "Reconstruction::compute called!"
+        raise NotImplementedError(msg)
+
+cdef class PieceWiseConstant(ReconstructionBase):
+    def __init__(self):
+        super(PieceWiseConstant, self).__init__()
 
     def initialize(self):
         if not self.registered_fields:
