@@ -35,12 +35,13 @@ cdef class IdealGas(EquationStateBase):
         '''
         # conserative variables
         cdef DoubleArray m = particles.get_carray("mass")
-        cdef DoubleArray r = particles.get_carray("density")
+        cdef DoubleArray e = particles.get_carray("energy")
 
         # primitive variable
-        cdef DoubleArray e = particles.get_carray("energy")
+        cdef DoubleArray d = particles.get_carray("density")
         cdef DoubleArray p = particles.get_carray("pressure")
 
+        # particle volume
         cdef DoubleArray vol = particles.get_carray("volume")
 
         cdef int i, k, dim
@@ -51,10 +52,11 @@ cdef class IdealGas(EquationStateBase):
         particles.pointer_groups(v,  particles.named_groups['velocity'])
         particles.pointer_groups(mv, particles.named_groups['momentum'])
 
+        # loop through all particles (real + ghost)
         for i in range(particles.get_number_of_items()):
 
             # total mass in cell
-            m.data[i] = r.data[i]*vol.data[i]
+            m.data[i] = d.data[i]*vol.data[i]
 
             # total momentum in cell
             v_sq = 0.
@@ -63,20 +65,22 @@ cdef class IdealGas(EquationStateBase):
                 v_sq    += v[k][i]*v[k][i]
 
             # total energy in cell
-            e.data[i] = (.5*r.data[i]*v_sq + p.data[i]/(self.param_gamma-1.))*vol.data[i]
+            e.data[i] = (.5*d.data[i]*v_sq + p.data[i]/(self.param_gamma-1.))*vol.data[i]
 
     cpdef primitive_from_conserative(self, CarrayContainer particles):
         '''
-        Computes primitive variables from conserative variables
+        Computes primitive variables from conserative variables. Calculates
+        for all particles (real + ghost).
         '''
         # conserative variables
-        cdef DoubleArray m   = particles.get_carray("mass")
-        cdef DoubleArray r   = particles.get_carray("density")
+        cdef DoubleArray m = particles.get_carray("mass")
+        cdef DoubleArray e = particles.get_carray("energy")
 
         # primitive variables
-        cdef DoubleArray e   = particles.get_carray("energy")
-        cdef DoubleArray p   = particles.get_carray("pressure")
+        cdef DoubleArray d = particles.get_carray("density")
+        cdef DoubleArray p = particles.get_carray("pressure")
 
+        # particle volume
         cdef DoubleArray vol = particles.get_carray("volume")
 
         cdef int i, k
@@ -87,10 +91,11 @@ cdef class IdealGas(EquationStateBase):
         particles.pointer_groups(v,  particles.named_groups['velocity'])
         particles.pointer_groups(mv, particles.named_groups['momentum'])
 
+        # loop through all particles (real + ghost)
         for i in range(particles.get_number_of_items()):
 
             # density in cell
-            r.data[i] = m.data[i]/vol.data[i]
+            d.data[i] = m.data[i]/vol.data[i]
 
             # velocity in cell
             v_sq = 0.
@@ -99,7 +104,7 @@ cdef class IdealGas(EquationStateBase):
                 v_sq   += v[k][i]*v[k][i]
 
             # pressure in cell
-            p.data[i] = (e.data[i]/vol.data[i] - .5*r.data[i]*v_sq)*(self.param_gamma-1.)
+            p.data[i] = (e.data[i]/vol.data[i] - .5*d.data[i]*v_sq)*(self.param_gamma-1.)
 
     cpdef np.float64_t sound_speed(self, np.float64_t density, np.float64_t pressure):
         """
