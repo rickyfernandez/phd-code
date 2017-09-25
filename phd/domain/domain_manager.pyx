@@ -9,16 +9,15 @@ cdef class DomainManager:
         self.load_balance = None
         self.boundary_condition = None
 
-        # search radius of particles
-        self.old_radius = DoubleArray()
-
         # interior particles 
         self.old_interior_flagged.clear()
         self.new_interior_flagged.clear()
+        self.radius_interior.clear()
 
         # exterior particles 
         self.old_exterior_flagged.clear()
         self.new_exterior_flagged.clear()
+        self.radius_exterior.clear()
 
         if phd._in_parallel:
 
@@ -79,12 +78,8 @@ cdef class DomainManager:
         for i in range(particles.get_number_of_items()):
             if phd._in_parallel:
                 raise NotImplemented("filter_radius called")
-#                if r.data[i] < 0.:
-#                    r.data[i] = self.param_box_fraction*\
-#                            self.load_balance.get_node_width(keys.data[i])
             else:
-                if r.data[i] < 0.:
-                    r.data[i] = search_radius
+                r.data[i] = min(search_radius, r.data[i])
 
     cdef create_ghost_particles(CarrayContainer particles):
         """
@@ -131,91 +126,118 @@ cdef class DomainManager:
 
             # for processor querying
             p.old_radius = self.old_radius.data[j]
-            p.new_radius = radius.data[j]
+            p.new_radius = radius.data[i]
             p.index = j
 
-            # create ghost if needed
+            # check for ghost and flag particle that created it
             if self.boundary.create_ghost_particle(p, self):
-                self.new_exterior_flagged.push_back(i)
+                self.new_exterior_flagged.push_back(j)
+                self.radius_exterior.push_back(p.new_radius)
 
-        for j in range(num_flagged_interior):
+        for i in range(num_flagged_interior):
 
             # extract particle
-            i = self.old_interior_flagged[j]
+            j = self.old_interior_flagged[i]
             for k in range(dim):
-                p.x[k] = x[k][i]
-                p.v[k] = v[k][i]
+                p.x[k] = x[k][j]
+                p.v[k] = v[k][j]
 
             # for processor querying
             p.old_radius = self.old_radius.data[j]
-            p.new_radius = radius.data[i]
-            p.index = i
+            p.new_radius = self.radius_interior[i]
+            p.index = j
 
+            # create ghost and flag particle that created it
             if self.create_interior_ghost_particle(p, self):
-                self.new_interior_flagged.push_back(i)
+                self.new_interior_flagged.push_back(j)
+                self.radius_interior.push_back(p.new_radius)
 
         # copy particles, put in processor order and export
-        self.copy_particles(particles, ghost_vec)
+        self.copy_particles(particles)
 
-    cdef copy_particles(CarrayContainer particles, vector[BoundaryParticle] ghost_vec):
+    cdef copy_particles(CarrayContainer particles):
         """
         Copy particles that where flagged for ghost creation and append them into particle
         container.
         """
         if phd._in_parallel:
             raise NotImplemented("copy_particles called!")
-            self.copy_particles_parallel(particles, ghost_vec)
         else:
-            self.copy_particles_serial(particles, ghost_vec)
+            self.copy_particles_serial(particles)
 
-    cdef copy_particles_serial(CarrayContainer particles, vector[BoundaryParticle] ghost_vec):
+    cdef copy_particles_serial(CarrayContainer particles):
         """
         Copy particles from ghost_particle vector
         """
-        cdef CarrayContainer ghosts
+        cdef LongArray maps
+        cdef LongArray tags
         cdef DoubleArray mass
+        cdef CarrayContainer ghosts
 
-        cdef int i, j
+        cdef int i, k
         cdef BoundaryParticle *p
         cdef CarrayContainer ghosts
         cdef LongArray indices = LongArray()
-        cdef np.float64_t *x[3], *v[3], *mv[3]
+
+        cdef np.float64_t *x[3], *v[3]
         cdef np.float64_t *xg[3], *vg[3], *mv[3]
 
         # copy indices
-        indices.resize(ghost_vec.size())
-        for i in range(ghost_vec.size()):
+        indices.resize(self.ghost_vec.size())
+        for i in range(self.ghost_vec.size()):
             p = &ghost_vec[i]
             indices.data[i] = p.index
 
+        # copy all particles to make ghost from
         ghosts = particles.extract_items(indices)
 
-        # reference to position and velocity
+        tags = ghosts.get_carray("tag")
+        maps = ghosts.get_carray("maps")
+        mass = ghosts.get_carray("mass")
+
+        ghosts.pointer_groups(mv, ghosts.named_groups['momentum'])
         ghosts.pointer_groups(xg, ghosts.named_groups['position'])
         ghosts.pointer_groups(vg, ghosts.named_groups['velocity'])
 
-        # reference to mass and momentum
-        mass = ghosts.get_carray("mass")
-        ghosts.pointer_groups(mv, ghosts.named_groups['momentum'])
-
-        # transfer new data to ghost 
+        # transfer ghost position and velocity 
         for i in range(self.ghost_vec.size()):
-            p = &ghost_vec[i]
+            p = &self.ghost_vec[i]
 
-            # for ghost to retrieve info later 
-            maps.data[i] = p.index
-            for j in range(dim):
+            maps.data[i] = p.index # reference to image
+            tags.data[i] = Ghost   # ghost label
+
+            for k in range(dim):
 
                 # update values
-                xg[j][i] = p.x[j]
-                vg[j][i] = p.v[j]
-                mv[j][i] = mass.data[i]*p.v[j]
+                xg[k][i] = p.x[k]
+                vg[k][i] = p.v[k]
+                mv[k][i] = mass.data[i]*p.v[k]
 
         # add new ghost to total ghost container
         particles.append_container(ghosts)
 
-    cdef copy_particles_parallel(CarrayContainer particles, vector[BoundaryParticle] ghost_vec):
-        pass
+    cdef bint ghost_complete(self):
+        """
+        Return True if no particles have been flagged for ghost
+        creation
+        """
+        if phd._in_parallel:
+            raise RuntimeError("not implemented yet")
+        else:
+            return True
+
+
+# ---------------------- add after serial working again -------------------------------
+#cdef class DomainManager:
+#    cdef filter_radius(self, CarrayContainer particles):
+#        for i in range(particles.get_number_of_items()):
+#            if phd._in_parallel:
+#                raise NotImplemented("filter_radius called")
+#                if r.data[i] < 0.:
+#                    r.data[i] = self.param_box_fraction*\
+#                            self.load_balance.get_node_width(keys.data[i])
+#
+#    cdef copy_particles_parallel(CarrayContainer particles, vector[BoundaryParticle] ghost_vec):
 #        """
 #        Copy particles from ghost_particle vector
 #        """
@@ -288,14 +310,9 @@ cdef class DomainManager:
 #                0, self.comm,
 #                self.pc.named_groups['gravity-walk-export'],
 #                self.send_disp, self.recv_disp)
-
-    cdef bint ghost_complete(self):
-        """
-        Return True if no particles have been flagged for ghost
-        creation
-        """
-        if phd._in_parallel:
-            raise RuntimeError("not implemented yet")
+#    cdef bint ghost_complete(self):
+#        if phd._in_parallel:
+#            raise RuntimeError("not implemented yet")
 #            # let all processors know if walk is complete 
 #            glb_done[0] = 0
 #            loc_done[0] = self.export_interaction.done_processing()
@@ -303,5 +320,5 @@ cdef class DomainManager:
 #
 #            return (self.new_exterior_flagged.empty() and\
 #                    self.new_interior_flagged.empty())
-        else:
-            return True
+#        else:
+#            return True

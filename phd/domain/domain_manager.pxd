@@ -7,12 +7,19 @@ from ..utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 
 
 cdef extern from "particle.h":
-    cdef cppclass BoundaryParticle:
-        Particle(double _x[3], double _v[3], int dim)
+    cdef cppclass QueryParticle:
+        Particle(double _x[3], double _v[3], double _old_radius, double _new_radius, int dim)
         double x[3]
         double v[3]
         double old_radius
         double new_radius
+        int index
+
+    cdef cppclass BoundaryParticle:
+        Particle(double _x[3], double _v[3], int _index, int _proc, int dim)
+        double x[3]
+        double v[3]
+        int proc
         int index
 
 cdef class DomainManager:
