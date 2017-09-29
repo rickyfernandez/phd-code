@@ -1,31 +1,29 @@
 import phd
 
+from libc.math cimport fmin
+
 cdef class DomainManager:
-    def __init__(self, double param_box_fraction):
+    def __init__(self, double param_box_fraction, double param_search_radius_factor = 2.0):
 
         self.param_box_fraction = param_box_fraction
+        self.param_search_radius_factor = param_search_radius_factor
 
         self.domain = None
         self.load_balance = None
         self.boundary_condition = None
 
-        # interior particles 
-        self.old_interior_flagged.clear()
-        self.new_interior_flagged.clear()
-        self.radius_interior.clear()
-
-        # exterior particles 
-        self.old_exterior_flagged.clear()
-        self.new_exterior_flagged.clear()
-        self.radius_exterior.clear()
+        # list of particle to create ghost particles from
+        self.flagged_particles.clear()
 
         if phd._in_parallel:
 
-            self.send_cnts = np.zeros(self.size, dtype=np.int32)
-            self.recv_cnts = np.zeros(self.size, dtype=np.int32)
+            # mpi send/receive counts
+            self.send_cnts = np.zeros(phd.size, dtype=np.int32)
+            self.recv_cnts = np.zeros(phd.size, dtype=np.int32)
 
-            self.send_disp = np.zeros(self.size, dtype=np.int32)
-            self.recv_disp = np.zeros(self.size, dtype=np.int32)
+            # mpi send/recieve displacements
+            self.send_disp = np.zeros(phd.size, dtype=np.int32)
+            self.recv_disp = np.zeros(phd.size, dtype=np.int32)
 
     def initialize(self):
         if not self.domain or\
@@ -60,26 +58,103 @@ cdef class DomainManager:
         """
         pass
 
-    cdef filter_radius(self, CarrayContainer particles):
+    cdef setup_for_ghost_creation(self, CarrayContainer particles):
         """
-        Starting radius for each particle in the simulation.
+        Go through each particle and flag for ghost creation. For particles
+        with infinite radius use domain size (serial) or partition tile
+        (parallel) as initial search radius.
 
         Parameters
         ----------
         pc : CarrayContainer
             Particle data
         """
-        cdef int i
-        cdef double box_size = self.domain.max_length
+        cdef int i, k
+        cdef FlagParticle *p
+        cdef double search_radius
         cdef DoubleArray r = particles.get_carray("radius")
-        cdef double search_radius = self.domain.max_length*\
-                self.param_box_fraction
 
-        for i in range(particles.get_number_of_items()):
+        # fraction of domain size
+        search_radius = self.domain.max_length*self.param_box_fraction
+        self.flagged_particles.resize(particles.get_number_of_items(), FlagParticle())
+
+        # there should be no ghost particles
+        i = 0
+        cdef list[FlagParticle].iterator it = self.flagged_particles.begin()
+        while(it != self.flagged_particles.end()):
+
+            # for infinite particles have fraction of domain size or
+            # processor tile as initial radius
             if phd._in_parallel:
-                raise NotImplemented("filter_radius called")
+                raise NotImplemented("parallel function called")
             else:
-                r.data[i] = min(search_radius, r.data[i])
+                if r.data[i] < 0:
+                    r.data[i] = 0.5*search_radius
+
+            # populate with particle information
+            p = particle_flag_deref(it)
+            p.index = i
+
+            # scale search radius from voronoi radius
+            p.radius = r.data[i]
+            p.search_radius = self.param_search_radius_factor*r.data[i]
+
+            # copy position and velocity
+            for k in range(self.dim):
+                p.x[k] = x[k][i]
+                p.v[k] = v[k][i]
+
+            # next particle
+            inc(it)
+            i += 1
+
+    cdef update_search_radius(self, CarrayContainer particles):
+        """
+        Go through each flag particle and update its radius. If
+        the particle is still infinite double the search radius. If
+        the new radius is smaller then the old search radius that
+        particle is done.
+
+        Parameters
+        ----------
+        pc : CarrayContainer
+            Particle data
+        """
+        cdef int i, k
+        cdef FlagParticle *p
+        cdef double search_radius
+        cdef DoubleArray r = particles.get_carray("radius")
+
+        # fraction of domain size
+        search_radius = self.domain.max_length*self.param_box_fraction
+
+        # there should be no ghost particles
+        cdef list[FlagParticle].iterator it = self.flagged_particles.begin()
+        while(it != self.flagged_particles.end()):
+
+            # populate with particle information
+            p = particle_flag_deref(it)
+            i = p.index
+
+            if phd._in_parallel:
+                if r.data[i] < 0: # infinite radius
+                    # grow until finite
+                    p.radius = p.search_radius
+                    p.search_radius = self.param_search_radius_factor*p.search_radius
+                    inc(it) # next particle
+
+                else: # finite radius
+                    # if updated radius is smaller than
+                    # then search radius we are done
+                    if r.data[i] < p.search_radius:
+                        it = mylist.erase(it)
+                    else:
+                        p.radius = r.data[i]
+                        p.search_radius = self.param_search_radius_factor*r.data[i]
+                        inc(it) # next particle
+            else:
+                # only one pass in serial
+                it = mylist.erase(it)
 
     cdef create_ghost_particles(CarrayContainer particles):
         """
@@ -87,70 +162,20 @@ cdef class DomainManager:
         and generates ghost particles and communicates them. This method
         is called by mesh repeatedly until the mesh is complete.
         """
-        cdef int i, j, k
-        cdef BoundaryParticle p
-        cdef np.float64_t *x[3], *v[3]
-        cdef int num_flagged_exterior, num_flagged_interior
+        cdef int i, k
+        cdef FlagParticle *p
 
-        # extract particle positions and velocities
-        particles.pointer_groups(x, particles.named_groups['position'])
-        particles.pointer_groups(v, particles.named_groups['velocity'])
+        # create particles from flagged particles
+        cdef list[FlagParticle].iterator it = self.flagged_particles.begin()
+        while it != self.flagged_particles.end():
 
-        # number flagged particle from previous call
-        num_flagged_interior = self.new_interior_flagged.size()
-        num_flagged_exterior = self.new_exterior_flagged.size()
+            # retrieve particle
+            p = particle_flag_deref(it)
 
-        # resize for copying
-        self.old_interior_flagged.resize(num_flagged_interior)
-        self.old_exterior_flagged.resize(num_flagged_exterior)
-
-        # copy previously flagged
-        for i in range(num_flagged_exterior):
-            self.old_exterior_flagged[i] =\
-                    self.new_exterior_flagged[i]
-        self.new_exterior_flagged.clear()
-
-        for i in range(num_flagged_interior):
-            self.old_interior_flagged[i] =\
-                    self.new_interior_flagged[i]
-        self.new_interior_flagged.clear()
-
-        # create new exterior ghost particles
-        for i in range(num_flagged_exterior):
-
-            # extract particle
-            j = self.old_exterior_flagged[i]
-            for k in range(dim):
-                p.x[k] = x[k][j]
-                p.v[k] = v[k][j]
-
-            # for processor querying
-            p.old_radius = self.old_radius.data[j]
-            p.new_radius = radius.data[i]
-            p.index = j
-
-            # check for ghost and flag particle that created it
-            if self.boundary.create_ghost_particle(p, self):
-                self.new_exterior_flagged.push_back(j)
-                self.radius_exterior.push_back(p.new_radius)
-
-        for i in range(num_flagged_interior):
-
-            # extract particle
-            j = self.old_interior_flagged[i]
-            for k in range(dim):
-                p.x[k] = x[k][j]
-                p.v[k] = v[k][j]
-
-            # for processor querying
-            p.old_radius = self.old_radius.data[j]
-            p.new_radius = self.radius_interior[i]
-            p.index = j
-
-            # create ghost and flag particle that created it
-            if self.create_interior_ghost_particle(p, self):
-                self.new_interior_flagged.push_back(j)
-                self.radius_interior.push_back(p.new_radius)
+            # create ghost particles 
+            self.boundary.create_ghost_particle(p, self)
+            self.create_interior_ghost_particle(p, self)
+            inc(it)  # increment iterator
 
         # copy particles, put in processor order and export
         self.copy_particles(particles)
