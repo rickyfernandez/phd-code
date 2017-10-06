@@ -13,7 +13,6 @@ cdef extern from "particle.h":
         int index
         double old_radius
         double new_radius
-        int boundary_type
 
     cdef cppclass BoundaryParticle:
         Particle(double _x[3], double _v[3], int _index, int _proc, int dim)
@@ -21,6 +20,7 @@ cdef extern from "particle.h":
         double v[3]
         int proc
         int index
+        int boundary_type
 
     FlagParticle* particle_flag_deref(list[FlagParticle].iterator &it)
 
@@ -31,6 +31,7 @@ cdef class DomainManager:
     cdef public LoadBalance load_balance
     cdef public BoundaryConditionBase boundary_condition
 
+    cdef public double param_initial_radius
     cdef public double param_box_fraction
     cdef public double param_search_radius_factor
 
@@ -38,10 +39,10 @@ cdef class DomainManager:
     cdef list[FlagParticle] flagged_particles
 
     # for parallel runs
-    cdef public np.ndarray send_cnts      # send counts for mpi
-    cdef public np.ndarray recv_cnts      # send counts for mpi
-    cdef public np.ndarray send_disp      # send displacments for mpi
-    cdef public np.ndarray recv_disp      # receive displacments for mpi
+    cdef public np.ndarray send_cnts    # send counts for mpi
+    cdef public np.ndarray recv_cnts    # send counts for mpi
+    cdef public np.ndarray send_disp    # send displacments for mpi
+    cdef public np.ndarray recv_disp    # receive displacments for mpi
 
     # load balance methods
     cpdef check_for_partition(self, CarrayContainer particles)

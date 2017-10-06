@@ -3,7 +3,8 @@ import phd
 from libc.math cimport fmin
 
 cdef class DomainManager:
-    def __init__(self, double param_box_fraction, double param_search_radius_factor = 2.0):
+    def __init__(self, double param_initial_radius, double param_box_fraction=0.4,
+            double param_search_radius_factor=2.0):
 
         self.param_box_fraction = param_box_fraction
         self.param_search_radius_factor = param_search_radius_factor
@@ -27,11 +28,11 @@ cdef class DomainManager:
 
     def initialize(self):
         if not self.domain or\
-                not self.load_balance or\
+                #not self.load_balance or\ FIX
                 not self.boundary_condition:
             raise RuntimeError("Not all setters defined in DomainMangaer")
 
-    @check_class(phd.Domain)
+    @check_class(phd.DomainLimits)
     def set_domain(domain):
         '''add boundary condition to list'''
         self.domain = domain
@@ -75,7 +76,7 @@ cdef class DomainManager:
         cdef DoubleArray r = particles.get_carray("radius")
 
         # fraction of domain size
-        search_radius = self.domain.max_length*self.param_box_fraction
+        search_radius = self.domain.min_length*self.param_box_fraction
         self.flagged_particles.resize(particles.get_number_of_items(), FlagParticle())
 
         # there should be no ghost particles
@@ -87,9 +88,10 @@ cdef class DomainManager:
             # processor tile as initial radius
             if phd._in_parallel:
                 raise NotImplemented("parallel function called")
+                # FIX: add runtime time method to set initial radius
             else:
-                if r.data[i] < 0:
-                    r.data[i] = 0.5*search_radius
+                if r.data[i] < 0: # infinite radius
+                    r.data[i] = search_radius/self.param_search_radius_factor
 
             # populate with particle information
             p = particle_flag_deref(it)
@@ -126,7 +128,7 @@ cdef class DomainManager:
         cdef DoubleArray r = particles.get_carray("radius")
 
         # fraction of domain size
-        search_radius = self.domain.max_length*self.param_box_fraction
+        search_radius = self.domain.min_length*self.param_box_fraction
 
         # there should be no ghost particles
         cdef list[FlagParticle].iterator it = self.flagged_particles.begin()
@@ -217,7 +219,7 @@ cdef class DomainManager:
         ghosts = particles.extract_items(indices)
 
         tags = ghosts.get_carray("tag")
-        maps = ghosts.get_carray("maps")
+        maps = ghosts.get_carray("map")
         mass = ghosts.get_carray("mass")
 
         ghosts.pointer_groups(mv, ghosts.named_groups['momentum'])

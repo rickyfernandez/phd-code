@@ -21,7 +21,9 @@ struct BoundaryParticle{
         int boundary_type;
 
     BoundaryParticle(const double _x[3], const double _v[3],
-            const int _proc, const int _index, int _boundary_type, int dim) {
+            const int _index, const int _proc, const int _boundary_type,
+            const int dim) {
+
         for(int i=0; i<dim; i++) {
             x[i] = _x[i];
             v[i] = _v[i];
