@@ -8,10 +8,11 @@ phdLogger = logging.getLogger('phd')
 callbacks = []
 
 class IntegrateBase(object):
-    def __init__(self, param_initial_time=0., param_final_time=1.0):
+    def __init__(self, param_initial_time=0., param_final_time=1.0, param_dim=2):
         """Constructor for Integrate base class. Every integrate class has
         to inherit this class.
         """
+        self.param_dim = param_dim
         self.param_final_time = param_final_time
         self.param_initial_time = param_initial_time
 
@@ -104,10 +105,10 @@ class StaticMesh(IntegrateBase):
     Static mesh integrator. Once the mesh is created in `begin_loop` method
     the mesh will stay static throughout the simulation.
     '''
-    def __init__(self, param_final_time=1.0):
+    def __init__(self, param_initial_time=0., param_final_time=1.0, param_dim=2):
         """Constructor for the Integrator
         """
-        super(StaticMesh, self).__init__(param_final_time)
+        super(StaticMesh, self).__init__(param_initial_time, param_final_time, param_dim)
 
     def initialize(self):
         if not self.mesh or\
@@ -119,10 +120,10 @@ class StaticMesh(IntegrateBase):
 
         # make sure proper dimension specified
         dim = len(self.particles.named_groups["position"])
-        if dim != self.dim:
+        if dim != self.param_dim:
             raise RuntimeError(
                 "Inconsistent dimension specified in particles %d and integrator %d)" %\
-                        (dim, self.dim))
+                        (dim, self.param_dim))
 
         # initialize classes
         self.domain_manager.initialize()
@@ -159,7 +160,9 @@ class StaticMesh(IntegrateBase):
         Compute time step for current state of the simulation.
         Works in serial and parallel.
         '''
-        self.loc_dt[0] = self.riemann.compute_time_step()
+        self.loc_dt[0] = self.riemann.compute_time_step(
+                self.particles, self.equation_state)
+
         # if in parallel find smallest dt across TODO
         return self.loc_dt[0]
 
@@ -167,24 +170,27 @@ class StaticMesh(IntegrateBase):
         '''
         Solve the compressible gas equations
         '''
-        phdLogger.info('Begining integration...')
+        phdLogger.info('Static Mesh Integrator: Begining integration step...')
 
         # solve the riemann problem at each face
-        phdLogger.info('Moving Mesh Integrator - Solving riemann...')
+        phdLogger.info('Static Mesh Integrator: Starting reconstruction...')
         self.reconstruction.compute_states(self.particles, self.mesh,
-                self.equation_state, self.riemann, self.dt)
-        phdLogger.success('Moving Mesh Integrator - Finished reconstruction')
+                self.equation_state, self.riemann, self.domain_manager,
+                self.dt, self.param_dim)
+        phdLogger.success('Static Mesh Integrator - Finished reconstruction')
 
-        phdLogger.info('Moving Mesh Integrator - Solving riemann...')
-        self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction)
+        phdLogger.info('Static Mesh Integrator: Starting riemann...')
+        self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
+                self.equation_state, self.param_dim)
+        phdLogger.success('Static Mesh Integrator: Finished riemann')
+
         self.mesh.update_from_fluxes(self.particles, self.riemann)
-        phdLogger.success('Moving Mesh Integrator - Finished riemann')
 
         # setup the mesh for the next setup 
         self.equation_state.primitive_from_conserative(self.particles)
         self.iteration += 1; self.time += self.dt
 
-        phdLogger.info('Finished integration')
+        phdLogger.info('Static Mesh Integrator: Finished integration')
 
     def after_loop(self):
         pass
