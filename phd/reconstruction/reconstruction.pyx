@@ -38,8 +38,7 @@ cdef class ReconstructionBase:
             dtype = particles.carray_info[field]
             if dtype != "double":
                 raise RuntimeError(
-                        "Reconstruction: %field non double type" %\
-                         dtype)
+                        "Reconstruction: %field non double type" % dtype)
             field_types[field] = "double"
 
         named_groups["velocity"] = particles.named_groups["velocity"]
@@ -131,7 +130,6 @@ cdef class PieceWiseConstant(ReconstructionBase):
                 else:
                     vl[k][n] = v[k][i]
                     vr[k][n] = v[k][j]
-
 
 #cdef class PieceWiseLinear(ReconstructionBase):
 #    def __init__(self, int param_limiter = 0):
