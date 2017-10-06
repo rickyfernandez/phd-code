@@ -13,12 +13,11 @@ cdef class RiemannBase:
     cdef public CarrayContainer fluxes
 
     cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh, ReconstructionBase reconstruction,
-            EquationStateBase eos, int dim)
+            EquationStateBase eos)
 
-    cdef riemann_solver(CarrayContainer particles, Mesh mesh, ReconstructionBase recnostruction,
-            double gamma, int dim)
+    cdef riemann_solver(Mesh mesh, ReconstructionBase recnostruction, double gamma, int dim)
 
-    cpdef double compute_time_step(self, CarrayContainer particles, EquationStateBase eos, int dim)
+    cpdef double compute_time_step(self, CarrayContainer particles, EquationStateBase eos)
 
     cdef deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim)
 

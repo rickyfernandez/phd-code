@@ -43,8 +43,7 @@ cdef class RiemannBase:
             # check type of field
             dtype = particles.carray_info[field]
             if dtype != "double":
-                raise RuntimeError(
-                        "Riemann: %field non double type" % dtype)
+                raise RuntimeError("Riemann: %s field non double type" % field)
             field_types[field] = "double"
 
         named_groups['momentum'] = particles.named_group['momentum']
@@ -55,19 +54,20 @@ cdef class RiemannBase:
         self.flux_field_groups = named_groups
 
     cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh, ReconstructionBase reconstruction,
-            EquationStateBase eos, int dim):
+            EquationStateBase eos):
         """Compute fluxes for each face in the mesh"""
+        cdef int dim = len(particles.named_groups['position'])
 
+        # resize to hold fluxes for each face in mesh
         self.fluxes.resize(mesh.faces.get_number_of_items())
-        self.riemann_solver(particles, mesh, reconstruction, eos.get_gamma(), dim)
+        self.riemann_solver(mesh, reconstruction, eos.get_gamma(), dim)
 
-    cdef riemann_solver(CarrayContainer particles, Mesh mesh, ReconstructionBase reconstruction,
-            double gamma, int dim):
+    cdef riemann_solver(Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
         """Riemann solver"""
         msg = "RiemannBase::riemann_solver called!"
         raise NotImplementedError(msg)
 
-    cpdef double compute_time_step(self, CarrayContainer particles, EquationStateBase eos, int dim):
+    cpdef double compute_time_step(self, CarrayContainer particles, EquationStateBase eos):
         """
         Compute time step for next integration step.
         """
@@ -77,30 +77,34 @@ cdef class RiemannBase:
         cdef DoubleArray d = particles.get_carray("density")
         cdef DoubleArray p = particles.get_carray("pressure")
 
-        cdef int i, k
+        cdef int i, k, dim
         cdef np.float64_t* v[3]
         cdef double c, R, dt, vsq
         cdef bint boost = self.param_boost
 
+        dim = len(particles.named_groups['position'])
         particles.pointer_groups(v, particles.named_groups['velocity'])
-        c = eos.sound_speed(d.data[i], p.data[i])
+
+        # calculate first value for min
+        c = eos.sound_speed(d.data[0], p.data[0])
 
         if dim == 2:
             R = sqrt(vol.data[0]/np.pi)
         elif dim == 3:
             R = pow(3.0*vol.data[0]/(4.0*np.pi), 1.0/3.0)
 
-        vsq = 0.0
-        for k in range(dim):
-            vsq += v[k][0]*v[k][0]
-
         if boost:
             dt = R/c
         else:
+            vsq = 0.0
+            for k in range(dim):
+                vsq += v[k][0]*v[k][0]
             dt = R/(c + sqrt(vsq))
 
         for i in range(particles.get_number_of_items()):
             if tags.data[i] == Real:
+
+                # sound speed
                 c = eos.sound_speed(d.data[i], p.data[i])
 
                 # calculate approx radius of each voronoi cell
@@ -109,13 +113,12 @@ cdef class RiemannBase:
                 elif dim == 3:
                     R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
 
-                vsq = 0.0
-                for k in range(dim):
-                    vsq += v[k][i]*v[k][i]
-
                 if boost:
                     dt = fmin(R/c, dt)
                 else:
+                    vsq = 0.0
+                    for k in range(dim):
+                        vsq += v[k][i]*v[k][i]
                     dt = fmin(R/(c + sqrt(vsq)), dt)
         return dt
 
@@ -144,14 +147,12 @@ cdef class HLL(RiemannBase):
 
     def initialize(self):
         if not self.registered_fields:
-            raise RuntimeError(
-                    "Riemann did not set fields for flux!")
+            raise RuntimeError("Riemann did not set fields for flux!")
 
         self.fluxes = CarrayContainer(var_dict=self.flux_fields)
         self.fluxes.named_groups = self.flux_field_groups
 
-    cdef riemann_solver(CarrayContainer particles, Mesh mesh, ReconstructionBase reconstruction,
-            double gamma, int dim):
+    cdef riemann_solver(Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
 
         # left state primitive variables
         cdef DoubleArray dl = reconstruction.left_state.get_carray("density")
@@ -189,6 +190,7 @@ cdef class HLL(RiemannBase):
         mesh.faces.pointer_groups(nx, mesh.faces.named_groups['normal'])
         mesh.faces.pointer_groups(wx, mesh.faces.named_groups['velocity'])
 
+        # solve riemann for each face
         for i in range(num_faces):
 
             # left state
@@ -217,8 +219,9 @@ cdef class HLL(RiemannBase):
                 # project face velocity to face normal
                 wn += wx[k][i]*nx_tmp
 
+            # in face frame
             if boost:
-                wn = 0. # in face frame
+                wn = 0.
 
             self.get_waves(_dl, Vnl, _pl, _dr, Vnr, _pr, gamma,
                     &sl, &s_contact, &sr)
