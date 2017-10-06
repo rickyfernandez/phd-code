@@ -76,10 +76,12 @@ class Simulation(object):
             phdLogger.setLevel(logging.WARNING)
         self.param_log_level = param_log_level
 
+        # remove color output if desired
         if not param_colored_logs:
             sh = phdLogger.handlers[0]
             sh.setFormatter(logging.Formatter(ufstring))
             sh.emit = original_emitter
+        self.param_colored_logs = param_colored_logs
 
         # create directory to store outputs
         if self.rank == 0:
@@ -97,7 +99,7 @@ class Simulation(object):
         self.integrator = integrator
 
     @check_class(phd.SimulationTime)
-    def set_simulationtime(self, simulation_time):
+    def set_simulation_time(self, simulation_time):
         """
         Set time outputer for data outputs
         """
