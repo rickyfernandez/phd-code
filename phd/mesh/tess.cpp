@@ -35,9 +35,9 @@ void Tess2d::reset_tess(void) {
 int Tess2d::build_initial_tess(
         double *x[3],
         double *radius,
-        int num_particles,
-        double huge) {
+        int num_particles) {
     
+    // save local number of particles
     local_num_particles = num_particles;
 
     // gernerating vertices for the tesselation 
@@ -98,13 +98,18 @@ int Tess2d::build_initial_tess(
                     //        (CGAL::to_double(pj.y()) - CGAL::to_double(pos.y()))
                     //       *(CGAL::to_double(pj.y()) - CGAL::to_double(pos.y())) );
                 }
+            } else {
+                // voronoi not complete
+                radius_max_sq = -1;
+                break;
+            }
 
             // infinite face case is considered because a particle can
             // have all faces that are rays
-            } else if (CGAL::object_cast<K::Ray_2>(&o)) {
-
-                radius_max_sq = huge;
-            }
+            //} else if (CGAL::object_cast<K::Ray_2>(&o)) {
+            //
+            //   radius_max_sq = huge;
+            //}
 
         } while (++ed != done);
 
@@ -117,21 +122,19 @@ int Tess2d::build_initial_tess(
 
 int Tess2d::update_initial_tess(
         double *x[3],
-        int up_num_particles) {
-
-    int start_num = local_num_particles;
-    tot_num_particles = local_num_particles + up_num_particles;
+        int begin_particles,
+        int end_particles) {
 
     Tess &tess = *(Tess*) ptess;
 
     // create points for ghost particles 
     std::vector<Point> particles;
-    for (int i=start_num; i<tot_num_particles; i++)
+    for (int i=begin_particles; i<end_particles; i++)
         particles.push_back(Point(x[0][i], x[1][i]));
 
-    // add ghost particles to the tess
+    // add ghost particles to the tessellation
     Vertex_handle vt;
-    for (int i=0, j=local_num_particles; i<up_num_particles; i++, j++) {
+    for (int i=0, j=begin_particles; i<end_particles; i++, j++) {
         vt = tess.insert(particles[i]);
         vt->info() = j;
     }
@@ -318,4 +321,61 @@ int Tess2d::extract_geometry(
     //std::size_t memory = CGAL::Memory_sizer().resident_size();
     //std::cout << "Tessellation size: " << (memory >> 20) <<  " Mib" <<std::endl;
     return fc;
+}
+
+int Tess2d::update_radius(
+        double* x[3],
+        double *radius,
+        std::list<FlagParticle> flagged_particles) {
+
+    Tess &tess = *(Tess*) ptess;
+    std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
+
+    for(std::list<FlagParticle>::iterator it = flagged_particles.begin();
+            it != flagged_particles.end(); ++it) {
+
+        // retrieve particle
+        int i = it->index;
+        const Vertex_handle &vi = vt_list[i];
+        double xp = x[0][i], yp = x[1][i];
+        double radius_max_sq = 0.0;
+
+        // find all edges that are incident with particle vertex
+        Edge_circulator ed = tess.incident_edges(vi), done(ed);
+
+        // process each edge
+        do {
+            // skip edge that contains infinite vertex
+            if (tess.is_infinite(ed)) 
+                continue;
+
+            const Edge e = *ed;
+            if (e.first->vertex( (e.second+2)%3 )->info() != i)
+                return -1; // sanity check
+
+            // extract voronoi face from edge
+            CGAL::Object o = tess.dual(*ed);
+
+            // finite faces
+            if (const K::Segment_2 *sg = CGAL::object_cast<K::Segment_2>(&o)) {
+
+                // loop over face vertices
+                for (int j=0; j<2; j++) {
+                    const Point& pj = sg->point(j);
+                
+                    // calculate max radius from particle
+                    radius_max_sq = std::max(radius_max_sq,
+                            (pj.x() - xp)*(pj.x() - xp) + 
+                            (pj.y() - yp)*(pj.y() - yp));
+                }
+            } else {
+                // voronoi not complete
+                radius_max_sq = -1;
+                break;
+            }
+        } while (++ed != done);
+
+        radius[i] = 2.01*std::sqrt(radius_max_sq);
+    }
+    return 0;
 }
