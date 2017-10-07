@@ -20,7 +20,7 @@ cdef class ReconstructionBase:
         msg = "Reconstruction::initialize called!"
         raise NotImplementedError(msg)
 
-    def set_fields_for_reconstruction(CarrayContainer particles):
+    def set_fields_for_reconstruction(self, CarrayContainer particles):
         """
         Create lists of variables to reconstruct and setup containers for
         gradients and reconstructions

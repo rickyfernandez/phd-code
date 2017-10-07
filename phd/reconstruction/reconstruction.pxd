@@ -1,8 +1,10 @@
 cimport numpy as np
 
 from ..mesh.mesh cimport Mesh
+from ..riemann.riemann cimport RiemannBase
 from ..domain.domain_manager cimport DomainManager
 from ..containers.containers cimport CarrayContainer
+from ..equation_state.equation_state cimport EquationStateBase
 
 cdef class ReconstructionBase:
 
@@ -20,7 +22,7 @@ cdef class ReconstructionBase:
 #    cdef public dict reconstruct_grad_groups
 
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
-            RiemannBase riemann, DomainManager domain_manager, double dt, int dim):
+            RiemannBase riemann, DomainManager domain_manager, double dt, int dim)
 
 cdef class PieceWiseConstant(ReconstructionBase):
     pass
