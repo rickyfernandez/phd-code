@@ -1,6 +1,12 @@
 import phd
 
 from libc.math cimport fmin
+from cython.operator cimport dereference as deref, preincrement as inc
+
+from ..utils.tools import check_class
+from ..utils.particle_tags import ParticleTAGS
+
+cdef int Ghost = ParticleTAGS.Ghost
 
 cdef class DomainManager:
     def __init__(self, double param_initial_radius, double param_box_fraction=0.4,
@@ -27,23 +33,22 @@ cdef class DomainManager:
             self.recv_disp = np.zeros(phd.size, dtype=np.int32)
 
     def initialize(self):
-        if not self.domain or\
-                #not self.load_balance or\ FIX
-                not self.boundary_condition:
+        if not self.domain or not self.boundary_condition:
+                #not self.load_balance or
             raise RuntimeError("Not all setters defined in DomainMangaer")
 
     @check_class(phd.DomainLimits)
-    def set_domain(domain):
+    def set_domain(self, domain):
         '''add boundary condition to list'''
         self.domain = domain
 
     @check_class(phd.BoundaryConditionBase)
-    def set_boundary_condition(boundary_condition):
+    def set_boundary_condition(self, boundary_condition):
         '''add boundary condition to list'''
         self.boundary_condition = boundary_condition
 
     @check_class(phd.LoadBalance)
-    def set_load_balance(load_balance):
+    def set_load_balance(self, load_balance):
         '''add boundary condition to list'''
         self.load_balance = load_balance
 
@@ -73,7 +78,11 @@ cdef class DomainManager:
         cdef int i, k
         cdef FlagParticle *p
         cdef double search_radius
+        cdef np.float64_t *x[3], *v[3]
         cdef DoubleArray r = particles.get_carray("radius")
+
+        particles.pointer_groups(x, particles.named_groups['position'])
+        particles.pointer_groups(v, particles.named_groups['velocity'])
 
         # fraction of domain size
         search_radius = self.domain.min_length*self.param_box_fraction
@@ -81,7 +90,7 @@ cdef class DomainManager:
 
         # there should be no ghost particles
         i = 0
-        cdef list[FlagParticle].iterator it = self.flagged_particles.begin()
+        cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
         while(it != self.flagged_particles.end()):
 
             # for infinite particles have fraction of domain size or
@@ -131,7 +140,7 @@ cdef class DomainManager:
         search_radius = self.domain.min_length*self.param_box_fraction
 
         # there should be no ghost particles
-        cdef list[FlagParticle].iterator it = self.flagged_particles.begin()
+        cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
         while(it != self.flagged_particles.end()):
 
             # populate with particle information
@@ -149,16 +158,16 @@ cdef class DomainManager:
                     # if updated radius is smaller than
                     # then search radius we are done
                     if r.data[i] < p.search_radius:
-                        it = mylist.erase(it)
+                        it = self.flagged_particles.erase(it)
                     else:
                         p.radius = r.data[i]
                         p.search_radius = self.param_search_radius_factor*r.data[i]
                         inc(it) # next particle
             else:
                 # only one pass in serial
-                it = mylist.erase(it)
+                it = self.flagged_particles.erase(it)
 
-    cdef create_ghost_particles(CarrayContainer particles):
+    cdef create_ghost_particles(self, CarrayContainer particles):
         """
         After mesh generation, this method goes through partilce list
         and generates ghost particles and communicates them. This method
@@ -168,21 +177,25 @@ cdef class DomainManager:
         cdef FlagParticle *p
 
         # create particles from flagged particles
-        cdef list[FlagParticle].iterator it = self.flagged_particles.begin()
+        cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
         while it != self.flagged_particles.end():
 
             # retrieve particle
             p = particle_flag_deref(it)
 
             # create ghost particles 
-            self.boundary.create_ghost_particle(p, self)
-            self.create_interior_ghost_particle(p, self)
+            self.boundary_condition.create_ghost_particle(p, self)
+            self.create_interior_ghost_particle(p)
             inc(it)  # increment iterator
 
         # copy particles, put in processor order and export
         self.copy_particles(particles)
 
-    cdef copy_particles(CarrayContainer particles):
+    cdef create_interior_ghost_particle(self, FlagParticle* p):
+        # not implement yet
+        pass
+
+    cdef copy_particles(self, CarrayContainer particles):
         """
         Copy particles that where flagged for ghost creation and append them into particle
         container.
@@ -192,27 +205,30 @@ cdef class DomainManager:
         else:
             self.copy_particles_serial(particles)
 
-    cdef copy_particles_serial(CarrayContainer particles):
+    cdef copy_particles_parallel(self, CarrayContainer particles):
+            raise RuntimeError("not implemented yet")
+
+    cdef copy_particles_serial(self, CarrayContainer particles):
         """
         Copy particles from ghost_particle vector
         """
         cdef LongArray maps
         cdef LongArray tags
         cdef DoubleArray mass
-        cdef CarrayContainer ghosts
 
-        cdef int i, k
+        cdef int i, k, dim
         cdef BoundaryParticle *p
         cdef CarrayContainer ghosts
         cdef LongArray indices = LongArray()
 
-        cdef np.float64_t *x[3], *v[3]
         cdef np.float64_t *xg[3], *vg[3], *mv[3]
+
+        dim = len(particles.named_group['position'])
 
         # copy indices
         indices.resize(self.ghost_vec.size())
         for i in range(self.ghost_vec.size()):
-            p = &ghost_vec[i]
+            p = &self.ghost_vec[i]
             indices.data[i] = p.index
 
         # copy all particles to make ghost from
@@ -252,6 +268,9 @@ cdef class DomainManager:
             raise RuntimeError("not implemented yet")
         else:
             return True
+
+    cdef values_to_ghost(self, CarrayContainer particles, list fields):
+        pass
 
 
 # ---------------------- add after serial working again -------------------------------
