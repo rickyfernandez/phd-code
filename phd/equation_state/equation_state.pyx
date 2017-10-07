@@ -48,7 +48,7 @@ cdef class IdealGas(EquationStateBase):
         cdef np.float64_t vs_sq
         cdef np.float64_t *v[3], *mv[3]
 
-        dim = particles.info["dim"]
+        dim = len(particles.named_groups['position'])
         particles.pointer_groups(v,  particles.named_groups['velocity'])
         particles.pointer_groups(mv, particles.named_groups['momentum'])
 
@@ -87,7 +87,7 @@ cdef class IdealGas(EquationStateBase):
         cdef np.float64_t vs_sq
         cdef np.float64_t *v[3], *mv[3]
 
-        dim = particles.info["dim"]
+        dim = len(particles.named_groups['position'])
         particles.pointer_groups(v,  particles.named_groups['velocity'])
         particles.pointer_groups(mv, particles.named_groups['momentum'])
 
