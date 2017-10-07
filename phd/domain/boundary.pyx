@@ -1,7 +1,7 @@
 import phd
 
 
-cdef bint inline in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
+cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
     """
     Check if particle bounding box overlaps with a box defined by bounds.
 
@@ -25,22 +25,22 @@ cdef bint inline in_box(double x[3], double r, np.float64_t bounds[2][3], int di
     return True
 
 cdef class BoundaryConditionBase:
-    cdef void create_ghost_particle(FlagParticle *p, DomainManager domain_manager):
+    cdef void create_ghost_particle(self, FlagParticle *p, DomainManager domain_manager):
         if phd._in_parallel:
             self.create_ghost_particle_parallel(p, domain_manager)
         else:
             self.create_ghost_particle_serial(p, domain_manager)
 
-    cdef void create_ghost_particle_serial(FlagParticle *p, DomainManager domain_manager):
+    cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
         msg = "BoundaryBase::create_ghost_particle_serial called!"
         raise NotImplementedError(msg)
 
-    cdef void create_ghost_particle_parallel(FlagParticle *p, DomainManager domain_manager):
+    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager):
         msg = "BoundaryBase::create_ghost_particle_serial!"
         raise NotImplementedError(msg)
 
-cdef class Reflective(BoundaryBase):
-    cdef void create_ghost_particle_serial(FlagParticle *p, DomainManager domain_manager)
+cdef class Reflective(BoundaryConditionBase):
+    cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
         """
         Create reflective ghost particles in the simulation. Can be used in non-parallel
         and parallel runs. Ghost particles are appended right after real particles in
@@ -95,8 +95,8 @@ cdef class Reflective(BoundaryBase):
                             BoundaryParticle(xs, vs,
                                 p.index, 0, REFLECTIVE, dim))
 
-class Periodic(BoundaryBase):
-    cdef void create_ghost_particle_serial(FlagParticle *p, DomainManager domain_manager)
+cdef class Periodic(BoundaryConditionBase):
+    cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
         """
         Create periodic ghost particles in the simulation. Should only be used in
         """
@@ -131,7 +131,7 @@ class Periodic(BoundaryBase):
                                 p.index, 0, PERIODIC, dim))
 
 #cdef class Reflective(BoundaryBase):
-#    cdef void create_ghost_particle_parallel(FlagParticle *p, DomainManager domain_manager)
+#    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)
 #        """
 #        Create reflective ghost particles in the simulation. Can be used in non-parallel
 #        and parallel runs. Ghost particles are appended right after real particles in
@@ -206,7 +206,7 @@ class Periodic(BoundaryBase):
 #                                        dim))
 #
 #class Periodic(BoundaryBase):
-#    cdef void create_ghost_particle_parallel(FlagParticle *p, DomainManager domain_manager)
+#    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)
 #        """
 #        Create periodic ghost particles in the simulation. Should only be used in
 #        """
