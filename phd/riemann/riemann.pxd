@@ -1,4 +1,6 @@
+from ..mesh.mesh cimport Mesh
 from ..containers.containers cimport CarrayContainer
+from ..equation_state.equation_state cimport EquationStateBase
 from ..reconstruction.reconstruction cimport ReconstructionBase
 
 
@@ -15,17 +17,17 @@ cdef class RiemannBase:
     cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh, ReconstructionBase reconstruction,
             EquationStateBase eos)
 
-    cdef riemann_solver(Mesh mesh, ReconstructionBase recnostruction, double gamma, int dim)
+    cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim)
 
     cpdef double compute_time_step(self, CarrayContainer particles, EquationStateBase eos)
 
     cdef deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim)
 
-#cdef class HLL(RiemannBase):
-#
-#    cdef inline void get_waves(self, double dl, double ul, double pl,
-#            double dr, double ur, double pr,
-#            double gamma, double *sl, double *sc, double *sr)
+cdef class HLL(RiemannBase):
+
+    cdef inline void get_waves(self, double dl, double ul, double pl,
+            double dr, double ur, double pr,
+            double gamma, double *sl, double *sc, double *sr)
 #
 #cdef class HLLC(HLL):
 #    pass

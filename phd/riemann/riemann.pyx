@@ -27,7 +27,7 @@ cdef class RiemannBase:
         msg = "Reconstruction::initialize called!"
         raise NotImplementedError(msg)
 
-    def set_fields_for_flux(CarrayContainer particles):
+    def set_fields_for_flux(self, CarrayContainer particles):
         """
         Create lists of variables to calculate fluxes.
         """
@@ -62,7 +62,7 @@ cdef class RiemannBase:
         self.fluxes.resize(mesh.faces.get_number_of_items())
         self.riemann_solver(mesh, reconstruction, eos.get_gamma(), dim)
 
-    cdef riemann_solver(Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
+    cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
         """Riemann solver"""
         msg = "RiemannBase::riemann_solver called!"
         raise NotImplementedError(msg)
@@ -152,15 +152,15 @@ cdef class HLL(RiemannBase):
         self.fluxes = CarrayContainer(var_dict=self.flux_fields)
         self.fluxes.named_groups = self.flux_field_groups
 
-    cdef riemann_solver(Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
+    cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
 
         # left state primitive variables
-        cdef DoubleArray dl = reconstruction.left_state.get_carray("density")
-        cdef DoubleArray pl = reconstruction.left_state.get_carray("pressure")
+        cdef DoubleArray dl = reconstruction.left_states.get_carray("density")
+        cdef DoubleArray pl = reconstruction.left_states.get_carray("pressure")
 
         # right state primitive variables
-        cdef DoubleArray dr = reconstruction.right_state.get_carray("density")
-        cdef DoubleArray pr = recnostruction.right_state.get_carray("pressure")
+        cdef DoubleArray dr = reconstruction.right_states.get_carray("density")
+        cdef DoubleArray pr = reconstruction.right_states.get_carray("pressure")
 
         # face mass and energy flux
         cdef DoubleArray fm = self.fluxes.get_carray("mass")
@@ -178,10 +178,10 @@ cdef class HLL(RiemannBase):
         cdef int num_faces = mesh.faces.get_number_of_items()
 
         # particle velocities left/right face
-        reconstruction.left_state.pointer_groups(vl,
-                reconstruction.left_state.named_groups['velocity'])
-        reconstruction.right_state.pointer_groups(vr,
-                reconstruction.right_state.named_groups['velocity'])
+        reconstruction.left_states.pointer_groups(vl,
+                reconstruction.left_states.named_groups['velocity'])
+        reconstruction.right_states.pointer_groups(vr,
+                reconstruction.right_states.named_groups['velocity'])
 
         # face momentum fluxes
         self.fluxes.pointer_groups(fmv, self.fluxes.named_groups['momentum'])
