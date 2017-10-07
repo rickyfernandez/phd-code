@@ -15,7 +15,6 @@ struct BoundaryParticle{
     public:
         double x[3];
         double v[3];
-
         int proc;
         int index;
         int boundary_type;
