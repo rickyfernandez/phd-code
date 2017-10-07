@@ -1,14 +1,16 @@
 import numpy as np
 cimport numpy as np
+from libc.math cimport sqrt
 cimport libc.stdlib as stdlib
 
-from .pytess cimport PyTess2d, PyTess3d
-from ..boundary.boundary cimport Boundary
+from ..mesh.pytess cimport PyTess2d#, PyTess3d
 from ..utils.particle_tags import ParticleTAGS
 from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, LongArray, IntArray
 
+cdef int REAL = ParticleTAGS.Real
 
+# face fields in 2d 
 cdef dict face_vars_2d = {
         "area": "double",
         "pair-i": "long",
@@ -21,59 +23,59 @@ cdef dict face_vars_2d = {
         "normal-y": "double",
         }
 
+# face fields in 3d 
 cdef dict face_vars_3d = face_vars_2d.update({
     "com-z":      "double",
     "normal-z":   "double",
     "velocity-z": "double"
     })
 
+# particle fields to register in 2d
 cdef dict fields_to_register_2d = {
         "volume": "double",
         "dcom-x": "double",
         "dcom-y": "double"
         }
 
+# particle fields to register in 3d
 cdef dict fields_to_register_3d = fields_to_register_2d.update({
     "dcom-z": "double"
     })
 
-cdef class MeshBase:
-    def __init__(self, int param_dim=2, bint param_regularize=True,
+cdef class Mesh:
+    def __init__(self, bint param_regularize=True,
             double param_eta=0.25, int param_num_neighbors=128):
         """
         Constructor for Mesh base class.
         """
         # domain manager needs to be set
-        self.domain_manager = None
         self.particle_fields_registered = False
 
-        self.param_dim = dim
         self.param_eta = param_eta
         self.param_regularize = param_regularize
         self.param_num_neighbors = param_num_neighbors
-
-    @check_class(DomainManager)
-    def set_domain_manager(self, domain_manager):
-        '''Set equation of state for gas'''
-        self.domain_manager = domain_manager
 
     def register_fields(self, CarrayContainer particles):
         """
         Register mesh fields into the particle container (i.e.
         volume, center of mass)
         """
-        cdef str fields, dtype
+        cdef int dim
+        cdef str field, dtype
         cdef int num_particles = particles.get_number_of_items()
 
-        if self.dim == 2:
+        # dimension of the problem
+        dim = len(particles.named_groups['position'])
+
+        if dim == 2:
             for field, dtype in fields_to_register_2d.iteritems():
                 if field not in particles.carray_info.keys():
-                    particles.register(num_particles, fields, dtype)
+                    particles.register(num_particles, field, dtype)
 
-        elif self.dim == 3:
-            for field, dtype in fields_to_register_3d.iteritems():
-                if field not in particles.carray_info.keys():
-                    particles.register(num_particles, fields, dtype)
+#        elif dim == 3:
+#            for field, dtype in fields_to_register_3d.iteritems():
+#                if field not in particles.carray_info.keys():
+#                    particles.register(num_particles, field, dtype)
 
         # record fields have been registered
         self.particle_fields_registered = True
@@ -82,23 +84,21 @@ cdef class MeshBase:
         """
         """
         cdef nn nearest_neigh = nn()
-        self.neighbors = nn_vec(param_num_neigh, nearest_neigh)
+        self.neighbors = nn_vec(self.param_num_neighbors, nearest_neigh)
 
-        if not self.domain_manager:
-            raise RuntimeError("Not all setters defined in Mesh")
         if not self.particle_fields_registered:
             raise RuntimeError("Fields not registered in particles by Mesh")
 
         if self.dim == 2:
             self.tess = PyTess2d()
             self.faces = CarrayContainer(var_dict=face_vars_2d)
-        elif self.dim == 3:
-            self.tess = PyTess3d()
-            self.faces = CarrayContainer(var_dict=face_vars_3d)
+        #elif self.dim == 3:
+        #    self.tess = PyTess3d()
+        #    self.faces = CarrayContainer(var_dict=face_vars_3d)
         else:
             raise RuntimeError("Wrong dimension supplied")
 
-    cpdef tessellate(self, CarrayContainer particles):
+    cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
         """
         Create voronoi mesh by first adding local particles. Then
         using the domain mangager flag particles that are incomplete
@@ -107,73 +107,48 @@ cdef class MeshBase:
         """
         cdef int fail
         cdef np.float64_t *xp[3], *rp
+        cdef int begin_particles, end_particles
         cdef DoubleArray r = particles.get_carray("radius")
 
         # remove current ghost particles
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
-        num_real_particles = particles.get_number_of_items()
+        end_particles = particles.get_number_of_items()
 
         # reference position and radius 
         rp = r.get_data_ptr()
         particles.pointer_groups(xp, particles.named_groups["position"])
 
-        # flag all particle for ghost creation 
-        self.domain_manager.flag_initial_ghost_particles(particles)
+        # first attempt of mesh, radius updated
+        assert(self.tess.build_initial_tess(xp, rp, end_particles) != -1)
 
-        # first attempt of the mesh 
-        fail = self.tess.build_initial_tess(xp, rp, num_real_particles, 1.0E33)
-        assert(fail != -1)
-
-        first_attempt = True
+        # every infinite radius set to boundary 
+        domain_manager.setup_for_ghost_creation(particles)
 
         while True:
 
             # add ghost particles untill mesh is complete
-            self.domain_manager.create_ghost_particles(particles, first_attempt)
-            if self.domain_manager.ghost_not_complete():
-                break
+            begin_particles = particles.get_number_of_items()
+            domain_manager.create_ghost_particles(particles)
+            end_particles = particles.get_number_of_items()
 
             # because of malloc
             rp = r.get_data_ptr()
             particles.pointer_groups(xp, particles.named_groups['position'])
 
-            self.tess.update_initial_tess(xp,
-                    num_real_particles,
-                    particles.get_number_of_items())
+            # add ghost particle to mesh
+            # FIX: allow to continual add ghost particles
+            assert(self.tess.update_initial_tess(xp,
+                begin_particles, end_particles) != -1)
 
-            # update radius of flagged particles 
-            self.tess.update_radius(rp, self.domain_manager.new_interior_flagged_particles)
-            self.tess.update_radius(rp, self.domain_manager.new_exterior_flagged_particles)
+            # update radius of old flagged particles 
+            self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
+            domain_manager.update_search_radius(particles)
 
-        # remove ghost particles
-        num_ghost_particles = particle.get_number_of_items() - num_real_particles
-        for i in range(num_ghost_particles):
-            self.indices[i] = num_real_particles + i
+            # if all process are done flagging
+            if domain_manager.ghost_complete():
+                break
 
-        # sort particles by processor order
-        self.sorted_indices.resize(num_ghost_particles)
-        for i in range(num_ghost_particles)
-            self.sortd_indices[i].proc  = proc.data[num_real_particles+i]
-            self.sortd_indices[i].index = proc.data[num_real_particles+i]
-            self.sortd_indices[i].pos = i
-
-        # put ghost in process order for neighbor information
-        qsort(<void*> self.sorted_indices, <size_t> self.sorted_indices.size(),
-                sizeof(SortedIndex), proc_index_compare)
-
-        for i in range(num_ghost_particles)
-            self.indices[i] = self.sorted_indices[i].index
-
-        # reappend ghost particle in ghost order
-        ghost_particles = particles.extract_items(self.indices)
-        particles.remove_tagged_particles(ParticleTAGS.Ghost)
-        particles.append(ghost)
-
-        # map for creating neighbors with ghost
-        for i in range(num_ghost_particles)
-            self.indices[i] = self.sorted_indices[i].index
-
-    cpdef build_geometry(self, CarrayContainer particles):
+    cpdef build_geometry(self, CarrayContainer particles, DomainManager domain_manager):
         """
         Build the voronoi mesh and then extract mesh information, i.e
         volumes, face information, and neighbors.
@@ -197,7 +172,7 @@ cdef class MeshBase:
 
         # release memory used in the tessellation
         self.reset_mesh()
-        self.tessellate(particles)
+        self.tessellate(particles, domain_manager)
 
         # allocate memory for face information
         num_faces = self.tess.count_number_of_faces()
@@ -230,7 +205,7 @@ cdef class MeshBase:
         self.faces.resize(fail)
 
         # transfer particle information to ghost particles
-        self.domain_manager.values_to_ghost(particles, self.fields)
+        domain_manager.values_to_ghost(particles, self.fields)
 
     cpdef reset_mesh(self):
         self.tess.reset_tess()
@@ -246,10 +221,12 @@ cdef class MeshBase:
         cdef DoubleArray cs  = particles.get_carray('sound-speed')
 
         # local variables
+        cdef int i, k, dim
         cdef double c, d, R
         cdef double eta = self.param_eta
-        cdef int i, k, dim = self.param_dim
         cdef np.float64_t *x[3], *v[3], *wx[3], *dcx[3]
+
+        dim = len(particles.named_groups['position'])
 
         particles.pointer_groups(x,   particles.named_groups['position'])
         particles.pointer_groups(v,   particles.named_groups['velocity'])
@@ -300,9 +277,11 @@ cdef class MeshBase:
         cdef LongArray pair_j = self.faces.get_carray("pair-j")
 
         # local variables
+        cdef int i, j, k, n, dim
         cdef double factor, denom
-        cdef int i, j, k, n, dim = self.param_dim
         cdef np.float64_t *x[3], *wx[3], *fv[3], *fij[3]
+
+        dim = len(particles.named_groups['position'])
 
         particles.pointer_groups(wx, particles.named_groups['w'])
         particles.pointer_groups(x,  particles.named_groups['position'])
@@ -337,17 +316,19 @@ cdef class MeshBase:
         cdef LongArray pair_j = self.faces.get_carray("pair-j")
 
         # particle values
-        cdef DoubleArray m  = particles.get_carray("mass")
-        cdef DoubleArray e  = particles.get_carray("energy")
-        cdef IntArray flags = particles.get_carray("flag")
+        cdef DoubleArray m = particles.get_carray("mass")
+        cdef DoubleArray e = particles.get_carray("energy")
+        cdef IntArray tags = particles.get_carray("tag")
 
         # flux values
         cdef DoubleArray fm = riemann.fluxes.get_carray("mass")
         cdef DoubleArray fe = riemann.fluxes.get_carray("energy")
 
         cdef double a
-        cdef int i, j, k, n, dim = self.param_dim
+        cdef int i, j, k, n, dim
         cdef np.float64_t *x[3], *wx[3], *mv[3], *fmv[3]
+
+        dim = len(particles.named_groups['position'])
 
         particles.pointer_groups(mv, particles.named_groups['momentum'])
         riemann.fluxes.pointer_groups(fmv, riemann.fluxes.named_groups['momentum'])
@@ -360,7 +341,7 @@ cdef class MeshBase:
             a = area.data[n]
 
             # flux entering cell defined by particle i
-            if(flags.data[i] & REAL):
+            if(tags.data[i] == REAL):
                 m.data[i] -= dt*a*fm.data[n]  # mass 
                 e.data[i] -= dt*a*fe.data[n]  # energy
 
@@ -369,10 +350,46 @@ cdef class MeshBase:
                     mv[k][i] -= dt*a*fmv[k][n]
 
             # flux leaving cell defined by particle j
-            if(flags.data[j] & REAL):
+            if(tags.data[j] == REAL):
                 m.data[j] += dt*a*fm.data[n]  # mass
                 e.data[j] += dt*a*fe.data[n]  # energy
 
                 # momentum
                 for k in range(dim):
                     mv[k][j] += dt*a*fmv[k][n]
+
+
+
+
+
+
+#    cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
+#        self.tess.reindex_ghost(particles, ...)
+#
+#        # remove ghost particles
+#        num_ghost_particles = particle.get_number_of_items() - num_real_particles
+#        for i in range(num_ghost_particles):
+#            self.indices[i] = num_real_particles + i
+#
+#        # sort particles by processor order
+#        self.sorted_indices.resize(num_ghost_particles)
+#        for i in range(num_ghost_particles)
+#            self.sortd_indices[i].proc  = proc.data[num_real_particles+i]
+#            self.sortd_indices[i].index = proc.data[num_real_particles+i]
+#            self.sortd_indices[i].pos = i
+#
+#        # put ghost in process order for neighbor information
+#        qsort(<void*> self.sorted_indices, <size_t> self.sorted_indices.size(),
+#                sizeof(SortedIndex), proc_index_compare)
+#
+#        for i in range(num_ghost_particles)
+#            self.indices[i] = self.sorted_indices[i].index
+#
+#        # reappend ghost particle in ghost order
+#        ghost_particles = particles.extract_items(self.indices)
+#        particles.remove_tagged_particles(ParticleTAGS.Ghost)
+#        particles.append(ghost)
+#
+#        # map for creating neighbors with ghost
+#        for i in range(num_ghost_particles)
+#            self.indices[i] = self.sorted_indices[i].index
