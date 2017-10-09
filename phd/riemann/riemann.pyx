@@ -27,14 +27,15 @@ cdef class RiemannBase:
         msg = "Reconstruction::initialize called!"
         raise NotImplementedError(msg)
 
-    def set_fields_for_flux(self, CarrayContainer particles):
+    def set_fields_for_riemann(self, CarrayContainer particles):
         """
         Create lists of variables to calculate fluxes.
         """
         cdef str field, dtype
-        cdef dict field_types = {}, named_groups = defaultdict([])
+        cdef dict fields_to_add = {}, named_groups = {}
 
         # add standard primitive fields
+        named_groups["conserative"] = []
         for field in particles.named_groups["conserative"]:
 
             # add field to group
@@ -44,13 +45,13 @@ cdef class RiemannBase:
             dtype = particles.carray_info[field]
             if dtype != "double":
                 raise RuntimeError("Riemann: %s field non double type" % field)
-            field_types[field] = "double"
+            fields_to_add[field] = "double"
 
-        named_groups['momentum'] = particles.named_group['momentum']
+        named_groups['momentum'] = particles.named_groups['momentum']
 
         # store fields info
         self.registered_fields = True
-        self.flux_fields = field_types
+        self.flux_fields = fields_to_add
         self.flux_field_groups = named_groups
 
     cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh, ReconstructionBase reconstruction,
