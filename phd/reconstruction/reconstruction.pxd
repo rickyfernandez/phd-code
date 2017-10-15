@@ -13,7 +13,7 @@ cdef class ReconstructionBase:
 #    cdef np.float64_t** coll
 #    cdef np.float64_t** colr
 
-    cdef public bint registered_fields
+    cdef bint registered_fields
     cdef public CarrayContainer left_states
     cdef public CarrayContainer right_states
 
@@ -21,8 +21,8 @@ cdef class ReconstructionBase:
     cdef public dict reconstruct_field_groups
 #    cdef public dict reconstruct_grad_groups
 
-    cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
-            RiemannBase riemann, DomainManager domain_manager, double dt, int dim)
+    cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
+            bint boost, DomainManager domain_manager, double dt)
 
 cdef class PieceWiseConstant(ReconstructionBase):
     pass

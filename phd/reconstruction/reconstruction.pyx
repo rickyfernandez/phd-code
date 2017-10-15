@@ -26,9 +26,10 @@ cdef class ReconstructionBase:
         gradients and reconstructions
         """
         cdef str field, dtype
-        cdef dict field_types = {}, named_groups = defaultdict([])
+        cdef dict fields_to_add = {}, named_groups = {}
 
         # add standard primitive fields
+        named_groups["primitive"] = []
         for field in particles.named_groups["primitive"]:
 
             # add field to group
@@ -38,18 +39,18 @@ cdef class ReconstructionBase:
             dtype = particles.carray_info[field]
             if dtype != "double":
                 raise RuntimeError(
-                        "Reconstruction: %field non double type" % dtype)
-            field_types[field] = "double"
+                        "Reconstruction: %s field non double type" % dtype)
+            fields_to_add[field] = "double"
 
         named_groups["velocity"] = particles.named_groups["velocity"]
 
         # store fields info
         self.registered_fields = True
-        self.reconstruct_fields = field_types
+        self.reconstruct_fields = fields_to_add
         self.reconstruct_field_groups = named_groups
 
-    cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
-            RiemannBase riemann, DomainManager domain_manager, double dt, int dim):
+    cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
+            bint boost, DomainManager domain_manager, double dt):
         """
         Perform reconstruction from cell center to face center of each face in
         mesh.
@@ -74,8 +75,8 @@ cdef class PieceWiseConstant(ReconstructionBase):
         self.left_states.named_groups  = self.reconstruct_field_groups
         self.right_states.named_groups = self.reconstruct_field_groups
 
-    cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
-            RiemannBase riemann, DomainManager domain_manager, double dt, int dim):
+    cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
+            bint boost, DomainManager domain_manager, double dt):
         """Construct left and right states for riemann solver for each face"""
 
         # particle primitive variables
@@ -94,17 +95,22 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef LongArray pair_i = mesh.faces.get_carray("pair-i")
         cdef LongArray pair_j = mesh.faces.get_carray("pair-j")
 
-        cdef int i, j, k, n
-        cdef bint boost = riemann.param_boost
+        cdef int i, j, k, n, dim
         cdef np.float64_t *v[3], *vl[3], *vr[3], *wx[3]
+
+        dim = len(particles.named_groups["position"])
 
         # particle and face velocity pointer
         particles.pointer_groups(v, particles.named_groups["velocity"])
         mesh.faces.pointer_groups(wx, mesh.faces.named_groups["velocity"])
 
+        # resize left/right states to hold each face
+        self.left_states.resize(mesh.faces.get_number_of_items())
+        self.right_states.resize(mesh.faces.get_number_of_items())
+
         # face state velocity pointer
-        self.left_states.pointer_groups(vl,  self.reconstruct_field_groups["velocity"])
-        self.right_states.pointer_groups(vr, self.reconstruct_field_groups["velocity"])
+        self.left_states.pointer_groups(vl,  self.left_states.named_groups["velocity"])
+        self.right_states.pointer_groups(vr, self.right_states.named_groups["velocity"])
 
         # loop through each face
         for n in range(mesh.faces.get_number_of_items()):
@@ -406,7 +412,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        # transfer gradients to ghost particles
 #        domain_manager.update_gradients(particles, self.grad, self.grad.named_groups['primitive'])
 #
-#    def compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
+#    def compute_states(self, CarrayContainer particles, Mesh mesh,
 #            RiemannBase riemann, double dt):
 #        """
 #        compute linear reconstruction. Method taken from Springel (2009)
