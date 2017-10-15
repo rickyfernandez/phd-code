@@ -2,17 +2,20 @@ import unittest
 import numpy as np
 
 
+from phd.mesh.mesh import Mesh
 from phd.riemann.riemann import HLL
+from phd.equation_state.equation_state import IdealGas
 from phd.utils.particle_creator import HydroParticleCreator
+from phd.reconstruction.reconstruction import PieceWiseConstant
 
 class TestHLLSetup(unittest.TestCase):
     """Tests for the Reconstruction class."""
 
     def setUp(self):
 
-        # setup particles and riemann class
-        self.particles = HydroParticleCreator(num=1, dim=2)
-        self.riemann = HLL()
+       # setup particles and riemann class
+       self.particles = HydroParticleCreator(num=1, dim=2)
+       self.riemann = HLL()
 
     def test_set_fields_for_flux(self):
 
@@ -54,100 +57,69 @@ class TestHLLSetup(unittest.TestCase):
                self.riemann.fluxes.named_groups["momentum"],
                self.particles.named_groups["momentum"])
 
-#def check_array(x, y):
-#    """Check if two array are equal with an absolute tolerance of
-#    1e-16."""
-#    return np.allclose(x, y , atol=1e-16, rtol=0)
-#
-#
-#class TestHLLC(unittest.TestCase):
-#    """Tests for the Reconstruction class."""
-#    def setUp(self):
-#        """Test reconstruction to left and right of face."""
-#
-#        # setup left/right face container 
-#        state_vars = {
-#                "density": "double",
-#                "velocity-x": "double",
-#                "velocity-y": "double",
-#                "pressure": "double",
-#                }
-#        self.left_state  = CarrayContainer(1, var_dict=state_vars)
-#        self.right_state = CarrayContainer(1, var_dict=state_vars)
-#
-#        self.dens_l = self.left_state['density']
-#        self.velx_l = self.left_state['velocity-x']
-#        self.vely_l = self.left_state['velocity-y']
-#        self.pres_l = self.left_state['pressure']
-#
-#        self.dens_r = self.right_state['density']
-#        self.velx_r = self.right_state['velocity-x']
-#        self.vely_r = self.right_state['velocity-y']
-#        self.pres_r = self.right_state['pressure']
-#
-#        # setup face container
-#        state_vars = {
-#                "normal-x": "double",
-#                "normal-y": "double",
-#                "velocity-x": "double",
-#                "velocity-y": "double",
-#                }
-#        self.faces = CarrayContainer(1, var_dict=state_vars)
-#
-#        # the face is perpendicular to the x-axis and has velocity zero
-#        self.nx = self.faces["normal-x"];   self.ny = self.faces["normal-y"]
-#        self.wx = self.faces["velocity-x"]; self.wy = self.faces["velocity-y"]
-#
-#        # setup flux container
-#        flux_vars = {
-#                "mass": "double",
-#                "momentum-x": "double",
-#                "momentum-y": "double",
-#                "energy": "double",
-#                }
-#        self.fluxes = CarrayContainer(1, var_dict=flux_vars)
-#
-#        # compute reconstruction to face
-#        recon = PieceWiseConstant()
-#        self.hllc = HLLC(recon)
-#
-#    def test_left_state(self):
-#
-#        # both particles have the same value
-#        self.dens_l[:] = 1.0; self.dens_r[:] = 1.0
-#        self.velx_l[:] = 2.0; self.velx_r[:] = 2.0
-#        self.vely_l[:] = 0.0; self.vely_r[:] = 0.0
-#        self.pres_l[:] = 0.4; self.pres_r[:] = 0.4
-#
-#        # the face is perpendicular to the x-axis and has velocity zero
-#        self.nx[0] = 1; self.ny[0] = 0
-#        self.wx[0] = 0; self.wy[0] = 0
-#
-#        ans = {"mass": 2.0, "momentum-x": 4.4, "momentum-y": 0.0, "energy": 6.8}
-#        self.hllc.solve(self.fluxes, self.left_state, self.right_state, self.faces, 0., 0., 0)
-#
-#        # left and right states should be the same
-#        for field in self.fluxes.properties.keys():
-#            self.assertAlmostEqual(self.fluxes[field][0], ans[field])
-#
-#    def test_right_state(self):
-#
-#        # both particles have the same value
-#        self.dens_l[:] = 1.0; self.dens_r[:] = 1.0
-#        self.velx_l[:] = -2.; self.velx_r[:] = -2.
-#        self.vely_l[:] = 0.0; self.vely_r[:] = 0.0
-#        self.pres_l[:] = 0.4; self.pres_r[:] = 0.4
-#
-#        # the face is perpendicular to the x-axis and has velocity zero
-#        self.nx[0] = 1; self.ny[0] = 0
-#        self.wx[0] = 0; self.wy[0] = 0
-#
-#        ans = {"mass": -2., "momentum-x": 4.4, "momentum-y": 0.0, "energy": -6.8}
-#        self.hllc.solve(self.fluxes, self.left_state, self.right_state, self.faces, 0., 0., 0)
-#
-#        # left and right states should be the same
-#        for field in self.fluxes.properties.keys():
-#            self.assertAlmostEqual(self.fluxes[field][0], ans[field])
+
+class TestHLLFlux(unittest.TestCase):
+    """Tests for the Reconstruction class."""
+    def setUp(self):
+        """Test reconstruction to left and right of face."""
+
+        # create 2 particles with constant values
+        self.particles = HydroParticleCreator(num=2, dim=2)
+
+        # mesh class
+        self.mesh = Mesh()
+        self.mesh.register_fields(self.particles)
+        self.mesh.initialize()
+
+        # equation of state class
+        self.eos = IdealGas(param_gamma=1.4)
+
+        # reconstruction class
+        self.reconstruction = PieceWiseConstant()
+        self.reconstruction.set_fields_for_reconstruction(
+                self.particles)
+        self.reconstruction.initialize()
+
+        # riemann class
+        self.riemann = HLL(param_boost=False)
+        self.riemann.set_fields_for_riemann(self.particles)
+        self.riemann.initialize()
+
+    def test_left_state(self):
+
+        lt = self.reconstruction.left_states
+        rt = self.reconstruction.right_states
+        lt.resize(1); rt.resize(1)
+
+        # both particles have the same value
+        lt["density"][:]    = 1.0; rt["density"][:]    = 1.0
+        lt["velocity-x"][:] = 2.0; rt["velocity-x"][:] = 2.0
+        lt["velocity-y"][:] = 0.0; rt["velocity-y"][:] = 0.0
+        lt["pressure"][:]   = 0.4; rt["pressure"][:]   = 0.4
+
+        faces = self.mesh.faces
+        faces.resize(1)
+
+        # the face is perpendicular to the x-axis and has velocity zero
+        faces["normal-x"][0]   = 1; faces["normal-y"][0]   = 0
+        faces["velocity-x"][0] = 0; faces["velocity-y"][0] = 0
+
+        ans = {"mass": 2.0, "momentum-x": 4.4, "momentum-y": 0.0, "energy": 6.8}
+        self.riemann.compute_fluxes(self.particles, self.mesh,
+                self.reconstruction, self.eos)
+
+        for field in self.riemann.fluxes.properties.keys():
+            self.assertAlmostEqual(self.riemann.fluxes[field][0], ans[field])
+
+        # reverse fluid flow
+        lt["velocity-x"][:] = -2.; rt["velocity-x"][:] = -2.
+        ans = {"mass": -2.0, "momentum-x": 4.4, "momentum-y": 0.0, "energy": -6.8}
+        self.riemann.compute_fluxes(self.particles, self.mesh,
+                self.reconstruction, self.eos)
+
+        # left and right states should be the same
+        for field in self.riemann.fluxes.properties.keys():
+            self.assertAlmostEqual(self.riemann.fluxes[field][0], ans[field])
 
 if __name__ == "__main__":
     unittest.main()

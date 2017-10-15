@@ -11,9 +11,12 @@ ctypedef vector[nn] nn_vec
 cdef class Mesh:
 
     # initialization parameters
+    cdef public int param_dim
     cdef public double param_eta
     cdef public bint param_regularize
     cdef public int param_num_neighbors
+
+    cdef bint particle_fields_registered
 
     cdef public CarrayContainer faces
 

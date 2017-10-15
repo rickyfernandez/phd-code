@@ -23,27 +23,43 @@ cdef dict face_vars_2d = {
         "normal-y": "double",
         }
 
+cdef dict named_group_2d = {
+        "com": ["com-x", "com-y"],
+        "velocity": ["velocity-x", "velocity-y"],
+        "normal": ["normal-x", "normal-y"]
+        }
+
 # face fields in 3d 
-cdef dict face_vars_3d = face_vars_2d.update({
+cdef dict face_vars_3d = dict(face_vars_2d, **{
     "com-z":      "double",
     "normal-z":   "double",
     "velocity-z": "double"
     })
 
+cdef dict named_group_3d = {
+        "com": ["com-x", "com-y", "com-z"],
+        "velocity": ["velocity-x", "velocity-y", "velocity-z"],
+        "normal": ["normal-x", "normal-y", "normal-z"]
+        }
+
 # particle fields to register in 2d
 cdef dict fields_to_register_2d = {
+        "radius": "double",
         "volume": "double",
         "dcom-x": "double",
-        "dcom-y": "double"
+        "dcom-y": "double",
+        "w-x"   : "double",
+        "w-y"   : "double"
         }
 
 # particle fields to register in 3d
-cdef dict fields_to_register_3d = fields_to_register_2d.update({
-    "dcom-z": "double"
+cdef dict fields_to_register_3d = dict(fields_to_register_2d, **{
+    "dcom-z": "double",
+    "w-z"   : "dobule"
     })
 
 cdef class Mesh:
-    def __init__(self, bint param_regularize=True,
+    def __init__(self, int param_dim=2, bint param_regularize=True,
             double param_eta=0.25, int param_num_neighbors=128):
         """
         Constructor for Mesh base class.
@@ -51,6 +67,7 @@ cdef class Mesh:
         # domain manager needs to be set
         self.particle_fields_registered = False
 
+        self.param_dim = param_dim
         self.param_eta = param_eta
         self.param_regularize = param_regularize
         self.param_num_neighbors = param_num_neighbors
@@ -62,15 +79,24 @@ cdef class Mesh:
         """
         cdef int dim
         cdef str field, dtype
+        cdef str axis, dimension = 'xyz'[:self.param_dim]
         cdef int num_particles = particles.get_number_of_items()
 
         # dimension of the problem
         dim = len(particles.named_groups['position'])
+        if self.param_dim != dim:
+            raise RuntimeError("Inconsistent dimension with particles")
 
-        if dim == 2:
+        if self.param_dim == 2:
             for field, dtype in fields_to_register_2d.iteritems():
                 if field not in particles.carray_info.keys():
-                    particles.register(num_particles, field, dtype)
+                    particles.register_property(num_particles, field, dtype)
+
+            particles.named_groups["w"] = []
+            particles.named_groups["dcom"] = []
+            for axis in dimension:
+                particles.named_groups["w"].append("w-" + axis)
+                particles.named_groups["dcom"].append("dcom-" + axis)
 
 #        elif dim == 3:
 #            for field, dtype in fields_to_register_3d.iteritems():
@@ -89,14 +115,14 @@ cdef class Mesh:
         if not self.particle_fields_registered:
             raise RuntimeError("Fields not registered in particles by Mesh")
 
-        if self.dim == 2:
+        if self.param_dim == 2:
             self.tess = PyTess2d()
             self.faces = CarrayContainer(var_dict=face_vars_2d)
+            self.faces.named_groups = named_group_2d
+
         #elif self.dim == 3:
         #    self.tess = PyTess3d()
         #    self.faces = CarrayContainer(var_dict=face_vars_3d)
-        else:
-            raise RuntimeError("Wrong dimension supplied")
 
     cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
         """
