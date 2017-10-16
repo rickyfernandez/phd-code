@@ -55,7 +55,7 @@ cdef class DomainManager:
 
     # ghost generation
     #cdef filter_radius(self, CarrayContainer particles)
-    cdef setup_for_ghost_creation(self, CarrayContainer particles)
+    cpdef setup_for_ghost_creation(self, CarrayContainer particles)
 
     cdef create_ghost_particles(self, CarrayContainer particles)
     cdef create_interior_ghost_particle(self, FlagParticle* p)

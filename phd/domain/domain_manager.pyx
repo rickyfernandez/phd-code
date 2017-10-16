@@ -1,7 +1,7 @@
 import phd
 
 from libc.math cimport fmin
-from cython.operator cimport dereference as deref, preincrement as inc
+from cython.operator cimport preincrement as inc
 
 from ..utils.tools import check_class
 from ..utils.particle_tags import ParticleTAGS
@@ -37,17 +37,17 @@ cdef class DomainManager:
                 #not self.load_balance or
             raise RuntimeError("Not all setters defined in DomainMangaer")
 
-    @check_class(phd.DomainLimits)
+    #@check_class(phd.DomainLimits)
     def set_domain(self, domain):
         '''add boundary condition to list'''
         self.domain = domain
 
-    @check_class(phd.BoundaryConditionBase)
+    #@check_class(phd.BoundaryConditionBase)
     def set_boundary_condition(self, boundary_condition):
         '''add boundary condition to list'''
         self.boundary_condition = boundary_condition
 
-    @check_class(phd.LoadBalance)
+    #@check_class(phd.LoadBalance)
     def set_load_balance(self, load_balance):
         '''add boundary condition to list'''
         self.load_balance = load_balance
@@ -64,7 +64,7 @@ cdef class DomainManager:
         """
         pass
 
-    cdef setup_for_ghost_creation(self, CarrayContainer particles):
+    cpdef setup_for_ghost_creation(self, CarrayContainer particles):
         """
         Go through each particle and flag for ghost creation. For particles
         with infinite radius use domain size (serial) or partition tile
@@ -75,16 +75,21 @@ cdef class DomainManager:
         pc : CarrayContainer
             Particle data
         """
-        cdef int i, k
+        cdef int i, k, dim
         cdef FlagParticle *p
         cdef double search_radius
         cdef np.float64_t *x[3], *v[3]
         cdef DoubleArray r = particles.get_carray("radius")
 
+        dim = len(particles.named_groups["velocity"])
+
         particles.pointer_groups(x, particles.named_groups['position'])
         particles.pointer_groups(v, particles.named_groups['velocity'])
 
-        # fraction of domain size
+        # set ghost buffer to zero
+        self.ghost_vec.clear()
+
+        # fraction of domain size FIX: search radius should be twice old radius
         search_radius = self.domain.min_length*self.param_box_fraction
         self.flagged_particles.resize(particles.get_number_of_items(), FlagParticle())
 
@@ -111,7 +116,7 @@ cdef class DomainManager:
             p.search_radius = self.param_search_radius_factor*r.data[i]
 
             # copy position and velocity
-            for k in range(self.dim):
+            for k in range(dim):
                 p.x[k] = x[k][i]
                 p.v[k] = v[k][i]
 
