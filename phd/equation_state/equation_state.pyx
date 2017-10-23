@@ -25,6 +25,10 @@ cdef class EquationStateBase:
         msg = "EquationStateBase::pressure_by_index called!"
         raise NotImplementedError(msg)
 
+    cpdef np.float64_t get_gamma(self):
+        msg = "EquationStateBase::get_gamma called!"
+        raise NotImplementedError(msg)
+
 cdef class IdealGas(EquationStateBase):
     def __init__(self, param_gamma = 1.4):
         self.param_gamma = param_gamma
@@ -111,3 +115,6 @@ cdef class IdealGas(EquationStateBase):
         Sound speed of particle
         """
         return sqrt(self.param_gamma*pressure/density)
+
+    cpdef np.float64_t get_gamma(self):
+        return self.param_gamma
