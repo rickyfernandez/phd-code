@@ -35,34 +35,37 @@ void Tess2d::reset_tess(void) {
 int Tess2d::build_initial_tess(
         double *x[3],
         double *radius,
-        int num_particles) {
+        int start_new_ghost,
+        int stop_new_ghost) {
     
     // save local number of particles
-    local_num_particles = num_particles;
+    local_num_particles = start_new_ghost;
 
     // gernerating vertices for the tesselation 
     std::vector<Point> particles;
-    for (int i=0; i<local_num_particles; i++)
+    for (int i=0; i<stop_new_ghost; i++)
         particles.push_back(Point(x[0][i], x[1][i]));
 
     // create tessellation
     ptess = (void*) new Tess;
-    pvt_list = (void*) (new std::vector<Vertex_handle>(local_num_particles));
+    pvt_list = (void*) (new std::vector<Vertex_handle>(stop_new_ghost));
 
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
 
     Vertex_handle vt;
-    for (int i=0; i<local_num_particles; i++) {
+    for (int i=0; i<stop_new_ghost; i++) {
         vt = tess.insert(particles[i]);
         vt->info() = i;
         vt_list[i] = vt;
     }
 
-    for (int i=0; i<local_num_particles; i++) {
+    // only real particles
+    for (int i=0; i<start_new_ghost; i++) {
 
         const Vertex_handle &vi = vt_list[i];
         const Point& pos = particles[i];
+        bool infinite_radius = false;
         double radius_max_sq = 0.0;
 
         // find all edges that are incident with particle vertex
@@ -100,20 +103,23 @@ int Tess2d::build_initial_tess(
                 }
             } else {
                 // voronoi not complete
-                radius_max_sq = -1;
+                infinite_radius = true;
                 break;
             }
 
             // infinite face case is considered because a particle can
             // have all faces that are rays
-            //} else if (CGAL::object_cast<K::Ray_2>(&o)) {
+            // else if (CGAL::object_cast<K::Ray_2>(&o)) 
             //
             //   radius_max_sq = huge;
-            //}
+            //
 
         } while (++ed != done);
 
-        radius[i] = 2.01*std::sqrt(radius_max_sq);
+        if (infinite_radius)
+            radius[i] = -1;
+        else
+            radius[i] = 2.0*std::sqrt(radius_max_sq);
     }
     //std::size_t memory = CGAL::Memory_sizer().resident_size();
     //std::cout << "Tessellation size: " << (memory >> 20) <<  " Mib" <<std::endl;
@@ -124,6 +130,9 @@ int Tess2d::update_initial_tess(
         double *x[3],
         int begin_particles,
         int end_particles) {
+
+    if (begin_particles == end_particles)
+        return 0;
 
     Tess &tess = *(Tess*) ptess;
 
@@ -338,6 +347,7 @@ int Tess2d::update_radius(
         int i = it->index;
         const Vertex_handle &vi = vt_list[i];
         double xp = x[0][i], yp = x[1][i];
+        bool infinite_radius = false;
         double radius_max_sq = 0.0;
 
         // find all edges that are incident with particle vertex
@@ -370,12 +380,16 @@ int Tess2d::update_radius(
                 }
             } else {
                 // voronoi not complete
-                radius_max_sq = -1;
+                //radius_max_sq = -1;
+                infinite_radius = true;
                 break;
             }
         } while (++ed != done);
 
-        radius[i] = 2.01*std::sqrt(radius_max_sq);
+        if (infinite_radius)
+            radius[i] = -1 ;
+        else
+            radius[i] = 2.0*std::sqrt(radius_max_sq);
     }
     return 0;
 }

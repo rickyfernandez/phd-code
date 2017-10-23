@@ -3,7 +3,8 @@ cdef class PyTess:
     cdef void reset_tess(self):
         raise NotImplementedError, 'PyTess::reset_tess'
 
-    cdef int build_initial_tess(self, double *x[3], double *radius_sq, int num_particles):
+    #cdef int build_initial_tess(self, double *x[3], double *radius_sq, int num_particles):
+    cdef int build_initial_tess(self, double *x[3], double *radius_sq, int start_new_ghost, int stop_new_ghost):
         raise NotImplementedError, 'PyTess::build_initial_tess'
 
     cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles):
@@ -30,8 +31,10 @@ cdef class PyTess2d(PyTess):
     cdef void reset_tess(self):
         self.thisptr.reset_tess()
 
-    cdef int build_initial_tess(self, double *x[3], double *radius_sq, int num_particles):
-        return self.thisptr.build_initial_tess(x, radius_sq, num_particles)
+    #cdef int build_initial_tess(self, double *x[3], double *radius_sq, int num_particles):
+    cdef int build_initial_tess(self, double *x[3], double *radius_sq, int start_new_ghost, int stop_new_ghost):
+        #return self.thisptr.build_initial_tess(x, radius_sq, num_particles)
+        return self.thisptr.build_initial_tess(x, radius_sq, start_new_ghost, stop_new_ghost)
 
     cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles):
         return self.thisptr.update_initial_tess(x, begin_particles, end_particles)

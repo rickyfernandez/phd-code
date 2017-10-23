@@ -1,5 +1,4 @@
 import numpy as np
-cimport numpy as np
 from libc.math cimport sqrt
 cimport libc.stdlib as stdlib
 
@@ -7,6 +6,29 @@ from ..mesh.pytess cimport PyTess2d#, PyTess3d
 from ..utils.particle_tags import ParticleTAGS
 from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, LongArray, IntArray
+
+cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
+    """
+    Check if particle bounding box overlaps with a box defined by bounds.
+
+    Parameters
+    ----------
+    x : array[3]
+        Particle position
+    r : np.float64_t
+        Particle radius
+    bounds : array[2][3]
+        min/max of bounds in each dimension
+    dim : int
+        Problem dimension
+    """
+    cdef int i
+    for i in range(dim):
+        if x[i] + r < bounds[0][i]:
+            return False
+        if x[i] - r > bounds[1][i]:
+            return False
+    return True
 
 cdef int REAL = ParticleTAGS.Real
 
@@ -44,7 +66,6 @@ cdef dict named_group_3d = {
 
 # particle fields to register in 2d
 cdef dict fields_to_register_2d = {
-        "radius": "double",
         "volume": "double",
         "dcom-x": "double",
         "dcom-y": "double",
@@ -131,21 +152,24 @@ cdef class Mesh:
         and export them. Continue the process unitil the mesh is
         complete.
         """
+        cdef int i
         cdef int fail
         cdef np.float64_t *xp[3], *rp
-        cdef int begin_particles, end_particles
+        cdef int start_new_ghost, stop_new_ghost
         cdef DoubleArray r = particles.get_carray("radius")
 
         # remove current ghost particles
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
-        end_particles = particles.get_number_of_items()
+        start_new_ghost = stop_new_ghost = particles.get_number_of_items()
 
         # reference position and radius 
         rp = r.get_data_ptr()
         particles.pointer_groups(xp, particles.named_groups["position"])
 
         # first attempt of mesh, radius updated
-        assert(self.tess.build_initial_tess(xp, rp, end_particles) != -1)
+        #assert(self.tess.build_initial_tess(xp, rp, end_particles) != -1)
+        assert(self.tess.build_initial_tess(xp,
+            rp, start_new_ghost, stop_new_ghost) != -1)
 
         # every infinite radius set to boundary 
         domain_manager.setup_for_ghost_creation(particles)
@@ -153,21 +177,27 @@ cdef class Mesh:
         while True:
 
             # add ghost particles untill mesh is complete
-            begin_particles = particles.get_number_of_items()
+            #start_new_ghost = particles.get_number_of_items()
             domain_manager.create_ghost_particles(particles)
-            end_particles = particles.get_number_of_items()
+            stop_new_ghost = particles.get_number_of_items()
 
             # because of malloc
             rp = r.get_data_ptr()
             particles.pointer_groups(xp, particles.named_groups['position'])
 
             # add ghost particle to mesh
-            # FIX: allow to continual add ghost particles
-            assert(self.tess.update_initial_tess(xp,
-                begin_particles, end_particles) != -1)
+            if start_new_ghost != stop_new_ghost:
+
+                # FIX: having a problem with cgal adding particles
+                self.reset_mesh()
+                assert(self.tess.build_initial_tess(xp, rp,
+                    start_new_ghost, stop_new_ghost) != -1)
+                #assert(self.tess.update_initial_tess(xp,
+                #    start_new_ghost, stop_new_ghost) != -1)
+
+                self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
 
             # update radius of old flagged particles 
-            self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
             domain_manager.update_search_radius(particles)
 
             # if all process are done flagging
@@ -194,7 +224,7 @@ cdef class Mesh:
         cdef np.int32_t *pair_i, *pair_j
         cdef np.float64_t *area, *nx[3], *com[3]
 
-        cdef int num_faces, i, j, fail, dim = self.dim
+        cdef int num_faces, i, j, fail
 
         # release memory used in the tessellation
         self.reset_mesh()
@@ -229,12 +259,42 @@ cdef class Mesh:
 
         # tmp for now
         self.faces.resize(fail)
-
-        # transfer particle information to ghost particles
-        domain_manager.values_to_ghost(particles, self.fields)
+#
+#        # transfer particle information to ghost particles
+#        #domain_manager.values_to_ghost(particles, self.fields)
 
     cpdef reset_mesh(self):
         self.tess.reset_tess()
+
+    cpdef relax(self, CarrayContainer particles, DomainManager domain_manager):
+        """
+        Perform mesh relaxation by moving particles to there
+        center of mass.
+        """
+        cdef double xp[3]
+        cdef np.float64_t *x[3], *dcx[3]
+        cdef int i, k, dim, num_real_particles
+        cdef IntArray tags = particles.get_carray("tag")
+
+        dim = len(particles.named_groups['position'])
+
+        particles.remove_tagged_particles(ParticleTAGS.Ghost)
+        num_real_particles = particles.get_number_of_items()
+
+        self.build_geometry(particles, domain_manager)
+        particles.pointer_groups(x,   particles.named_groups['position'])
+        particles.pointer_groups(dcx, particles.named_groups['dcom'])
+        for i in range(num_real_particles):
+            for k in range(dim):
+                x[k][i] += dcx[k][i]
+                xp[k] = x[k][i]
+
+            # particles can leave the domain flag as ghost to be removed
+            if not in_box(xp, 0., domain_manager.domain.bounds, dim):
+                tags.data[i] = ParticleTAGS.Ghost
+
+        particles.remove_tagged_particles(ParticleTAGS.Ghost)
+        self.build_geometry(particles, domain_manager)
 
     cdef assign_generator_velocities(self, CarrayContainer particles):
         """
@@ -372,7 +432,7 @@ cdef class Mesh:
                 e.data[i] -= dt*a*fe.data[n]  # energy
 
                 # momentum
-                for k in range(self.dim):
+                for k in range(dim):
                     mv[k][i] -= dt*a*fmv[k][n]
 
             # flux leaving cell defined by particle j

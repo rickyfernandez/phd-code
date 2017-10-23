@@ -61,7 +61,8 @@ class Tess2d {
     public:
         Tess2d(void);
         void reset_tess(void);
-        int build_initial_tess(double *x[3], double *radius_sq, int num_particles); 
+        //int build_initial_tess(double *x[3], double *radius_sq, int num_particles); 
+        int build_initial_tess(double *x[3], double *radius_sq, int start_new_ghost, int stop_new_ghost); 
         int update_initial_tess(double *x[3], int begin_particles, int end_particles);
         int count_number_of_faces(void);
         int extract_geometry(double* x[3], double* dcom[3], double* volume,

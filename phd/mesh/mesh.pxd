@@ -1,3 +1,4 @@
+cimport numpy as np
 from libcpp.vector cimport vector
 
 from ..mesh.pytess cimport PyTess
@@ -7,6 +8,8 @@ from ..containers.containers cimport CarrayContainer
 
 ctypedef vector[int] nn           # nearest neighbors
 ctypedef vector[nn] nn_vec
+
+cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim)
 
 cdef class Mesh:
 
@@ -27,6 +30,7 @@ cdef class Mesh:
     cpdef reset_mesh(self)
     cpdef tessellate(self, CarrayContainer pc, DomainManager domain_manager)
     cpdef build_geometry(self, CarrayContainer pc, DomainManager domain_manager)
+    cpdef relax(self, CarrayContainer particles, DomainManager domain_manager)
 
     cdef assign_generator_velocities(self, CarrayContainer particles)
     cdef assign_face_velocities(self, CarrayContainer particles)

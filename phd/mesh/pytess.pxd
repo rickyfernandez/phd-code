@@ -10,7 +10,8 @@ cdef extern from "tess.h":
     cdef cppclass Tess2d:
         Tess2d() except +
         void reset_tess()
-        int build_initial_tess(double *x[3], double *radius_sq, int num_particles)
+        #int build_initial_tess(double *x[3], double *radius_sq, int num_particles)
+        int build_initial_tess(double *x[3], double *radius_sq, int start_new_ghost, int stop_new_ghost)
         int update_initial_tess(double *x[3], int begin_particles, int end_particles)
         int count_number_of_faces()
         int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
@@ -32,7 +33,8 @@ cdef extern from "tess.h":
 cdef class PyTess:
 
     cdef void reset_tess(self)
-    cdef int build_initial_tess(self, double *x[3], double *radius_sq, int num_particles)
+    #cdef int build_initial_tess(self, double *x[3], double *radius_sq, int num_particles)
+    cdef int build_initial_tess(self, double *x[3], double *radius_sq, int start_new_ghost, int stop_new_ghost)
     cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles)
     cdef int count_number_of_faces(self)
     cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
