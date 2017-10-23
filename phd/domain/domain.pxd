@@ -6,8 +6,8 @@ cdef class DomainLimits:
     cdef np.float64_t[2][3] bounds
     cdef public np.float64_t max_length, min_length
 
-    cdef public np.float64_t xmin
-    cdef public np.float64_t xmax
+    cdef np.float64_t[3] xmin
+    cdef np.float64_t[3] xmax
 
     cdef public int dim
     #cdef public bint is_periodic

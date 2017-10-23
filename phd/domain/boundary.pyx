@@ -53,7 +53,7 @@ cdef class Reflective(BoundaryConditionBase):
         cdef double xs[3], vs[3]
         cdef int dim = domain_manager.domain.dim
 
-        # skip if it does not intersect boundary
+        # skip particle does not intersect boundary
         if in_box(p.x, p.search_radius, domain_manager.domain.bounds, dim):
 
             # extract real particle
@@ -61,51 +61,58 @@ cdef class Reflective(BoundaryConditionBase):
 
                 # lower boundary
                 # does particle radius leave global boundary 
-                if p.x[i] - p.search_radius < domain_manager.domain.bounds[0][i]:
+                # skip if processed in earlier iteration 
+                if p.x[i] < domain_manager.domain.translate[i]/2.0:
+                    if(p.x[i] - p.search_radius < domain_manager.domain.bounds[0][i]) and\
+                        (p.x[i] - p.old_search_radius > domain_manager.domain.bounds[0][i]):
 
-                    # copy particle information
-                    for k in range(dim):
-                        xs[k] = p.x[k]
-                        vs[k] = p.v[k]
+                        # copy particle information
+                        for k in range(dim):
+                            xs[k] = p.x[k]
+                            vs[k] = p.v[k]
 
-                    # reflect particle position and velocity 
-                    xs[i] =  xs[i] - 2*(xs[i] - domain_manager.domain.bounds[0][i])
-                    vs[i] = -vs[i]
+                        # reflect particle position and velocity 
+                        xs[i] =  xs[i] - 2*(xs[i] - domain_manager.domain.bounds[0][i])
+                        vs[i] = -vs[i]
 
-                    # create ghost particle
-                    domain_manager.ghost_vec.push_back(
-                            BoundaryParticle(xs, vs,
-                                p.index, 0, REFLECTIVE, dim))
+                        # create ghost particle
+                        domain_manager.ghost_vec.push_back(
+                                BoundaryParticle(xs, vs,
+                                    p.index, 0, REFLECTIVE, dim))
 
                 # upper boundary
                 # does particle radius leave global boundary 
-                if domain_manager.domain.bounds[1][i] < p.x[i] + p.search_radius:
+                # skip if processed in earlier iteration 
+                if p.x[i] > domain_manager.domain.translate[i]/2.0:
+                    if (domain_manager.domain.bounds[1][i] < p.x[i] + p.search_radius) and\
+                        (domain_manager.domain.bounds[1][i] > p.x[i] + p.old_search_radius):
 
-                    # copy particle information
-                    for k in range(dim):
-                        xs[k] = p.x[k]
-                        vs[k] = p.v[k]
+                        # copy particle information
+                        for k in range(dim):
+                            xs[k] = p.x[k]
+                            vs[k] = p.v[k]
 
-                    # reflect particle position and velocity
-                    xs[i] =  xs[i] - 2*(xs[i] - domain_manager.domain.bounds[1][i])
-                    vs[i] = -vs[i]
+                        # reflect particle position and velocity
+                        xs[i] =  xs[i] - 2*(xs[i] - domain_manager.domain.bounds[1][i])
+                        vs[i] = -vs[i]
 
-                    # create ghost particle
-                    domain_manager.ghost_vec.push_back(
-                            BoundaryParticle(xs, vs,
-                                p.index, 0, REFLECTIVE, dim))
+                        # create ghost particle
+                        domain_manager.ghost_vec.push_back(
+                                BoundaryParticle(xs, vs,
+                                    p.index, 0, REFLECTIVE, dim))
 
 cdef class Periodic(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
         """
         Create periodic ghost particles in the simulation. Should only be used in
+        serial run.
         """
         cdef int j, k
         cdef double xs[3]
         cdef int index[3]
         cdef int dim = domain_manager.domain.dim
 
-        # skip if it does not intersect boundary
+        # skip partilce if does not intersect boundary
         if in_box(p.x, p.search_radius, domain_manager.domain.bounds, dim):
 
             # shift particle
@@ -116,19 +123,22 @@ cdef class Periodic(BoundaryConditionBase):
                 if (i == 4 and dim == 2) or (i == 13 and dim == 3):
                     continue # skip no shift
 
-                # shifted position
+                # shifted particle
                 for k in range(dim):
                     xs[k] = p.x[k] +\
                             (index[k]-1)*domain_manager.domain.translate[k]
 
                 # find if shifted particle intersects domain
-                if in_box(xs, p.search_radius,
-                        domain_manager.domain.bounds, dim):
+                # skip if processed in earlier iteration 
+                if(in_box(xs, p.search_radius,
+                        domain_manager.domain.bounds, dim)) and\
+                                not (in_box(xs, p.old_search_radius,
+                                    domain_manager.domain.bounds, dim)):
 
-                    # create ghost particle
-                    domain_manager.ghost_vec.push_back(
-                            BoundaryParticle(xs, p.v,
-                                p.index, 0, PERIODIC, dim))
+                        # create ghost particle
+                        domain_manager.ghost_vec.push_back(
+                                BoundaryParticle(xs, p.v,
+                                    p.index, 0, PERIODIC, dim))
 
 #cdef class Reflective(BoundaryBase):
 #    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)

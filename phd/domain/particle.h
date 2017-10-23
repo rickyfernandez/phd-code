@@ -7,7 +7,7 @@ struct FlagParticle{
     double x[3];
     double v[3];
     int index;
-    double radius;
+    double old_search_radius;
     double search_radius;
 };
 

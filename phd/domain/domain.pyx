@@ -1,22 +1,27 @@
+import numpy as np
 
 cdef class DomainLimits:
     """
     Physical dimensions of the simulation space
     """
-    def __init__(self, int dim=2, double xmin=0, double xmax=1.0):
-        self._check_limits(xmin, xmax)
+    def __init__(self, np.ndarray[np.float64_t, ndim=1] xmin,
+            np.ndarray[np.float64_t, ndim=1] xmax, int dim=2):
+        #self._check_limits(xmin, xmax)
 
         # only square boxes for now
-        self.xmin = xmin
-        self.xmax = xmax
+        #self.xmin = xmin
+        #self.xmax = xmax
 
+        self.min_length = 0.
+        self.max_length = 0.
         for i in range(dim):
-            self.bounds[0][i] = xmin
-            self.bounds[1][i] = xmax
-            self.translate[i] = xmax - xmin
+            self.bounds[0][i] = xmin[i]
+            self.bounds[1][i] = xmax[i]
+            self.translate[i] = xmax[i] - xmin[i]
+            #print 'translate', self.translate[i]
 
-        self.max_length = xmax - xmin
-        self.min_length = xmax - xmin
+            self.min_length = min(self.min_length, self.translate[i])
+            self.max_length = max(self.max_length, self.translate[i])
 
         # store the dimension
         self.dim = dim
