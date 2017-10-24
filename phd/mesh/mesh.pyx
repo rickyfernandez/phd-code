@@ -268,8 +268,11 @@ cdef class Mesh:
 
     cpdef relax(self, CarrayContainer particles, DomainManager domain_manager):
         """
-        Perform mesh relaxation by moving particles to there
-        center of mass.
+        Perform mesh relaxation by moving particles to their center of mass.
+        Particles that move outside the domain and ghost particles are removed
+        from the container. This allows to call this method multiple times, without
+        building the mesh twice per call. You will have build the mesh after this
+        call to get ghost particles.
         """
         cdef double xp[3]
         cdef np.float64_t *x[3], *dcx[3]
@@ -281,7 +284,10 @@ cdef class Mesh:
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
         num_real_particles = particles.get_number_of_items()
 
+        # create ghost, extract geometric values
         self.build_geometry(particles, domain_manager)
+
+        # update real particle positions
         particles.pointer_groups(x,   particles.named_groups['position'])
         particles.pointer_groups(dcx, particles.named_groups['dcom'])
         for i in range(num_real_particles):
@@ -289,12 +295,12 @@ cdef class Mesh:
                 x[k][i] += dcx[k][i]
                 xp[k] = x[k][i]
 
+            # FIX: put this in the boundary class
             # particles can leave the domain flag as ghost to be removed
             if not in_box(xp, 0., domain_manager.domain.bounds, dim):
                 tags.data[i] = ParticleTAGS.Ghost
 
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
-        self.build_geometry(particles, domain_manager)
 
     cdef assign_generator_velocities(self, CarrayContainer particles):
         """
