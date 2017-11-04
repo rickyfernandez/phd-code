@@ -356,7 +356,7 @@ cdef class DomainManager:
                 for k in range(dim):
                     x[k][i] += dt*wx[k][i]
 
-    cpdef migrate_particles(self, CarrayContainer pc):
+    cpdef migrate_particles(self, CarrayContainer particles):
         """
         For particles that have left the domain or processor patch
         move particles to their appropriate spot.
