@@ -39,6 +39,10 @@ cdef class BoundaryConditionBase:
         msg = "BoundaryBase::create_ghost_particle_serial!"
         raise NotImplementedError(msg)
 
+    cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
+        msg = "BoundaryBase::create_ghost_particle_serial!"
+        raise NotImplementedError(msg)
+
 cdef class Reflective(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
         """
@@ -101,6 +105,37 @@ cdef class Reflective(BoundaryConditionBase):
                                 BoundaryParticle(xs, vs,
                                     p.index, 0, REFLECTIVE, dim))
 
+    cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
+        pass
+#
+#        cdef np.float64_t xp[3], *x[3]
+#        cdef int i, j, dim, is_outside
+#
+#        particles.remove_tagged_particles(ParticleTAGS.Ghost)
+#
+#        dim = len(particles.named_groups['position'])
+#        particles.pointer_groups(x, particles.named_groups['position'])
+#
+#        for i in range(particles.get_number_of_items()):
+#
+#            # did particle leave domain
+#            is_outside = 0
+#            for j in range(dim):
+#                xp[j] = x[j][i]
+#                is_outside += xp[j] <= domain_manager.domain.bounds[0][j] or domain_manager.domain.bounds[1][j] <= xp[j]
+#
+#            if is_outside: # particle left domain
+#                raise RuntimeError("particle left domain in reflective boundary condition!!")
+
+
+#    cdef void create_ghost_particle_serial(self, np.float64_t xp[3], DomainManager domain_manager):
+#        cdef int k
+#        cdef int dim = domain_manager.domain.dim
+#
+#        for k in range(dim):
+#            if not in_box(p.x, 0.0, domain_manager.domain.bounds, dim):
+#                raise RuntimeError("particle left domain in reflective boundary condition!!")
+
 cdef class Periodic(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
         """
@@ -139,6 +174,16 @@ cdef class Periodic(BoundaryConditionBase):
                         domain_manager.ghost_vec.push_back(
                                 BoundaryParticle(xs, p.v,
                                     p.index, 0, PERIODIC, dim))
+
+#    cdef void create_ghost_particle_serial(self, np.float64_t x[3], np.float64_t *xp[3], DomainManager domain_manager):
+#        cdef int k
+#        cdef int dim = domain_manager.domain.dim
+#
+#        for j in range(dim):
+#            if x[j] <= self.domain.bounds[0][j]:
+#                xp[j][i] += self.domain.translate[j]
+#            if x[j] >= self.domain.bounds[1][j]:
+#                xp[j][i] -= self.domain.translate[j]
 
 #cdef class Reflective(BoundaryBase):
 #    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)
