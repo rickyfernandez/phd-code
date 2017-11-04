@@ -7,28 +7,28 @@ from ..utils.particle_tags import ParticleTAGS
 from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, LongArray, IntArray
 
-cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
-    """
-    Check if particle bounding box overlaps with a box defined by bounds.
-
-    Parameters
-    ----------
-    x : array[3]
-        Particle position
-    r : np.float64_t
-        Particle radius
-    bounds : array[2][3]
-        min/max of bounds in each dimension
-    dim : int
-        Problem dimension
-    """
-    cdef int i
-    for i in range(dim):
-        if x[i] + r < bounds[0][i]:
-            return False
-        if x[i] - r > bounds[1][i]:
-            return False
-    return True
+#cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
+#    """
+#    Check if particle bounding box overlaps with a box defined by bounds.
+#
+#    Parameters
+#    ----------
+#    x : array[3]
+#        Particle position
+#    r : np.float64_t
+#        Particle radius
+#    bounds : array[2][3]
+#        min/max of bounds in each dimension
+#    dim : int
+#        Problem dimension
+#    """
+#    cdef int i
+#    for i in range(dim):
+#        if x[i] + r < bounds[0][i]:
+#            return False
+#        if x[i] - r > bounds[1][i]:
+#            return False
+#    return True
 
 cdef int REAL = ParticleTAGS.Real
 
@@ -123,6 +123,9 @@ cdef class Mesh:
 #            for field, dtype in fields_to_register_3d.iteritems():
 #                if field not in particles.carray_info.keys():
 #                    particles.register(num_particles, field, dtype)
+
+#        self.update_ghost_fields = list(particles.named_groups['dcom'])
+#        self.update_ghost_fields.append('volume')
 
         # record fields have been registered
         self.particle_fields_registered = True
@@ -232,6 +235,7 @@ cdef class Mesh:
 
         # allocate memory for face information
         num_faces = self.tess.count_number_of_faces()
+        assert(num_faces != -1)
         self.faces.resize(num_faces)
 
         # pointers to particle data 
@@ -259,9 +263,9 @@ cdef class Mesh:
 
         # tmp for now
         self.faces.resize(fail)
-#
-#        # transfer particle information to ghost particles
-#        #domain_manager.values_to_ghost(particles, self.fields)
+
+        # transfer particle information to ghost particles
+#        domain_manager.values_to_ghost(particles, self.update_ghost_fields)
 
     cpdef reset_mesh(self):
         self.tess.reset_tess()
@@ -295,22 +299,18 @@ cdef class Mesh:
                 x[k][i] += dcx[k][i]
                 xp[k] = x[k][i]
 
-            # FIX: put this in the boundary class
-            # particles can leave the domain flag as ghost to be removed
-            if not in_box(xp, 0., domain_manager.domain.bounds, dim):
-                tags.data[i] = ParticleTAGS.Ghost
+        #domain_manager.migrate_boundary_particles(particles)
 
-        particles.remove_tagged_particles(ParticleTAGS.Ghost)
-
-    cdef assign_generator_velocities(self, CarrayContainer particles):
+    cpdef assign_generator_velocities(self, CarrayContainer particles, EquationStateBase equation_state):
         """
         Assigns particle velocities. Particle velocities are
         equal to local fluid velocity plus a regularization
         term. The algorithm is taken from Springel (2009).
         """
         # particle values
+        cdef DoubleArray r = particles.get_carray("density")
+        cdef DoubleArray p = particles.get_carray("pressure")
         cdef DoubleArray vol = particles.get_carray("volume")
-        cdef DoubleArray cs  = particles.get_carray('sound-speed')
 
         # local variables
         cdef int i, k, dim
@@ -333,7 +333,7 @@ cdef class Mesh:
             if self.param_regularize:
 
                 # sound speed 
-                c = cs.data[i]
+                c = equation_state.sound_speed(r.data[i], p.data[i])
 
                 # distance form cell com to particle position
                 d = 0.0
@@ -356,7 +356,7 @@ cdef class Mesh:
                     for k in range(dim):
                         wx[k][i] += c*dcx[k][i]/d
 
-    cdef assign_face_velocities(self, CarrayContainer particles):
+    cpdef assign_face_velocities(self, CarrayContainer particles):
         """
         Assigns velocities to the center of mass of the face
         defined by neighboring particles. The face velocity
@@ -399,7 +399,7 @@ cdef class Mesh:
             for k in range(dim):
                 fv[k][n] = 0.5*(wx[k][i] + wx[k][j]) + factor*(x[k][j] - x[k][i])
 
-    cdef update_from_fluxes(self, CarrayContainer particles, RiemannBase riemann, double dt):
+    cpdef update_from_fluxes(self, CarrayContainer particles, RiemannBase riemann, double dt):
         """Update conserative variables from fluxes"""
 
         # face information
