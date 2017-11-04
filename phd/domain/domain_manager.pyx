@@ -6,9 +6,10 @@ from cython.operator cimport preincrement as inc
 from ..utils.tools import check_class
 from ..utils.particle_tags import ParticleTAGS
 
+cdef int Real = ParticleTAGS.Real
 cdef int Ghost = ParticleTAGS.Ghost
+cdef int Exterior = ParticleTAGS.Exterior
 
-# FIX: ids -> id
 cdef dict fields_for_parallel = {
         "key": "longlong",
         "process": "long",
@@ -50,7 +51,6 @@ cdef class DomainManager:
                 if field not in particles.carray_info.keys():
                     particles.register_property(num_particles, field, dtype)
 
-        particles.register_property(num_particles, 'ids', 'long')
         particles.register_property(num_particles, 'map', 'long')
         particles.register_property(num_particles, 'radius', 'double')
         particles.register_property(num_particles, 'old_radius', 'double')
@@ -64,7 +64,7 @@ cdef class DomainManager:
             raise RuntimeError("Not all setters defined in DomainMangaer")
 
     #@check_class(phd.DomainLimits)
-    def set_domain(self, domain):
+    def set_domain_limits(self, domain):
         '''add boundary condition to list'''
         self.domain = domain
 
@@ -113,14 +113,16 @@ cdef class DomainManager:
         cdef int i, k, dim
         cdef FlagParticle *p
         cdef double search_radius
-        cdef np.float64_t *x[3], *v[3]
+        #cdef np.float64_t *x[3], *v[3]
+        cdef np.float64_t *x[3], *mv[3]
         cdef DoubleArray r = particles.get_carray("radius")
         cdef DoubleArray rold = particles.get_carray("old_radius")
 
-        dim = len(particles.named_groups["velocity"])
+        dim = len(particles.named_groups["position"])
 
         particles.pointer_groups(x, particles.named_groups['position'])
-        particles.pointer_groups(v, particles.named_groups['velocity'])
+        #particles.pointer_groups(v, particles.named_groups['velocity'])
+        particles.pointer_groups(mv, particles.named_groups['momentum'])
 
         # set ghost buffer to zero
         self.ghost_vec.clear()
@@ -155,7 +157,8 @@ cdef class DomainManager:
             # copy position and velocity
             for k in range(dim):
                 p.x[k] = x[k][i]
-                p.v[k] = v[k][i]
+                #p.v[k] = v[k][i]
+                p.v[k] = mv[k][i]
 
             # next particle
             inc(it)
@@ -251,14 +254,14 @@ cdef class DomainManager:
         """
         cdef IntArray tags
         cdef LongArray maps
-        cdef DoubleArray mass
+        cdef IntArray types
 
         cdef int i, k, dim
         cdef BoundaryParticle *p
         cdef CarrayContainer ghosts
         cdef LongArray indices = LongArray()
 
-        cdef np.float64_t *xg[3], *vg[3], *mv[3]
+        cdef np.float64_t *xg[3], *mvg[3]
 
         dim = len(particles.named_groups['position'])
 
@@ -274,27 +277,26 @@ cdef class DomainManager:
         # copy all particles to make ghost from
         ghosts = particles.extract_items(indices)
 
-        tags = ghosts.get_carray("tag")
-        maps = ghosts.get_carray("map")
-        mass = ghosts.get_carray("mass")
+        tags  = ghosts.get_carray("tag")
+        types = ghosts.get_carray("type")
+        maps  = ghosts.get_carray("map")
 
-        ghosts.pointer_groups(mv, particles.named_groups['momentum'])
-        ghosts.pointer_groups(xg, particles.named_groups['position'])
-        ghosts.pointer_groups(vg, particles.named_groups['velocity'])
+        ghosts.pointer_groups(mvg, particles.named_groups['momentum'])
+        ghosts.pointer_groups(xg,  particles.named_groups['position'])
 
         # transfer ghost position and velocity 
         for i in range(self.ghost_vec.size()):
             p = &self.ghost_vec[i]
 
-            maps.data[i] = p.index # reference to image
-            tags.data[i] = Ghost   # ghost label
+            maps.data[i]  = p.index # reference to image
+            tags.data[i]  = Ghost   # ghost label
+            types.data[i] = Exterior
 
             for k in range(dim):
 
                 # update values
                 xg[k][i] = p.x[k]
-                vg[k][i] = p.v[k]
-                mv[k][i] = mass.data[i]*p.v[k]
+                mvg[k][i] = p.v[k] # momentum not velocity
 
         # add new ghost to total ghost container
         particles.append_container(ghosts)
@@ -310,8 +312,67 @@ cdef class DomainManager:
             return self.flagged_particles.empty()
 
     cdef values_to_ghost(self, CarrayContainer particles, list fields):
-        pass
+        """
+        Transfer data from image particle to ghost particle.
 
+        Parameters
+        ----------
+        pc : CarrayContainer
+            Particle data
+        fields : list
+            List of field strings to update
+        """
+        cdef int i
+        cdef str field
+        cdef LongArray indices = LongArray()
+        cdef np.ndarray indices_npy, map_indices_npy
+        cdef IntArray types = particles.get_carray("type")
+
+        # find all ghost that need to be updated
+        for i in range(particles.get_number_of_items()):
+            if types.data[i] == Exterior:
+                indices.append(i)
+
+        if indices.length:
+
+            indices_npy = indices.get_npy_array()
+            map_indices_npy = particles["map"][indices_npy]
+
+            # update ghost with their image data
+            for field in fields:
+                particles[field][indices_npy] = particles[field][map_indices_npy]
+
+    cpdef move_generators(self, CarrayContainer particles, double dt):
+        """
+        Move particles after flux update.
+        """
+        cdef int i, k, dim
+        cdef np.float64_t *x[3], *wx[3]
+        cdef IntArray tags = particles.get_carray("tag")
+        cdef LongArray ids = particles.get_carray("ids")
+
+        dim = len(particles.named_groups['position'])
+        particles.pointer_groups(x,  particles.named_groups['position'])
+        particles.pointer_groups(wx, particles.named_groups['w'])
+
+        for i in range(particles.get_number_of_items()):
+            if tags.data[i] == Real:
+
+                if ids.data[i] == 149:
+                    print 'move_generator', i, ids.data[i], tags.data[i], x[0][i], dt, wx[0][i]
+                if ids.data[i] == 249:
+                    print 'move_generator', i, ids.data[i], tags.data[i], x[0][i], dt, wx[0][i]
+
+                for k in range(dim):
+                    x[k][i] += dt*wx[k][i]
+
+    cpdef migrate_particles(self, CarrayContainer pc):
+        """
+        For particles that have left the domain or processor patch
+        move particles to their appropriate spot.
+        """
+        pass
+        #self.boundary_condition.migrate_boundary_particles(particles, self)
 
 # ---------------------- add after serial working again -------------------------------
 #cdef class DomainManager:
