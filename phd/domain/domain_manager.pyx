@@ -6,8 +6,8 @@ from cython.operator cimport preincrement as inc
 from ..utils.tools import check_class
 from ..utils.particle_tags import ParticleTAGS
 
-cdef int Real = ParticleTAGS.Real
-cdef int Ghost = ParticleTAGS.Ghost
+cdef int REAL = ParticleTAGS.Real
+cdef int GHOST = ParticleTAGS.Ghost
 cdef int Exterior = ParticleTAGS.Exterior
 
 cdef dict fields_for_parallel = {
@@ -286,7 +286,7 @@ cdef class DomainManager:
             p = &self.ghost_vec[i]
 
             maps.data[i]  = p.index # reference to image
-            tags.data[i]  = Ghost   # ghost label
+            tags.data[i]  = GHOST   # ghost label
             types.data[i] = Exterior
 
             for k in range(dim):
@@ -353,7 +353,7 @@ cdef class DomainManager:
         particles.pointer_groups(wx, particles.named_groups['w'])
 
         for i in range(particles.get_number_of_items()):
-            if tags.data[i] == Real:
+            if tags.data[i] == REAL:
                 for k in range(dim):
                     x[k][i] += dt*wx[k][i]
 
