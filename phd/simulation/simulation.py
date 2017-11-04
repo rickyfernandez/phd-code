@@ -2,6 +2,9 @@ import os
 import phd
 import logging
 
+from ..integrate.integrate import IntegrateBase
+from ..io.simulation_time import SimulationTime
+
 from ..utils.logo import logo_str
 from ..utils.tools import check_class, class_dict
 from ..utils.logger import phdLogger, ufstring, original_emitter
@@ -40,6 +43,8 @@ class Simulation(object):
         # integrator uses a setter 
         self.integrator = None
         self.simulation_time = None
+
+        self.mesh_relax_iterations = 0
 
         # time step parameters
         self.param_max_dt_change = param_max_dt_change
@@ -91,14 +96,17 @@ class Simulation(object):
             else:
                 os.mkdir(self.param_output_directory)
 
-    @check_class(phd.IntegrateBase)
+    def set_mesh_relax_iterations(self, mesh_relax_iterations):
+        self.mesh_relax_iterations = mesh_relax_iterations
+
+    @check_class(IntegrateBase)
     def set_integrator(self, integrator):
         """
         Set integrator to evolve the simulation.
         """
         self.integrator = integrator
 
-    @check_class(phd.SimulationTime)
+    @check_class(SimulationTime)
     def set_simulation_time(self, simulation_time):
         """
         Set time outputer for data outputs
@@ -119,31 +127,26 @@ class Simulation(object):
 
         # output initial state of simulation
         integrator.before_loop(self)
-        phdLogger.info("Writting initial output...")
-        simulation_time.outputs(integrator)
+
+        # compute first time step
+        integrator.compute_time_step()
+        self.modify_timestep()
 
         # evolve the simulation
         phdLogger.info("Beginning integration loop")
-        while not simulation_time.finish(integration):
-
-            phdLogger.info("Starting iteration: "
-                    "%d time: %f dt: %f" %\
-                    (integrator.iteration,
-                     integrator.time,
-                     integrator.dt))
+        while not simulation_time.finished(integrator):
 
             # advance one time step
             integrator.evolve_timestep()
-            phdLogger.success("Finished iteration: "
-                    "%d time: %f dt: %f" %\
-                    integrator.iteration)
-
-            # compute new time step
-            integrator.compute_timestep()
-            self.modify_timestep() # if needed
 
             # output if needed
-            simulation_time.outputs(integrator)
+            simulation_time.output(
+                    self.param_output_directory,
+                    integrator)
+
+            # compute new time step
+            integrator.compute_time_step()
+            self.modify_timestep()
 
         # clean up or last calculations
         integrator.after_loop(self)
@@ -157,24 +160,23 @@ class Simulation(object):
         message = "\n" + logo_str
         message += "\nSimulation Information\n" + bar
 
-        # print if serial or parallel run
         if phd._in_parallel:
             message += "\nRunning in parallel: number of " +\
                 "processors = %d" % self.num_procs
         else:
             message += "\nRunning in serial"
 
-        message += "\nLog file saved at: %s" % self.log_filename
-
         # simulation name and output directory
+        message += "\nLog file saved at: %s" % self.log_filename
         message += "\nProblem solving: %s" % self.param_simulation_name
         message += "\nOutput data will be saved at: %s\n" %\
                 self.param_output_directory
 
         # print which classes are used in simulation
         cldict = class_dict(self.integrator)
+        cldict["integrator"] = self.integrator.__class__.__name__
         message += "\nClasses used in the simulation\n" + bar + "\n"
-        for key, val in cldict.iteritems():
+        for key, val in sorted(cldict.iteritems()):
             message += key + ": " + val + "\n"
 
         # log message
@@ -187,14 +189,14 @@ class Simulation(object):
         constrained.
         '''
         dt = self.integrator.dt
-        if self.integrator.iteration == 0:
-            # shrink if first iteration
-            dt = self.param_initial_timestep_factor*dt
-        else:
-            # constrain rate of change
-            dt = min(self.param_max_dt_change*self.old_dt, dt)
-        self.old_dt = dt
+        #if self.integrator.iteration == 0:
+        #    # shrink if first iteration
+        #    dt = self.param_initial_timestep_factor*dt
+        #else:
+        #    # constrain rate of change
+        #    dt = min(self.param_max_dt_change*self.old_dt, dt)
+        #self.old_dt = dt
 
         # ensure the simulation outputs and finishes at selected time
-        dt = min(self.simulation_time.modify_timestep(dt), dt)
+        dt = min(self.simulation_time.modify_timestep(self.integrator), dt)
         self.integrator.set_dt(dt)
