@@ -107,7 +107,7 @@ cdef class CarrayContainer:
         if PyDict_Contains(self.properties, prop) == 1:
             return <BaseArray> PyDict_GetItem(self.properties, prop)
         else:
-            return None
+            raise KeyError, 'c-array %s not present' % (prop)
 
     cdef _check_property(self, str prop):
         """Check if a property is present or not."""
@@ -315,3 +315,19 @@ cdef class CarrayContainer:
             else:
                 msg = 'Unknown field in pointer_groups'
                 raise ValueError, msg
+
+
+
+
+
+
+
+
+#        if "species" in particles.named_groups.keys():
+#            named_groups["colors"] = named_groups["species"]
+#            if "passive-scalars" in particles.named_groups.keys():
+#            named_groups["colors"] += named_groups["passive-scalars"]
+#
+#        elif "passive-scalars" in particles.named_groups.keys():
+#            self.do_colors = True
+#            named_groups["colors"] = named_groups["species"]
