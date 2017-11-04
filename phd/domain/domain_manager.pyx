@@ -46,7 +46,7 @@ cdef class DomainManager:
         cdef str field, dtype
         cdef int num_particles = particles.get_number_of_items()
 
-        if True:
+        if phd._in_parallel:
             for field, dtype in fields_for_parallel.iteritems():
                 if field not in particles.carray_info.keys():
                     particles.register_property(num_particles, field, dtype)
