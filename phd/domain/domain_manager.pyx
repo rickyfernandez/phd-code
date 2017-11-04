@@ -149,7 +149,6 @@ cdef class DomainManager:
 
             # scale search radius from voronoi radius
             p.old_search_radius = 0.  # initial pass 
-            #p.search_radius = r.data[i]
             p.search_radius = min(r.data[i], self.param_search_radius_factor*rold.data[i])
 
             # copy position and velocity
