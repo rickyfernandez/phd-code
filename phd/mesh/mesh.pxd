@@ -20,7 +20,7 @@ cdef class Mesh:
     cdef public bint param_regularize
     cdef public int param_num_neighbors
 
-#    cdef public list update_ghost_fields
+    cdef public list update_ghost_fields
     cdef bint particle_fields_registered
 
     cdef public CarrayContainer faces

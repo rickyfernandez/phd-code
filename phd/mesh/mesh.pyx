@@ -124,8 +124,8 @@ cdef class Mesh:
 #                if field not in particles.carray_info.keys():
 #                    particles.register(num_particles, field, dtype)
 
-#        self.update_ghost_fields = list(particles.named_groups['dcom'])
-#        self.update_ghost_fields.append('volume')
+        self.update_ghost_fields = list(particles.named_groups['dcom'])
+        self.update_ghost_fields.append('volume')
 
         # record fields have been registered
         self.particle_fields_registered = True
