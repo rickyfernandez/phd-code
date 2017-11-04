@@ -276,7 +276,7 @@ int Tess2d::extract_geometry(
                 const double area = (L1 < SMALLDIFF*L2) ? 0.0 : area0;
 
                 // ignore face
-                if (area == 0.0)
+                if (area <= 0.0)
                     continue;
 
                 // the volume of the cell is the sum of triangle areas - eq. 27
