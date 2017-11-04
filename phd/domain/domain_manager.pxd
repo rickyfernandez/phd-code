@@ -66,5 +66,8 @@ cdef class DomainManager:
     cdef copy_particles_serial(self, CarrayContainer particles)
     cdef copy_particles_parallel(self, CarrayContainer particles)
 
+    cpdef move_generators(self, CarrayContainer particles, double dt)
+    cpdef migrate_particles(self, CarrayContainer pc)
+
     cpdef bint ghost_complete(self)
     cdef values_to_ghost(self, CarrayContainer particles, list fields)
