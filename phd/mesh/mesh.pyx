@@ -299,7 +299,7 @@ cdef class Mesh:
                 x[k][i] += dcx[k][i]
                 xp[k] = x[k][i]
 
-        #domain_manager.migrate_boundary_particles(particles)
+        domain_manager.migrate_particles(particles)
 
     cpdef assign_generator_velocities(self, CarrayContainer particles, EquationStateBase equation_state):
         """
