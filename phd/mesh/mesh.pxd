@@ -5,11 +5,12 @@ from ..mesh.pytess cimport PyTess
 from ..riemann.riemann cimport RiemannBase
 from ..domain.domain_manager cimport DomainManager
 from ..containers.containers cimport CarrayContainer
+from ..equation_state.equation_state cimport EquationStateBase
 
 ctypedef vector[int] nn           # nearest neighbors
 ctypedef vector[nn] nn_vec
 
-cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim)
+#cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim)
 
 cdef class Mesh:
 
@@ -19,6 +20,7 @@ cdef class Mesh:
     cdef public bint param_regularize
     cdef public int param_num_neighbors
 
+#    cdef public list update_ghost_fields
     cdef bint particle_fields_registered
 
     cdef public CarrayContainer faces
@@ -32,6 +34,6 @@ cdef class Mesh:
     cpdef build_geometry(self, CarrayContainer pc, DomainManager domain_manager)
     cpdef relax(self, CarrayContainer particles, DomainManager domain_manager)
 
-    cdef assign_generator_velocities(self, CarrayContainer particles)
-    cdef assign_face_velocities(self, CarrayContainer particles)
-    cdef update_from_fluxes(self, CarrayContainer particles, RiemannBase riemann, double dt)
+    cpdef assign_generator_velocities(self, CarrayContainer particles, EquationStateBase equation_state)
+    cpdef assign_face_velocities(self, CarrayContainer particles)
+    cpdef update_from_fluxes(self, CarrayContainer particles, RiemannBase riemann, double dt)
