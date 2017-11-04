@@ -121,7 +121,7 @@ cdef class RiemannBase:
                     for k in range(dim):
                         vsq += v[k][i]*v[k][i]
                     dt = fmin(R/(c + sqrt(vsq)), dt)
-        return dt
+        return self.param_cfl*dt
 
     cdef deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim):
         """
