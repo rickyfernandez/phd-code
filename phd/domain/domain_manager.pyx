@@ -357,12 +357,6 @@ cdef class DomainManager:
 
         for i in range(particles.get_number_of_items()):
             if tags.data[i] == Real:
-
-                if ids.data[i] == 149:
-                    print 'move_generator', i, ids.data[i], tags.data[i], x[0][i], dt, wx[0][i]
-                if ids.data[i] == 249:
-                    print 'move_generator', i, ids.data[i], tags.data[i], x[0][i], dt, wx[0][i]
-
                 for k in range(dim):
                     x[k][i] += dt*wx[k][i]
 
