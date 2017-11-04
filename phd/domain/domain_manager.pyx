@@ -361,8 +361,7 @@ cdef class DomainManager:
         For particles that have left the domain or processor patch
         move particles to their appropriate spot.
         """
-        pass
-        #self.boundary_condition.migrate_boundary_particles(particles, self)
+        self.boundary_condition.migrate_particles(particles, self)
 
 # ---------------------- add after serial working again -------------------------------
 #cdef class DomainManager:
