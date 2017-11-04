@@ -113,7 +113,6 @@ cdef class DomainManager:
         cdef int i, k, dim
         cdef FlagParticle *p
         cdef double search_radius
-        #cdef np.float64_t *x[3], *v[3]
         cdef np.float64_t *x[3], *mv[3]
         cdef DoubleArray r = particles.get_carray("radius")
         cdef DoubleArray rold = particles.get_carray("old_radius")
@@ -121,7 +120,6 @@ cdef class DomainManager:
         dim = len(particles.named_groups["position"])
 
         particles.pointer_groups(x, particles.named_groups['position'])
-        #particles.pointer_groups(v, particles.named_groups['velocity'])
         particles.pointer_groups(mv, particles.named_groups['momentum'])
 
         # set ghost buffer to zero
@@ -157,7 +155,6 @@ cdef class DomainManager:
             # copy position and velocity
             for k in range(dim):
                 p.x[k] = x[k][i]
-                #p.v[k] = v[k][i]
                 p.v[k] = mv[k][i]
 
             # next particle
