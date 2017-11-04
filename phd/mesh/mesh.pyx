@@ -265,7 +265,7 @@ cdef class Mesh:
         self.faces.resize(fail)
 
         # transfer particle information to ghost particles
-#        domain_manager.values_to_ghost(particles, self.update_ghost_fields)
+        domain_manager.values_to_ghost(particles, self.update_ghost_fields)
 
     cpdef reset_mesh(self):
         self.tess.reset_tess()
