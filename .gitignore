@@ -11,6 +11,8 @@
 *.dat
 *.f
 *.txt
+domain.cpp
+domain_manager.cpp
 riemann.cpp
 reconstruction.cpp
 integrator.cpp
