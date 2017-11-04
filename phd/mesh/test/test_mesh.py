@@ -80,7 +80,7 @@ class TestMesh2dUniformBox(unittest.TestCase):
         maxx = np.array([1., 1.])
         self.domain_manager = DomainManager(param_initial_radius=0.1,
                 param_search_radius_factor=1.25)
-        self.domain_manager.set_domain(DomainLimits(minx, maxx))
+        self.domain_manager.set_domain_limits(DomainLimits(minx, maxx))
         self.domain_manager.register_fields(self.particles)
         self.domain_manager.set_boundary_condition(Reflective())
         self.domain_manager.initialize()
@@ -121,13 +121,14 @@ class TestMesh2dLatticeBox(unittest.TestCase):
                 self.particles['position-x'][part] = (i+0.5)*dx
                 self.particles['position-y'][part] = (j+0.5)*dy
                 part += 1
+        self.dx = dx; self.dy = dy
 
         # create unit square domain, reflective boundary condition
         minx = np.array([0., 0.])
         maxx = np.array([1., 1.])
         self.domain_manager = DomainManager(param_initial_radius=0.1,
                 param_search_radius_factor=1.25)
-        self.domain_manager.set_domain(DomainLimits(minx, maxx))
+        self.domain_manager.set_domain_limits(DomainLimits(minx, maxx))
         self.domain_manager.register_fields(self.particles)
         self.domain_manager.set_boundary_condition(Reflective())
         self.domain_manager.initialize()
@@ -166,6 +167,21 @@ class TestMesh2dLatticeBox(unittest.TestCase):
             if self.particles["tag"][i] == ParticleTAGS.Real:
                 self.assertAlmostEqual(0., self.particles["dcom-x"][i])
                 self.assertAlmostEqual(0., self.particles["dcom-y"][i])
+
+    def test_particle_volume(self):
+        """
+        Test if particle center of mass positions are created correctly.
+        Particles are placed in a uniform lattice. Therefore the center
+        of mass is the same as particle positions.
+        """
+
+        # generate voronoi mesh 
+        self.mesh.build_geometry(self.particles, self.domain_manager)
+
+        # check if particle position is the same as center of mass
+        for i in range(self.particles.get_number_of_items()):
+            if self.particles["tag"][i] == ParticleTAGS.Real:
+                self.assertAlmostEqual(self.dx*self.dy, self.particles["volume"][i])
 
 if __name__ == "__main__":
     unittest.main()
