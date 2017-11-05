@@ -121,6 +121,58 @@ class IntegrateBase(object):
         '''Set riemann solver'''
         self.riemann = riemann
 
+    def before_loop(self, simulation):
+        '''
+        Build initial mesh.
+        '''
+        # ignored if in serial 
+        self.domain_manager.partition(self.particles)
+        phdLogger.info('Static Mesh Integrator: Building Initial mesh')
+
+        # build mesh with ghost particles and
+        # geometric quantities (volumes, faces, area, ...)
+        self.mesh.build_geometry(self.particles, self.domain_manager)
+
+        # relax mesh if needed 
+        if simulation.mesh_relax_iterations > 0:
+            phdLogger.info('Relaxing mesh')
+
+            for i in range(simulation.mesh_relax_iterations):
+                phdLogger.info('Relaxing iteration %d' % i)
+
+                simulation.simulation_time.output(
+                        simulation.param_output_directory,
+                        self)
+                self.mesh.relax(self.particles, self.domain_manager)
+
+            # build mesh with ghost
+            self.mesh.build_geometry(self.particles, self.domain_manager)
+
+        # compute density, velocity, pressure, ...
+        self.equation_state.conserative_from_primitive(self.particles)
+
+        # assign cell and face velocities to zero 
+        dim = len(self.particles.named_groups['position'])
+        for axis in 'xyz'[:dim]:
+            self.particles['w-' + axis][:] = 0.
+            self.mesh.faces['velocity-' + axis][:] = 0.
+
+        # output data
+        simulation.simulation_time.output(
+                simulation.param_output_directory,
+                self)
+
+    def compute_time_step(self):
+        '''
+        Compute time step for current state of the simulation.
+        Works in serial and parallel.
+        '''
+        self.dt = self.riemann.compute_time_step(
+                self.particles, self.equation_state)
+
+        # if in parallel find smallest dt across TODO
+        return self.dt
+
 class StaticMesh(IntegrateBase):
     '''
     Static mesh integrator. Once the mesh is created in `begin_loop` method
@@ -165,57 +217,6 @@ class StaticMesh(IntegrateBase):
         self.riemann.set_fields_for_riemann(self.particles)
         self.riemann.initialize()
 
-    def before_loop(self, simulation):
-        '''
-        Build initial mesh, the mesh is only built once.
-        '''
-        # ignored if in serial 
-        self.domain_manager.partition(self.particles)
-        phdLogger.info('Static Mesh Integrator: Building Initial mesh')
-
-        # build mesh with ghost particles and
-        # geometric quantities (volumes, faces, area, ...)
-        self.mesh.build_geometry(self.particles, self.domain_manager)
-
-        # relax mesh if needed 
-        if simulation.mesh_relax_iterations > 0:
-            phdLogger.info('Static Mesh Integrator: Relaxing mesh')
-
-            for i in range(simulation.mesh_relax_iterations):
-                phdLogger.info('Static Mesh Integrator: Relaxing iteration %d' % i)
-
-                simulation.simulation_time.output(
-                        simulation.param_output_directory,
-                        self)
-                self.mesh.relax(self.particles, self.domain_manager)
-
-            # build mesh with ghost
-            self.mesh.build_geometry(self.particles, self.domain_manager)
-
-        # compute density, velocity, pressure, ...
-        self.equation_state.conserative_from_primitive(self.particles)
-
-        # assign cell and face velocities to zero 
-        dim = len(self.particles.named_groups['position'])
-        for axis in 'xyz'[:dim]:
-            self.particles['w-' + axis][:] = 0.
-            self.mesh.faces['velocity-' + axis][:] = 0.
-
-        # output data
-        simulation.simulation_time.output(
-                simulation.param_output_directory,
-                self)
-
-    def compute_time_step(self):
-        '''
-        Compute time step for current state of the simulation.
-        Works in serial and parallel.
-        '''
-        self.dt = self.riemann.compute_time_step(
-                self.particles, self.equation_state)
-
-        # if in parallel find smallest dt across TODO
-        return self.dt
 
     def evolve_timestep(self):
         '''
