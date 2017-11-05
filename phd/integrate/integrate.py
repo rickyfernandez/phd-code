@@ -2,7 +2,16 @@ import logging
 import numpy as np
 
 import phd
+
+from ..mesh.mesh import Mesh
 from ..utils.tools import check_class
+from ..domain.domain import DomainLimits
+from ..riemann.riemann import RiemannBase
+from ..domain.domain_manager import DomainManager
+from ..containers.containers import CarrayContainer
+from ..domain.boundary import BoundaryConditionBase
+from ..equation_state.equation_state import EquationStateBase
+from ..reconstruction.reconstruction import ReconstructionBase
 
 phdLogger = logging.getLogger('phd')
 callbacks = []
@@ -24,8 +33,10 @@ class IntegrateBase(object):
         self.mesh = None
         self.riemann = None
         self.particles = None
+        self.domain_limits = None
         self.reconstruction = None
         self.domain_manager = None
+        self.boundary_condition = None
 
         # for communication dt across processors
         self.loc_dt = np.zeros(1, dtype=np.float64)
@@ -70,32 +81,42 @@ class IntegrateBase(object):
         '''Set time step'''
         self.dt = dt
 
-    @check_class(phd.DomainManager)
+    @check_class(BoundaryConditionBase)
+    def set_boundary_condition(self, boundary_condition):
+        '''Set domain manager for communiating across processors'''
+        self.boundary_condition = boundary_condition
+
+    @check_class(DomainLimits)
+    def set_domain_limits(self, domain_limits):
+        '''Set domain manager for communiating across processors'''
+        self.domain_limits = domain_limits
+
+    @check_class(DomainManager)
     def set_domain_manager(self, domain_manager):
         '''Set domain manager for communiating across processors'''
         self.domain_manager = domain_manager
 
-    @check_class(phd.EquationStateBase)
+    @check_class(EquationStateBase)
     def set_equation_state(self, equation_state):
         '''Set equation of state for gas'''
         self.equation_state = equation_state
 
-    @check_class(phd.CarrayContainer)
+    @check_class(CarrayContainer)
     def set_particles(self, particles):
         '''Set particles to simulate'''
         self.particles = particles
 
-    @check_class(phd.Mesh)
+    @check_class(Mesh)
     def set_mesh(self, mesh):
         '''Set spatial mesh'''
         self.mesh = mesh
 
-    @check_class(phd.ReconstructionBase)
+    @check_class(ReconstructionBase)
     def set_reconstruction(self, reconstruction):
         '''Set reconstruction method'''
         self.reconstruction = reconstruction
 
-    @check_class(phd.RiemannBase)
+    @check_class(RiemannBase)
     def set_riemann(self, riemann):
         '''Set riemann solver'''
         self.riemann = riemann
@@ -114,8 +135,11 @@ class StaticMesh(IntegrateBase):
         if not self.mesh or\
                 not self.riemann or\
                 not self.particles or\
+                not self.domain_limits or\
                 not self.domain_manager or\
-                not self.reconstruction:
+                not self.equation_state or\
+                not self.reconstruction or\
+                not self.boundary_condition:
             raise RuntimeError("Not all setters defined in StaticMesh")
 
         # make sure proper dimension specified
@@ -125,129 +149,159 @@ class StaticMesh(IntegrateBase):
                 "Inconsistent dimension specified in particles %d and integrator %d)" %\
                         (dim, self.param_dim))
 
-        # initialize classes
+        # initialize domain manager
+        self.domain_manager.set_domain_limits(self.domain_limits)
+        self.domain_manager.set_boundary_condition(self.boundary_condition)
+        self.domain_manager.register_fields(self.particles)
         self.domain_manager.initialize()
+
+        # intialize mesh
+        self.mesh.register_fields(self.particles)
         self.mesh.initialize()
 
         self.reconstruction.set_fields_for_reconstruction(self.particles)
         self.reconstruction.initialize()
 
-        self.riemann.set_feilds_for_flux(self.particles)
+        self.riemann.set_fields_for_riemann(self.particles)
         self.riemann.initialize()
 
-    def begin_loop(self, simulation):
+    def before_loop(self, simulation):
         '''
         Build initial mesh, the mesh is only built once.
         '''
         # ignored if in serial 
-        self.domain_manager.partition()
+        self.domain_manager.partition(self.particles)
+        phdLogger.info('Static Mesh Integrator: Building Initial mesh')
 
         # build mesh with ghost particles and
         # geometric quantities (volumes, faces, area, ...)
-        self.mesh.build_geometry(self.particles)
+        self.mesh.build_geometry(self.particles, self.domain_manager)
 
-        # relax mesh if needed TODO
+        # relax mesh if needed 
+        if simulation.mesh_relax_iterations > 0:
+            phdLogger.info('Static Mesh Integrator: Relaxing mesh')
+
+            for i in range(simulation.mesh_relax_iterations):
+                phdLogger.info('Static Mesh Integrator: Relaxing iteration %d' % i)
+
+                simulation.simulation_time.output(
+                        simulation.param_output_directory,
+                        self)
+                self.mesh.relax(self.particles, self.domain_manager)
+
+            # build mesh with ghost
+            self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # compute density, velocity, pressure, ...
-        self.equation_state.primitive_from_conserative(self.particles)
+        self.equation_state.conserative_from_primitive(self.particles)
 
-        # assign velocities to mesh cells and faces 
-        self.mesh.assign_generator_velocities(self.particles)
-        self.mesh.assign_face_velocities()
+        # assign cell and face velocities to zero 
+        dim = len(self.particles.named_groups['position'])
+        for axis in 'xyz'[:dim]:
+            self.particles['w-' + axis][:] = 0.
+            self.mesh.faces['velocity-' + axis][:] = 0.
+
+        # output data
+        simulation.simulation_time.output(
+                simulation.param_output_directory,
+                self)
 
     def compute_time_step(self):
         '''
         Compute time step for current state of the simulation.
         Works in serial and parallel.
         '''
-        self.loc_dt[0] = self.riemann.compute_time_step(
+        self.dt = self.riemann.compute_time_step(
                 self.particles, self.equation_state)
 
         # if in parallel find smallest dt across TODO
-        return self.loc_dt[0]
+        return self.dt
 
     def evolve_timestep(self):
         '''
         Solve the compressible gas equations
         '''
-        phdLogger.info('Static Mesh Integrator: Begining integration step...')
+        phdLogger.info('Static Mesh Integrator: Starting iteration %d time: %f dt: %f' %\
+                (self.iteration,
+                 self.time,
+                 self.dt))
 
         # solve the riemann problem at each face
         phdLogger.info('Static Mesh Integrator: Starting reconstruction...')
         self.reconstruction.compute_states(self.particles, self.mesh,
-                self.equation_state, self.riemann, self.domain_manager,
-                self.dt, self.param_dim)
-        phdLogger.success('Static Mesh Integrator - Finished reconstruction')
+                False, self.domain_manager, self.dt)
+        phdLogger.success('Static Mesh Integrator: Finished reconstruction')
 
         phdLogger.info('Static Mesh Integrator: Starting riemann...')
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
-                self.equation_state, self.param_dim)
+                self.equation_state)
         phdLogger.success('Static Mesh Integrator: Finished riemann')
 
-        self.mesh.update_from_fluxes(self.particles, self.riemann)
+        self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+
+        phdLogger.info('Static Mesh Integrator: Finished iteration %d' %\
+                self.iteration)
 
         # setup the mesh for the next setup 
         self.equation_state.primitive_from_conserative(self.particles)
         self.iteration += 1; self.time += self.dt
 
-        phdLogger.info('Static Mesh Integrator: Finished integration')
-
-    def after_loop(self):
+    def after_loop(self, simulation):
         pass
 
-#class MovingMesh(StaticMesh):
-#    '''
-#    Moving mesh integrator.
-#    '''
-#    def __init__(self, param_time=0, param_final_time=1.0, param_iteration=0):
-#
-#        # call super
-#        self.param_time = param_time
-#        self.param_iteration = param_iteration
-#        self.param_final_time = param_final_time
-#
-#    def evolve_timestep(self):
-#        '''
-#        Solve the compressible gas equations
-#        '''
-#        phdLogger.info('Moving Mesh Integrator - Starting integration...')
-#
-#        # assign velocities to mesh cells and faces 
-#        self.mesh.assign_generator_velocities(self.particles)
-#        self.mesh.assign_face_velocities(self.particles)
-#
-#        # construct states at each face
-#        phdLogger.info('Moving Mesh Integrator - Computing reconstruction...')
-#        self.reconstruction.compute_states(self.particles, self.mesh,
-#                self.equation_state, self.riemann, dt)
-#        phdLogger.success('Moving Mesh Integrator - Finished reconstruction')
-#
-#        # solve riemann problem at each face and update variables
-#        phdLogger.info('Moving Mesh Integrator - Solving riemann...')
-#        self.riemann.compute_fluxes(self.particles, self.reconstruction)
-#        self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
-#        phdLogger.success('Moving Mesh Integrator - Finished riemann')
-#
-#        # update mesh generator positions
-#        self.domain_manager.move_generators(self.particles)
-#        self.domain_manager.migrate_boundary_particles(self.particles)
-#
-#        # ignored if serial run
+class MovingMesh(StaticMesh):
+    '''
+    Moving mesh integrator.
+    '''
+    def evolve_timestep(self):
+        '''
+        Solve the compressible gas equations
+        '''
+        phdLogger.info('Moving Mesh Integrator: Starting iteration %d time: %f dt: %f' %\
+                (self.iteration,
+                 self.time,
+                 self.dt))
+
+        # assign velocities to mesh cells and faces 
+        self.mesh.assign_generator_velocities(self.particles, self.equation_state)
+        self.mesh.assign_face_velocities(self.particles)
+
+        phdLogger.info('Moving Mesh Integrator: Starting reconstruction...')
+        self.reconstruction.compute_states(self.particles, self.mesh,
+                self.riemann.param_boost, self.domain_manager, self.dt)
+        phdLogger.success('Moving Mesh Integrator: Finished reconstruction')
+
+        phdLogger.info('Moving Mesh Integrator: Starting riemann...')
+        self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
+                self.equation_state)
+        phdLogger.success('Moving Mesh Integrator: Finished riemann')
+
+        self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+
+        # update mesh generator positions
+        self.domain_manager.move_generators(self.particles, self.dt)
+#        self.domain_manager.migrate_particles(self.particles)
+
+        # ignored if serial run
 #        if self.domain_manager.check_for_partion():
-#            phdLogger.info('Moving Mesh Integrator - Starting domain decomposition...')
+#            phdLogger.info('Moving Mesh Integrator: Starting domain decomposition...')
 #            self.domain_manager.partion()
-#            phdLogger.success('Moving Mesh Integrator - Finished domain decomposition')
-#
-#        # setup the mesh for the next setup 
-#        phdLogger.info('Moving Mesh Integrator - Rebuilding mesh...')
-#        self.mesh.build_geometry(self.particles)
-#        phdLogger.success('Moving Mesh Integrator - Finished mesh')
-#
-#        self.equation_state.primitive_from_conserative(self.particles)
-#        self.equation_state.sound_speed(self.particles)
-#        self.iteration += 1; self.time += self.dt
-#
-#        phdLogger.success('Moving Mesh Integrator - Finished integration')
+#            phdLogger.success('Moving Mesh Integrator: Finished domain decomposition')
+
+        # setup the mesh for the next setup 
+        phdLogger.info('Moving Mesh Integrator: Rebuilding mesh...')
+        self.mesh.build_geometry(self.particles, self.domain_manager)
+        phdLogger.success('Moving Mesh Integrator: Finished mesh')
+
+        self.equation_state.primitive_from_conserative(self.particles)
+        phdLogger.info('Moving Mesh Integrator: Finished iteration %d' %\
+                self.iteration)
+
+        self.iteration += 1; self.time += self.dt
+
+
+
+
 
 
 ## --------------------- to add after serial working ---------------------------
