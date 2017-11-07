@@ -28,9 +28,9 @@ cdef class HLL(RiemannBase):
     cdef inline void get_waves(self, double dl, double ul, double pl,
             double dr, double ur, double pr,
             double gamma, double *sl, double *sc, double *sr)
-#
-#cdef class HLLC(HLL):
-#    pass
+
+cdef class HLLC(HLL):
+    pass
 #
 #cdef class Exact(RiemannBase):
 #

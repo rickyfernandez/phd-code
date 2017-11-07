@@ -360,146 +360,152 @@ cdef class HLL(RiemannBase):
         sc[0] = _sc
         sr[0] = _sr
 
-#cdef class HLLC(HLL):
-#
-#    cdef riemann_solver(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces,
-#            CarrayContainer faces, double gamma, int dim):
-#
-#        # left state primitive variables
-#        cdef DoubleArray dl = left_faces.get_carray("density")
-#        cdef DoubleArray pl = left_faces.get_carray("pressure")
-#
-#        # left state primitive variables
-#        cdef DoubleArray dr = right_faces.get_carray("density")
-#        cdef DoubleArray pr = right_faces.get_carray("pressure")
-#
-#        cdef DoubleArray fm = fluxes.get_carray("mass")
-#        cdef DoubleArray fe = fluxes.get_carray("energy")
-#
-#        # local variables
-#        cdef int i, k
-#
-#        cdef double _dl, _pl, _vl[3], el, cl
-#        cdef double _dr, _pr, _vr[3], er, cr
-#        cdef double d, p, v[3], n[3], vn, vsq
-#
-#        cdef double factor_1, factor_2, frho
-#        cdef double wn, Vnl, Vnr, sl, sr, s_contact
-#        cdef double vl_tmp, vr_tmp, nx_tmp, vl_sq, vr_sq
-#        cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3], *wx[3]
-#
-#        cdef double fac1, fac2, fac3
-#
-#        cdef int boost = self.param_boost
-#        cdef int num_faces = faces.get_number_of_items()
-#
-#        left_faces.pointer_groups(vl,  left_faces.named_groups['velocity'])
-#        right_faces.pointer_groups(vr, right_faces.named_groups['velocity'])
-#        fluxes.pointer_groups(fmv, fluxes.named_groups['momentum'])
-#        faces.pointer_groups(nx, faces.named_groups['normal'])
-#        faces.pointer_groups(wx, faces.named_groups['velocity'])
-#
-#        for i in range(num_faces):
-#
-#            # left state
-#            _dl = dl.data[i]
-#            _pl = pl.data[i]
-#
-#            # right state
-#            _dr = dr.data[i]
-#            _pr = pr.data[i]
-#
-#            cl = sqrt(gamma*_pl/_dl)
-#            cr = sqrt(gamma*_pr/_dr)
-#
-#            Vnl = Vnr = 0.0
-#            vl_sq = vr_sq = wn = 0.0
-#            for k in range(dim):
-#
-#                _vl[k] = vl[k][i]
-#                _vr[k] = vr[k][i]
-#
-#                n[k] = nx[k][i]
-#
-#                # left/right velocity square
-#                vl_sq += _vl[k]*_vl[k]
-#                vr_sq += _vr[k]*_vr[k]
-#
-#                # project left/righ velocity to face normal
-#                Vnl += _vl[k]*n[k]
-#                Vnr += _vr[k]*n[k]
-#
-#                # project face velocity to face normal
-#                wn += wx[k][i]*n[k]
-#
-#            # if boosted we are in face frame
-#            if boost == 1:
-#                wn = 0.
-#
-#            self.get_waves(_dl, Vnl, _pl, _dr, Vnr, _pr, gamma,
-#                    &sl, &s_contact, &sr)
-#
-#            # calculate interface flux - eq. 10.71
-#            if(wn <= sl):
-#
-#                # left state
-#                fm.data[i]  = _dl*(Vnl - wn)
-#                fe.data[i]  = (0.5*_dl*vl_sq + _pl/(gamma - 1.0))*(Vnl - wn) + _pl*Vnl
-#
-#                for k in range(dim):
-#                    fmv[k][i] = _dl*vl[k][i]*(Vnl - wn) + _pl*nx[k][i]
-#
-#            elif((sl < wn) and (wn <= sr)):
-#
-#                # intermediate state
-#                if(wn <= s_contact):
-#
-#                    # left star state - eq. 10.38 and 10.39
-#                    factor_1 = _dl*(sl - Vnl)/(sl - s_contact)
-#                    factor_2 = factor_1*(sl - wn)*(s_contact - Vnl) + _pl
-#                    frho = _dl*(Vnl - sl) + factor_1*(sl - wn)
-#
-#                    # total energy
-#                    el = 0.5*_dl*vl_sq + _pl/(gamma-1.0)
-#
-#                    fm.data[i] = frho
-#                    fe.data[i] = (el + _pl)*Vnl - sl*el +\
-#                            (sl - wn)*factor_1*(el/_dl + (s_contact - Vnl)*\
-#                            (s_contact + _pl/(_dl*(sl - Vnl))))
-#
-#                    for k in range(dim):
-#                        fmv[k][i] = frho*vl[k][i] + factor_2*nx[k][i]
-#
-#                else:
-#
-#                    # right star state
-#                    factor_1 = _dr*(sr - Vnr)/(sr - s_contact)
-#                    factor_2 = factor_1*(sr - wn)*(s_contact - Vnr) + _pr
-#                    frho = _dr*(Vnr - sr) + factor_1*(sr - wn)
-#
-#                    # total energy
-#                    er = 0.5*_dr*vr_sq + _pr/(gamma-1.0)
-#
-#                    fm.data[i] = frho
-#                    fe.data[i] = (er + _pr)*Vnr - sr*er +\
-#                            (sr - wn)*factor_1*(er/_dr + (s_contact - Vnr)*\
-#                            (s_contact + _pr/(_dr*(sr - Vnr))))
-#
-#                    for k in range(dim):
-#                        fmv[k][i] = frho*vr[k][i] + factor_2*nx[k][i]
-#
-#            else:
-#
-#                # right state
-#                fm.data[i]  = _dr*(Vnr - wn)
-#                fe.data[i]  = (0.5*_dr*vr_sq + _pr/(gamma - 1.0))*(Vnr - wn) + _pr*Vnr
-#
-#                for k in range(dim):
-#                    fmv[k][i] = _dr*vr[k][i]*(Vnr - wn) + _pr*nx[k][i]
-#
-#        if boost == 1:
-#            self.deboost(fluxes, faces, dim)
-#
+cdef class HLLC(HLL):
+
+    cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
+
+        # left state primitive variables
+        cdef DoubleArray dl = reconstruction.left_states.get_carray("density")
+        cdef DoubleArray pl = reconstruction.left_states.get_carray("pressure")
+
+        # left state primitive variables
+        cdef DoubleArray dr = reconstruction.right_states.get_carray("density")
+        cdef DoubleArray pr = reconstruction.right_states.get_carray("pressure")
+
+        cdef DoubleArray fm = self.fluxes.get_carray("mass")
+        cdef DoubleArray fe = self.fluxes.get_carray("energy")
+
+        # local variables
+        cdef int i, k
+
+        cdef double _dl, _pl, _vl[3], el, cl
+        cdef double _dr, _pr, _vr[3], er, cr
+        cdef double d, p, v[3], n[3], vn, vsq
+
+        cdef double factor_1, factor_2, frho
+        cdef double wn, Vnl, Vnr, sl, sr, s_contact
+        cdef double vl_tmp, vr_tmp, nx_tmp, vl_sq, vr_sq
+        cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3], *wx[3]
+
+        cdef double fac1, fac2, fac3
+
+        cdef int boost = self.param_boost
+        cdef int num_faces = mesh.faces.get_number_of_items()
+
+        # particle velocities left/right face
+        reconstruction.left_states.pointer_groups(vl,
+                reconstruction.left_states.named_groups['velocity'])
+        reconstruction.right_states.pointer_groups(vr,
+                reconstruction.right_states.named_groups['velocity'])
+
+        # face momentum fluxes
+        self.fluxes.pointer_groups(fmv, self.fluxes.named_groups['momentum'])
+
+        # face normal and velocity
+        mesh.faces.pointer_groups(nx, mesh.faces.named_groups['normal'])
+        mesh.faces.pointer_groups(wx, mesh.faces.named_groups['velocity'])
+
+        for i in range(num_faces):
+
+            # left state
+            _dl = dl.data[i]
+            _pl = pl.data[i]
+
+            # right state
+            _dr = dr.data[i]
+            _pr = pr.data[i]
+
+            cl = sqrt(gamma*_pl/_dl)
+            cr = sqrt(gamma*_pr/_dr)
+
+            Vnl = Vnr = 0.0
+            vl_sq = vr_sq = wn = 0.0
+            for k in range(dim):
+
+                _vl[k] = vl[k][i]
+                _vr[k] = vr[k][i]
+
+                n[k] = nx[k][i]
+
+                # left/right velocity square
+                vl_sq += _vl[k]*_vl[k]
+                vr_sq += _vr[k]*_vr[k]
+
+                # project left/righ velocity to face normal
+                Vnl += _vl[k]*n[k]
+                Vnr += _vr[k]*n[k]
+
+                # project face velocity to face normal
+                wn += wx[k][i]*n[k]
+
+            # if boosted we are in face frame
+            if boost == 1:
+                wn = 0.
+
+            self.get_waves(_dl, Vnl, _pl, _dr, Vnr, _pr, gamma,
+                    &sl, &s_contact, &sr)
+
+            # calculate interface flux - eq. 10.71
+            if(wn <= sl):
+
+                # left state
+                fm.data[i]  = _dl*(Vnl - wn)
+                fe.data[i]  = (0.5*_dl*vl_sq + _pl/(gamma - 1.0))*(Vnl - wn) + _pl*Vnl
+
+                for k in range(dim):
+                    fmv[k][i] = _dl*vl[k][i]*(Vnl - wn) + _pl*nx[k][i]
+
+            elif((sl < wn) and (wn <= sr)):
+
+                # intermediate state
+                if(wn <= s_contact):
+
+                    # left star state - eq. 10.38 and 10.39
+                    factor_1 = _dl*(sl - Vnl)/(sl - s_contact)
+                    factor_2 = factor_1*(sl - wn)*(s_contact - Vnl) + _pl
+                    frho = _dl*(Vnl - sl) + factor_1*(sl - wn)
+
+                    # total energy
+                    el = 0.5*_dl*vl_sq + _pl/(gamma-1.0)
+
+                    fm.data[i] = frho
+                    fe.data[i] = (el + _pl)*Vnl - sl*el +\
+                            (sl - wn)*factor_1*(el/_dl + (s_contact - Vnl)*\
+                            (s_contact + _pl/(_dl*(sl - Vnl))))
+
+                    for k in range(dim):
+                        fmv[k][i] = frho*vl[k][i] + factor_2*nx[k][i]
+
+                else:
+
+                    # right star state
+                    factor_1 = _dr*(sr - Vnr)/(sr - s_contact)
+                    factor_2 = factor_1*(sr - wn)*(s_contact - Vnr) + _pr
+                    frho = _dr*(Vnr - sr) + factor_1*(sr - wn)
+
+                    # total energy
+                    er = 0.5*_dr*vr_sq + _pr/(gamma-1.0)
+
+                    fm.data[i] = frho
+                    fe.data[i] = (er + _pr)*Vnr - sr*er +\
+                            (sr - wn)*factor_1*(er/_dr + (s_contact - Vnr)*\
+                            (s_contact + _pr/(_dr*(sr - Vnr))))
+
+                    for k in range(dim):
+                        fmv[k][i] = frho*vr[k][i] + factor_2*nx[k][i]
+
+            else:
+
+                # right state
+                fm.data[i]  = _dr*(Vnr - wn)
+                fe.data[i]  = (0.5*_dr*vr_sq + _pr/(gamma - 1.0))*(Vnr - wn) + _pr*Vnr
+
+                for k in range(dim):
+                    fmv[k][i] = _dr*vr[k][i]*(Vnr - wn) + _pr*nx[k][i]
+
+        if boost:
+            self.deboost(self.fluxes, mesh.faces, dim)
+
 #cdef class Exact(RiemannBase):
 #    def __init__(self ):
 #        # self.reconstruction = None
