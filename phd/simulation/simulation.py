@@ -79,6 +79,8 @@ class Simulation(object):
             phdLogger.setLevel(logging.SUCCESS)
         elif param_log_level == 'warning':
             phdLogger.setLevel(logging.WARNING)
+        else:
+            raise RuntimeError("Unknown log level: %s" % param_log_level)
         self.param_log_level = param_log_level
 
         # remove color output if desired
