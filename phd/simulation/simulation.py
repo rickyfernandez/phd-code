@@ -11,33 +11,63 @@ from ..utils.logger import phdLogger, ufstring, original_emitter
 
 
 class Simulation(object):
-    """Marshalls the simulation."""
+    """Marshalls the simulation
+
+    This class runs the simulation and all necessary outputs. It takes
+    an integrator and simulation time and builds an output directory
+    where files will be saved.
+
+    Attributes
+    ----------
+    integrator : IntegrateBase
+        Advances the fluid equations by one step
+
+    mesh_relax_iterations : int
+        If non zero it signals the integrator to perform that
+        many numbers of mesh relaxtion in before_loop
+
+    param_max_dt_change : float
+        Largest change allowed of dt relative to old_dt
+
+    param_initial_timestep_factor : float
+        For dt at the first iteration, reduce by this factor
+
+    param_simulation_name : str
+       Name of problem solving, this name prefixs output data.
+
+    param_output_type : str
+        Format which data is written to disk
+
+    param_log_level : str
+        Level which logger is outputted
+
+    param_colored_logs : bool
+        Output colored logs to screen if True otherwise revmove color
+
+    simulation_time : SimulationTime
+        Signals when to output data and finish the simulation
+    """
     def __init__(
-        self, param_max_dt_change=1.e33, param_initial_timestep_factor=1.0,
-        param_simulation_name='simulation', param_colored_logs=True, param_log_level='debug'):
+            self, max_dt_change=1.e33, initial_timestep_factor=1.0,
+            simulation_name='simulation', colored_logs=True,
+            log_level='debug'):
         """Constructor for simulation.
 
         Parameters:
         -----------
-        param_max_dt_change : float
-            Largest change allowed of dt relative to old_dt (max_dt_change*old_dt)
+        max_dt_change : float
+            Largest change allowed of dt relative to old_dt (param_max_dt_change*old_dt)
 
-        param_initial_timestep_factor : float
+        initial_timestep_factor : float
             For dt at the first iteration, reduce by this factor
 
-        param_simulation_name : str
+        simulation_name : str
            Name of problem solving, this name prefixs output data.
 
-        param_output_relax : bool
-            Write out data at each mesh relaxation
-
-        param_output_type : str
-            Format which data is written to disk
-
-        param_log_level : str
+        log_level : str
             Level which logger is outputted
 
-        param_colored_logs : bool
+        colored_logs : bool
             Output colored logs to screen if True otherwise revmove color
         """
         # integrator uses a setter 
@@ -47,21 +77,10 @@ class Simulation(object):
         self.mesh_relax_iterations = 0
 
         # time step parameters
-        self.param_max_dt_change = param_max_dt_change
-        self.param_initial_timestep_factor = param_initial_timestep_factor
+        self.param_max_dt_change = max_dt_change
+        self.param_initial_timestep_factor = initial_timestep_factor
 
-        # parallel parameters
-        self.rank = 0
-        self.comm = None
-        self.num_procs = 1
-
-        # if mpi4py is available
-        if phd._in_parallel:
-            self.comm = phd._comm
-            self.num_procs = self.comm.Get_size()
-            self.rank = self.comm.Get_rank()
-
-        self.param_simulation_name = param_simulation_name
+        self.param_simulation_name = simulation_name
         self.param_output_directory = self.param_simulation_name + "_output"
 
         # create log file
@@ -71,27 +90,28 @@ class Simulation(object):
         phdLogger.addHandler(file_handler)
 
         # set logger level
-        if param_log_level == 'debug':
+        if log_level == 'debug':
             phdLogger.setLevel(logging.DEBUG)
-        elif param_log_level == 'info':
+        elif log_level == 'info':
             phdLogger.setLevel(logging.INFO)
-        elif param_log_level == 'success':
+        elif log_level == 'success':
             phdLogger.setLevel(logging.SUCCESS)
-        elif param_log_level == 'warning':
+        elif log_level == 'warning':
             phdLogger.setLevel(logging.WARNING)
         else:
-            raise RuntimeError("Unknown log level: %s" % param_log_level)
-        self.param_log_level = param_log_level
+            raise RuntimeError("Unknown log level: %s" % log_level)
+
+        self.param_log_level = log_level
 
         # remove color output if desired
-        if not param_colored_logs:
+        if not colored_logs:
             sh = phdLogger.handlers[0]
             sh.setFormatter(logging.Formatter(ufstring))
             sh.emit = original_emitter
-        self.param_colored_logs = param_colored_logs
+        self.param_colored_logs = colored_logs
 
         # create directory to store outputs
-        if self.rank == 0:
+        if phd._comm.Get_rank() == 0:
             if os.path.isdir(self.param_output_directory):
                 phdLogger.warning("Directory %s already exists, "
                         "files maybe over written!"  % self.param_output_directory)
@@ -164,7 +184,8 @@ class Simulation(object):
 
         if phd._in_parallel:
             message += "\nRunning in parallel: number of " +\
-                "processors = %d" % self.num_procs
+                "processors = %d" % phd._comm.Get_size()
+                #"processors = %d" % self.num_procs
         else:
             message += "\nRunning in serial"
 
