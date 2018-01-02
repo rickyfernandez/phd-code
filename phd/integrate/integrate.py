@@ -179,7 +179,7 @@ class IntegrateBase(object):
             self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # compute density, velocity, pressure, ...
-        self.equation_state.conserative_from_primitive(self.particles)
+        self.equation_state.conservative_from_primitive(self.particles)
 
         # should this be removed? TODO
         # assign cell and face velocities to zero 
@@ -262,7 +262,7 @@ class StaticMesh(IntegrateBase):
                 self.iteration)
 
         # setup the mesh for the next setup 
-        self.equation_state.primitive_from_conserative(self.particles)
+        self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
 
     def after_loop(self, simulation):
@@ -308,7 +308,7 @@ class MovingMesh(StaticMesh):
         self.mesh.build_geometry(self.particles, self.domain_manager)
         phdLogger.success("Moving Mesh Integrator: Finished mesh")
 
-        self.equation_state.primitive_from_conserative(self.particles)
+        self.equation_state.primitive_from_conservative(self.particles)
         phdLogger.info("Moving Mesh Integrator: Finished iteration %d" %\
                 self.iteration)
 

@@ -7,18 +7,18 @@ cdef class EquationStateBase:
     Equation of state base. All equation of states must inherit this
     class.
     '''
-    cpdef conserative_from_primitive(self, CarrayContainer particles):
+    cpdef conservative_from_primitive(self, CarrayContainer particles):
         '''
-        Computes conserative variables from primitive variables
+        Computes conservative variables from primitive variables
         '''
-        msg = "EquationStateBase::conserative_from_primitive called!"
+        msg = "EquationStateBase::conservative_from_primitive called!"
         raise NotImplementedError(msg)
 
-    cpdef primitive_from_conserative(self, CarrayContainer particles):
+    cpdef primitive_from_conservative(self, CarrayContainer particles):
         '''
-        Computes primitive variables from conserative variables
+        Computes primitive variables from conservative variables
         '''
-        msg = "EquationStateBase::primitive_from_conserative called!"
+        msg = "EquationStateBase::primitive_from_conservative called!"
         raise NotImplementedError(msg)
 
     cpdef np.float64_t sound_speed(self, np.float64_t density, np.float64_t pressure):
@@ -33,11 +33,11 @@ cdef class IdealGas(EquationStateBase):
     def __init__(self, param_gamma = 1.4):
         self.param_gamma = param_gamma
 
-    cpdef conserative_from_primitive(self, CarrayContainer particles):
+    cpdef conservative_from_primitive(self, CarrayContainer particles):
         '''
-        Computes conserative variables from primitive variables
+        Computes conservative variables from primitive variables
         '''
-        # conserative variables
+        # conservative variables
         cdef DoubleArray m = particles.get_carray("mass")
         cdef DoubleArray e = particles.get_carray("energy")
 
@@ -71,12 +71,12 @@ cdef class IdealGas(EquationStateBase):
             # total energy in cell
             e.data[i] = (.5*d.data[i]*v_sq + p.data[i]/(self.param_gamma-1.))*vol.data[i]
 
-    cpdef primitive_from_conserative(self, CarrayContainer particles):
+    cpdef primitive_from_conservative(self, CarrayContainer particles):
         '''
-        Computes primitive variables from conserative variables. Calculates
+        Computes primitive variables from conservative variables. Calculates
         for all particles (real + ghost).
         '''
-        # conserative variables
+        # conservative variables
         cdef DoubleArray m = particles.get_carray("mass")
         cdef DoubleArray e = particles.get_carray("energy")
 
