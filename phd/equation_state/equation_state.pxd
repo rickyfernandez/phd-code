@@ -3,7 +3,7 @@ cimport numpy as np
 from ..containers.containers cimport CarrayContainer
 
 cdef class EquationStateBase:
-    cdef public double param_gamma
+    cdef public double gamma
 
     cpdef conservative_from_primitive(self, CarrayContainer particles)
     cpdef primitive_from_conservative(self, CarrayContainer particles)
