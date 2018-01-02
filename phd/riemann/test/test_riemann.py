@@ -24,11 +24,11 @@ class TestHLLSetup(unittest.TestCase):
         # check if reconstruction has fields registered
        self.assertTrue(self.riemann.registered_fields)
 
-       # check for conserative fields, these are the fields that
+       # check for conservative fields, these are the fields that
        # the riemann solver will use 
        self.assertEqual(
-               self.riemann.flux_field_groups["conserative"],
-               self.particles.named_groups["conserative"])
+               self.riemann.flux_field_groups["conservative"],
+               self.particles.named_groups["conservative"])
 
        # check for momentum fields
        self.assertEqual(
@@ -49,8 +49,8 @@ class TestHLLSetup(unittest.TestCase):
 
        # check if flux states have correct fields
        self.assertEqual(
-               self.riemann.fluxes.named_groups["conserative"],
-               self.particles.named_groups["conserative"])
+               self.riemann.fluxes.named_groups["conservative"],
+               self.particles.named_groups["conservative"])
 
        # check if flux have correct momentum fields
        self.assertEqual(
