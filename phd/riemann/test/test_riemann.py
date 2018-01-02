@@ -72,7 +72,7 @@ class TestHLLFlux(unittest.TestCase):
         self.mesh.initialize()
 
         # equation of state class
-        self.eos = IdealGas(param_gamma=1.4)
+        self.eos = IdealGas(gamma=1.4)
 
         # reconstruction class
         self.reconstruction = PieceWiseConstant()
