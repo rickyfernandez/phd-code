@@ -400,7 +400,7 @@ cdef class Mesh:
                 fv[k][n] = 0.5*(wx[k][i] + wx[k][j]) + factor*(x[k][j] - x[k][i])
 
     cpdef update_from_fluxes(self, CarrayContainer particles, RiemannBase riemann, double dt):
-        """Update conserative variables from fluxes"""
+        """Update conservative variables from fluxes"""
 
         # face information
         cdef DoubleArray area = self.faces.get_carray("area")
