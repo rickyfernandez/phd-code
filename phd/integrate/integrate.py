@@ -283,7 +283,7 @@ class MovingMesh(StaticMesh):
 
         phdLogger.info("Moving Mesh Integrator: Starting reconstruction...")
         self.reconstruction.compute_states(self.particles, self.mesh,
-                self.riemann.param_boost, self.domain_manager, self.dt)
+                self.riemann.boost, self.domain_manager, self.dt)
         phdLogger.success("Moving Mesh Integrator: Finished reconstruction")
 
         phdLogger.info("Moving Mesh Integrator: Starting riemann...")

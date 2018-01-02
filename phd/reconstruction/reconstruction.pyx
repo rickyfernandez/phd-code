@@ -418,7 +418,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        compute linear reconstruction. Method taken from Springel (2009)
 #        """
 #        cdef double fac = 0.5*dt
-#        cdef bint boost = riemann.param_boost
+#        cdef bint boost = riemann.boost
 #        cdef double sepi, sepj, gamma = eos.get_gamma()
 #        cdef int i, j, k, m, n, dim = particles.info["dim"]
 #

@@ -6,8 +6,8 @@ from ..reconstruction.reconstruction cimport ReconstructionBase
 
 cdef class RiemannBase:
 
-    cdef public bint param_boost
-    cdef public double param_cfl
+    cdef public bint boost
+    cdef public double cfl
 
     cdef public registered_fields
     cdef public dict flux_fields

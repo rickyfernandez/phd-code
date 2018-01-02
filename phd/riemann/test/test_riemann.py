@@ -81,7 +81,7 @@ class TestHLLFlux(unittest.TestCase):
         self.reconstruction.initialize()
 
         # riemann class
-        self.riemann = HLL(param_boost=False)
+        self.riemann = HLL(boost=False)
         self.riemann.set_fields_for_riemann(self.particles)
         self.riemann.initialize()
 

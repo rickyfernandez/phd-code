@@ -14,9 +14,9 @@ cdef class RiemannBase:
     """
     Riemann base that all riemann solvers need to inherit.
     """
-    def __init__(self, double param_cfl=0.5, bint param_boost=True):
-        self.param_cfl = param_cfl
-        self.param_boost = param_boost
+    def __init__(self, double cfl=0.5, bint boost=True):
+        self.cfl = cfl
+        self.boost = boost
         self.registered_fields = False
 
     def initialize(self):
@@ -81,7 +81,7 @@ cdef class RiemannBase:
         cdef int i, k, dim
         cdef np.float64_t* v[3]
         cdef double c, R, dt, vsq
-        cdef bint boost = self.param_boost
+        cdef bint boost = self.boost
 
         dim = len(particles.named_groups['position'])
         particles.pointer_groups(v, particles.named_groups['velocity'])
@@ -121,7 +121,7 @@ cdef class RiemannBase:
                     for k in range(dim):
                         vsq += v[k][i]*v[k][i]
                     dt = fmin(R/(c + sqrt(vsq)), dt)
-        return self.param_cfl*dt
+        return self.cfl*dt
 
     cdef deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim):
         """
@@ -143,8 +143,8 @@ cdef class RiemannBase:
                 fmv[k][m]  += wx[k][m]*fm.data[m]
 
 cdef class HLL(RiemannBase):
-    def __init__(self, double param_cfl=0.5, bint param_boost=True):
-        super(HLL, self).__init__(param_cfl, param_boost)
+    def __init__(self, double cfl=0.5, bint boost=True):
+        super(HLL, self).__init__(cfl, boost)
 
     def initialize(self):
         if not self.registered_fields:
@@ -175,7 +175,7 @@ cdef class HLL(RiemannBase):
         cdef double vl_tmp, vr_tmp, nx_tmp, vl_sq, vr_sq
         cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3], *wx[3]
 
-        cdef bint boost = self.param_boost
+        cdef bint boost = self.boost
         cdef int num_faces = mesh.faces.get_number_of_items()
 
         # particle velocities left/right face
@@ -389,7 +389,7 @@ cdef class HLLC(HLL):
 
         cdef double fac1, fac2, fac3
 
-        cdef int boost = self.param_boost
+        cdef int boost = self.boost
         cdef int num_faces = mesh.faces.get_number_of_items()
 
         # particle velocities left/right face
