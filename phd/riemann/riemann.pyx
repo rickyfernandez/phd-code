@@ -35,11 +35,11 @@ cdef class RiemannBase:
         cdef dict fields_to_add = {}, named_groups = {}
 
         # add standard primitive fields
-        named_groups["conserative"] = []
-        for field in particles.named_groups["conserative"]:
+        named_groups["conservative"] = []
+        for field in particles.named_groups["conservative"]:
 
             # add field to group
-            named_groups["conserative"].append(field)
+            named_groups["conservative"].append(field)
 
             # check type of field
             dtype = particles.carray_info[field]
