@@ -11,7 +11,7 @@ from ..utils.logger import phdLogger, ufstring, original_emitter
 
 
 class Simulation(object):
-    """Marshalls the simulation
+    """Marshalls the simulation.
 
     This class runs the simulation and all necessary outputs. It takes
     an integrator and simulation time and builds an output directory
@@ -19,127 +19,128 @@ class Simulation(object):
 
     Attributes
     ----------
+    colored_logs : bool
+        Output colored logs to screen if True otherwise revmove color.
+
+    initial_timestep_factor : float
+        For dt at the first iteration, reduce by this factor.
+
     integrator : IntegrateBase
-        Advances the fluid equations by one step
+        Advances the fluid equations by one step.
+
+    log_level : str
+        Level which logger is outputted.
+
+    max_dt_change : float
+        Largest change allowed of dt relative to old_dt.
 
     mesh_relax_iterations : int
         If non zero it signals the integrator to perform that
-        many numbers of mesh relaxtion in before_loop
+        many numbers of mesh relaxtion in before_loop.
 
-    param_max_dt_change : float
-        Largest change allowed of dt relative to old_dt
+    output_type : str
+        Format which data is written to disk.
 
-    param_initial_timestep_factor : float
-        For dt at the first iteration, reduce by this factor
-
-    param_simulation_name : str
+    simulation_name : str
        Name of problem solving, this name prefixs output data.
 
-    param_output_type : str
-        Format which data is written to disk
-
-    param_log_level : str
-        Level which logger is outputted
-
-    param_colored_logs : bool
-        Output colored logs to screen if True otherwise revmove color
-
     simulation_time : SimulationTime
-        Signals when to output data and finish the simulation
+        Signals when to output data and finish the simulation.
+
     """
     def __init__(
             self, max_dt_change=1.e33, initial_timestep_factor=1.0,
-            simulation_name='simulation', colored_logs=True,
-            log_level='debug'):
+            simulation_name='simulation', mesh_relax_iterations,
+            colored_logs=True, log_level='debug', restart=False):
         """Constructor for simulation.
 
         Parameters:
         -----------
-        max_dt_change : float
-            Largest change allowed of dt relative to old_dt (param_max_dt_change*old_dt)
+        colored_logs : bool
+            Output colored logs to screen if True otherwise remove color.
 
         initial_timestep_factor : float
-            For dt at the first iteration, reduce by this factor
+            For dt at the first iteration, reduce by this factor.
+
+        log_level : str
+            Level which logger is outputted.outputted.
+
+        max_dt_change : float
+            Largest change allowed of dt relative to old_dt.
+
+        restart : bool
+            Flag to signal if the simulation is a restart.
 
         simulation_name : str
            Name of problem solving, this name prefixs output data.
 
-        log_level : str
-            Level which logger is outputted
-
-        colored_logs : bool
-            Output colored logs to screen if True otherwise revmove color
         """
         # integrator uses a setter 
         self.integrator = None
         self.simulation_time = None
 
-        self.mesh_relax_iterations = 0
+        # perform lloyd relaxtion scheme if non-zero
+        self.mesh_relax_iterations = mesh_relax_iterations
 
         # time step parameters
-        self.param_max_dt_change = max_dt_change
-        self.param_initial_timestep_factor = initial_timestep_factor
+        self.max_dt_change = max_dt_change
+        self.initial_timestep_factor = initial_timestep_factor
 
-        self.param_simulation_name = simulation_name
-        self.param_output_directory = self.param_simulation_name + "_output"
+        self.simulation_name = simulation_name
+        self.output_directory = self.simulation_name + "_output"
 
         # create log file
-        self.log_filename = self.param_simulation_name + ".log"
+        self.log_filename = self.simulation_name + ".log"
         file_handler = logging.FileHandler(self.log_filename)
         file_handler.setFormatter(logging.Formatter(ufstring))
         phdLogger.addHandler(file_handler)
 
-        # set logger level
-        if log_level == 'debug':
+        # set logger level for outputs
+        if log_level == "debug":
             phdLogger.setLevel(logging.DEBUG)
-        elif log_level == 'info':
+        elif log_level == "info":
             phdLogger.setLevel(logging.INFO)
-        elif log_level == 'success':
+        elif log_level == "success":
             phdLogger.setLevel(logging.SUCCESS)
-        elif log_level == 'warning':
+        elif log_level == "warning":
             phdLogger.setLevel(logging.WARNING)
         else:
             raise RuntimeError("Unknown log level: %s" % log_level)
 
-        self.param_log_level = log_level
+        self.log_level = log_level
 
         # remove color output if desired
         if not colored_logs:
             sh = phdLogger.handlers[0]
             sh.setFormatter(logging.Formatter(ufstring))
             sh.emit = original_emitter
-        self.param_colored_logs = colored_logs
+        self.colored_logs = colored_logs
 
         # create directory to store outputs
-        if phd._comm.Get_rank() == 0:
-            if os.path.isdir(self.param_output_directory):
+        if phd._rank == 0:
+            if os.path.isdir(self.output_directory):
                 phdLogger.warning("Directory %s already exists, "
-                        "files maybe over written!"  % self.param_output_directory)
+                        "files maybe over written!" % self.output_directory)
             else:
-                os.mkdir(self.param_output_directory)
-
-    def set_mesh_relax_iterations(self, mesh_relax_iterations):
-        self.mesh_relax_iterations = mesh_relax_iterations
+                os.mkdir(self.output_directory)
 
     @check_class(IntegrateBase)
     def set_integrator(self, integrator):
-        """
-        Set integrator to evolve the simulation.
-        """
+        """Set integrator to evolve the simulation."""
         self.integrator = integrator
 
     @check_class(SimulationTime)
     def set_simulation_time(self, simulation_time):
-        """
-        Set time outputer for data outputs
-        """
+        """Set time outputer for data outputs and ending the simulation"""
         self.simulation_time = simulation_time
 
     def solve(self):
-        """
+        """Advance the simulation to final time.
+
         Main driver to evolve the equations. Responsible for advancing
         the simulation while outputting data to disk at appropriate
         times.
+
         """
         integrator = self.integrator
         simulation_time = self.simulation_time
@@ -150,34 +151,34 @@ class Simulation(object):
         # output initial state of simulation
         integrator.before_loop(self)
 
-        # compute first time step
-        integrator.compute_time_step()
-        self.modify_timestep()
+        # output initial data
+        simulation.simulation_time.output(
+                self.output_directory,
+                integrator,
+                force=True)
 
         # evolve the simulation
         phdLogger.info("Beginning integration loop")
         while not simulation_time.finished(integrator):
+
+            # compute new time step
+            integrator.compute_time_step()
+            self.modify_timestep()
 
             # advance one time step
             integrator.evolve_timestep()
 
             # output if needed
             simulation_time.output(
-                    self.param_output_directory,
+                    self.output_directory,
                     integrator)
-
-            # compute new time step
-            integrator.compute_time_step()
-            self.modify_timestep()
 
         # clean up or last calculations
         integrator.after_loop(self)
         phdLogger.success("Simulation successfully finished!")
 
     def start_up_message(self):
-        '''
-        Print out welcome message with details of the simulation
-        '''
+        """Print out welcome message with details of the simulation."""
         bar = "-"*30
         message = "\n" + logo_str
         message += "\nSimulation Information\n" + bar
@@ -191,9 +192,9 @@ class Simulation(object):
 
         # simulation name and output directory
         message += "\nLog file saved at: %s" % self.log_filename
-        message += "\nProblem solving: %s" % self.param_simulation_name
+        message += "\nProblem solving: %s" % self.simulation_name
         message += "\nOutput data will be saved at: %s\n" %\
-                self.param_output_directory
+                self.output_directory
 
         # print which classes are used in simulation
         cldict = class_dict(self.integrator)
@@ -202,22 +203,22 @@ class Simulation(object):
         for key, val in sorted(cldict.iteritems()):
             message += key + ": " + val + "\n"
 
-        # log message
         phdLogger.info(message)
 
     def modify_timestep(self):
-        '''
-        Compute time step for the next iteration. First the integrator time step
-        is called. Then it is modified by the simulation as to ensure it is
-        constrained.
-        '''
+        """Modify time step for the next iteration.
+        
+        Once the time step is calculated from the integrator, then
+        constrain by outputters and simulation.
+
+        """
         dt = self.integrator.dt
         #if self.integrator.iteration == 0:
         #    # shrink if first iteration
-        #    dt = self.param_initial_timestep_factor*dt
+        #    dt = self.initial_timestep_factor*dt
         #else:
         #    # constrain rate of change
-        #    dt = min(self.param_max_dt_change*self.old_dt, dt)
+        #    dt = min(self.max_dt_change*self.old_dt, dt)
         #self.old_dt = dt
 
         # ensure the simulation outputs and finishes at selected time

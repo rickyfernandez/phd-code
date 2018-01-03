@@ -50,7 +50,7 @@ def HydroParticleCreator(num=0, dim=2, parallel=False):
     named_groups['primitive'] = ['density'] +\
             named_groups['velocity'] +\
             ['pressure']
-    named_groups['conserative'] = ['mass'] +\
+    named_groups['conservative'] = ['mass'] +\
             named_groups['momentum'] +\
             ['energy']
 

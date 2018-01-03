@@ -1,22 +1,42 @@
 
-class SimulationOutputer(object):
-    '''
-    Class that singals the simulation to write out
+class SimulationOutputerBase(object):
+    """Class that singals the simulation to write out
     data at current time.
-    '''
+
+    Attributes
+    ----------
+    read_write : ReaderWriter 
+        Class that writes data in a given format.
+
+    """
     def __init__(self):
         self.read_write = None
-        self.counter = 0
 
     def set_writer(self, read_write):
         self.read_write = read_write
 
+    def check_for_output(self, integrator):
+        """Signal if simulation needs to output"""
+        msg = "SimulationOutputerBase::check_for_output called!"
+        raise NotImplementedError(msg)
+
     def output(self, output_directory, integrator):
+        """Write out data to given directory.
+
+        Parameters
+        ----------
+        output_directory : str
+            Directory name to output data.
+
+        integrator : IntegrateBase
+            Integrator that solves the equations.
+
+        """
         if self.check_for_output(integrator):
             self.read_write.write(output_directory, integrator)
 
     def modify_timestep(self, integrator):
-        '''
+        """
         Return consistent time step
 
         Parameters
@@ -27,29 +47,38 @@ class SimulationOutputer(object):
         Returns
         -------
         float
-            modified time step if needed otherwise integrator dt
-        '''
+            Modified dt if needed otherwise integrator dt.
+
+        """
         return integrator.dt
 
-class IterationInterval(SimulationOutputer):
+class IterationInterval(SimulationOutputerBase):
+    """Class that singals the simulation to write out
+    at given iteration intervals. 
+
+    Attributes
+    ----------
+    read_write : ReaderWriter 
+        Class that writes data in a given format.
+
+    """
     def __init__(self, iteration_interval):
         self.iteration_interval = iteration_interval
 
     def check_for_output(self, integrator):
-        '''
-        Return True to signal the simulation has reached
-        iteteration number to ouput data
+        """Return True to signal the simulation has reached
+        iteteration interval to ouput data.
 
         Parameters
         ----------
-        integrator : phd.IntegrateBase
+        integrator : IntegrateBase
             Integrator that solves the equations
 
         Returns
         -------
         bool
             True if should output False otherwise
-        '''
+        """
         return (integrator.iteration % self.iteration_interval == 0)
 
 #class TimeInterval(SimulationOutputer):

@@ -412,196 +412,196 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #                    for k in range(dim):
 #                        grad[dim*n+k][i] = alpha[n]*df[dim*n+k]
 #
-##        # transfer gradients to ghost particles
-##        domain_manager.update_gradients(particles, self.grad, self.grad.named_groups['primitive'])
-##
-##    def compute_states(self, CarrayContainer particles, Mesh mesh,
-##            RiemannBase riemann, double dt):
-##        """
-##        compute linear reconstruction. Method taken from Springel (2009)
-##        """
-##        cdef double fac = 0.5*dt
-##        cdef bint boost = riemann.param_boost
-##        cdef double sepi, sepj, gamma = eos.get_gamma()
-##        cdef int i, j, k, m, n, dim = particles.info["dim"]
-##
-##        cdef np.float64_t vi[3], vj[3]
-##        cdef np.float64_t *fij[3], *wx[3]
-##        cdef np.float64_t *vl[3], *vr[3]
-##        cdef np.float64_t *x[3], *v[3], *dcx[3]
-##        cdef np.float64_t *dd[3], *dv[9], *dp[3]
-##
-##        cdef LongArray pair_i = mesh.faces.get_carray("pair-i")
-##        cdef LongArray pair_j = mesh.faces.get_carray("pair-j")
-##
-##        # particle primitive variables
-##        cdef DoubleArray d = particles.get_carray("density")
-##        cdef DoubleArray p = particles.get_carray("pressure")
-##
-##        # left state primitive variables
-##        cdef DoubleArray dl = self.left_state.get_carray("density")
-##        cdef DoubleArray pl = self.left_state.get_carray("pressure")
-##
-##        # right state primitive variables
-##        cdef DoubleArray dr = self.right_state.get_carray("density")
-##        cdef DoubleArray pr = self.right_state.get_carray("pressure")
-##
-##        # extract pointers
-##        particles.pointer_groups(x, particles.named_groups['position'])
-##        particles.pointer_groups(dcx, particles.named_groups['dcom'])
-##        particles.pointer_groups(v, particles.named_groups['velocity'])
-##
-##        self.left_state.pointer_groups(vl,  self.left_state.named_groups['velocity'])
-##        self.right_state.pointer_groups(vr, self.right_state.named_groups['velocity'])
-##
-##        mesh.faces.pointer_groups(fij, mesh.faces.named_groups['com'])
-##        mesh.faces.pointer_groups(wx,  mesh.faces.named_groups['velocity'])
-##
-##        # allocate space and compute gradients
-##        self.grad.resize(particles.get_number_of_items())
-##        self.compute_gradients(particles, mesh.faces)
-##
-##        self.grad.pointer_groups(dd, self.reconstruct_grad_groups['density'])
-##        self.grad.pointer_groups(dv, self.reconstruct_grad_groups['velocity'])
-##        self.grad.pointer_groups(dp, self.reconstruct_grad_groups['pressure'])
-##
-##        if do_colors:
-##            self.particles(self.col, particles.named_groups["colors"])
-##            self.left_state.pointer_groups(self.coll,  self.named_groups['colors'])
-##            self.right_state.pointer_groups(self.colr, self.named_groups['colors'])
-##            self.grad.pointer_groups(dc, self.reconstruct_grad_groups['colors'])
-##
-##        # create left/right states for each face
-##        for m in range(mesh.faces.get_number_of_items()):
-##
-##            i = pair_i.data[m]
-##            j = pair_j.data[m]
-##
-##            # density
-##            dl.data[m] = d.data[i]
-##            dr.data[m] = d.data[j]
-##
-##            if do_colors:
-##                for c in range(num_colors):
-##                    self.coll[c][m] = self.col[c][i]
-##                    self.colr[c][m] = self.col[c][j]
-##
-##            # pressure
-##            pl.data[m] = p.data[i]
-##            pr.data[m] = p.data[j]
-##
-##            # velocity - add pressure gradient component
-##            for k in range(dim):
-##
-##                # copy velocities
-##                if boost:
-##                    vi[k] = v[k][i] - wx[k][m]
-##                    vj[k] = v[k][j] - wx[k][m]
-##                else:
-##                    vi[k] = v[k][i]
-##                    vj[k] = v[k][j]
-##
-##                vl[k][m] = vi[k] - fac*dp[k][i]/d.data[i]
-##                vr[k][m] = vj[k] - fac*dp[k][j]/d.data[j]
-##
-##            # MUSCL schemem eq. 36
-##            for k in range(dim): # dot products
-##
-##                # distance from particle to com of face
-##                sepi = fij[k][m] - (x[k][i] + dcx[k][i])
-##                sepj = fij[k][m] - (x[k][j] + dcx[k][j])
-##
-##                # add gradient (eq. 21) and time extrapolation (eq. 37)
-##                # the trace of dv is div of velocity
-##                dl.data[m] += dd[k][i]*(sepi - fac*vi[k]) - fac*d.data[i]*dv[(dim+1)*k][i]
-##                dr.data[m] += dd[k][j]*(sepj - fac*vj[k]) - fac*d.data[j]*dv[(dim+1)*k][j]
-##
-##                if do_colors:
-##                    for c in range(num_colors):
-##                        self.coll[c][m] += self.dc[c*num_colors+k]*(sepi - fac*vi[k]) -\
-##                                fac*self.col[c][i]*dv[(dim+1)*k][i]
-##                        self.colr[c][m] += self.dc[c*num_colors+k]*(sepj - fac*vj[k]) -\
-##                                fac*self.col[c][j]*dv[(dim+1)*k][j]
-##
-##                pl.data[m] += dp[k][i]*(sepi - fac*vi[k]) - fac*gamma*p.data[i]*dv[(dim+1)*k][i]
-##                pr.data[m] += dp[k][j]*(sepj - fac*vj[k]) - fac*gamma*p.data[j]*dv[(dim+1)*k][j]
-##
-##                # pressure term already added before loop 
-##                for n in range(dim): # over velocity components
-##                    vl[n][m] += dv[n*dim+k][i]*(sepi - fac*vi[k])
-##                    vr[n][m] += dv[n*dim+k][j]*(sepj - fac*vj[k])
-##
-##            if dl.data[m] <= 0.0:
-##                raise RuntimeError('left density less than zero...... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
-##            if dr.data[m] <= 0.0:
-##                raise RuntimeError('right density less than zero..... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))
-##            if pl.data[m] <= 0.0:
-##                raise RuntimeError('left pressure less than zero..... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
-##            if pr.data[m] <= 0.0:
-##                raise RuntimeError('right pressure less than zero.... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))
+#        # transfer gradients to ghost particles
+#        domain_manager.update_gradients(particles, self.grad, self.grad.named_groups['primitive'])
+#
+#    def compute_states(self, CarrayContainer particles, Mesh mesh,
+#            RiemannBase riemann, double dt):
+#        """
+#        compute linear reconstruction. Method taken from Springel (2009)
+#        """
+#        cdef double fac = 0.5*dt
+#        cdef bint boost = riemann.boost
+#        cdef double sepi, sepj, gamma = eos.get_gamma()
+#        cdef int i, j, k, m, n, dim = particles.info["dim"]
+#
+#        cdef np.float64_t vi[3], vj[3]
+#        cdef np.float64_t *fij[3], *wx[3]
+#        cdef np.float64_t *vl[3], *vr[3]
+#        cdef np.float64_t *x[3], *v[3], *dcx[3]
+#        cdef np.float64_t *dd[3], *dv[9], *dp[3]
+#
+#        cdef LongArray pair_i = mesh.faces.get_carray("pair-i")
+#        cdef LongArray pair_j = mesh.faces.get_carray("pair-j")
+#
+#        # particle primitive variables
+#        cdef DoubleArray d = particles.get_carray("density")
+#        cdef DoubleArray p = particles.get_carray("pressure")
+#
+#        # left state primitive variables
+#        cdef DoubleArray dl = self.left_state.get_carray("density")
+#        cdef DoubleArray pl = self.left_state.get_carray("pressure")
+#
+#        # right state primitive variables
+#        cdef DoubleArray dr = self.right_state.get_carray("density")
+#        cdef DoubleArray pr = self.right_state.get_carray("pressure")
+#
+#        # extract pointers
+#        particles.pointer_groups(x, particles.named_groups['position'])
+#        particles.pointer_groups(dcx, particles.named_groups['dcom'])
+#        particles.pointer_groups(v, particles.named_groups['velocity'])
+#
+#        self.left_state.pointer_groups(vl,  self.left_state.named_groups['velocity'])
+#        self.right_state.pointer_groups(vr, self.right_state.named_groups['velocity'])
+#
+#        mesh.faces.pointer_groups(fij, mesh.faces.named_groups['com'])
+#        mesh.faces.pointer_groups(wx,  mesh.faces.named_groups['velocity'])
+#
+#        # allocate space and compute gradients
+#        self.grad.resize(particles.get_number_of_items())
+#        self.compute_gradients(particles, mesh.faces)
+#
+#        self.grad.pointer_groups(dd, self.reconstruct_grad_groups['density'])
+#        self.grad.pointer_groups(dv, self.reconstruct_grad_groups['velocity'])
+#        self.grad.pointer_groups(dp, self.reconstruct_grad_groups['pressure'])
+#
+#        if do_colors:
+#            self.particles(self.col, particles.named_groups["colors"])
+#            self.left_state.pointer_groups(self.coll,  self.named_groups['colors'])
+#            self.right_state.pointer_groups(self.colr, self.named_groups['colors'])
+#            self.grad.pointer_groups(dc, self.reconstruct_grad_groups['colors'])
+#
+#        # create left/right states for each face
+#        for m in range(mesh.faces.get_number_of_items()):
+#
+#            i = pair_i.data[m]
+#            j = pair_j.data[m]
+#
+#            # density
+#            dl.data[m] = d.data[i]
+#            dr.data[m] = d.data[j]
+#
+#            if do_colors:
+#                for c in range(num_colors):
+#                    self.coll[c][m] = self.col[c][i]
+#                    self.colr[c][m] = self.col[c][j]
+#
+#            # pressure
+#            pl.data[m] = p.data[i]
+#            pr.data[m] = p.data[j]
+#
+#            # velocity - add pressure gradient component
+#            for k in range(dim):
+#
+#                # copy velocities
+#                if boost:
+#                    vi[k] = v[k][i] - wx[k][m]
+#                    vj[k] = v[k][j] - wx[k][m]
+#                else:
+#                    vi[k] = v[k][i]
+#                    vj[k] = v[k][j]
+#
+#                vl[k][m] = vi[k] - fac*dp[k][i]/d.data[i]
+#                vr[k][m] = vj[k] - fac*dp[k][j]/d.data[j]
+#
+#            # MUSCL schemem eq. 36
+#            for k in range(dim): # dot products
+#
+#                # distance from particle to com of face
+#                sepi = fij[k][m] - (x[k][i] + dcx[k][i])
+#                sepj = fij[k][m] - (x[k][j] + dcx[k][j])
+#
+#                # add gradient (eq. 21) and time extrapolation (eq. 37)
+#                # the trace of dv is div of velocity
+#                dl.data[m] += dd[k][i]*(sepi - fac*vi[k]) - fac*d.data[i]*dv[(dim+1)*k][i]
+#                dr.data[m] += dd[k][j]*(sepj - fac*vj[k]) - fac*d.data[j]*dv[(dim+1)*k][j]
+#
+#                if do_colors:
+#                    for c in range(num_colors):
+#                        self.coll[c][m] += self.dc[c*num_colors+k]*(sepi - fac*vi[k]) -\
+#                                fac*self.col[c][i]*dv[(dim+1)*k][i]
+#                        self.colr[c][m] += self.dc[c*num_colors+k]*(sepj - fac*vj[k]) -\
+#                                fac*self.col[c][j]*dv[(dim+1)*k][j]
+#
+#                pl.data[m] += dp[k][i]*(sepi - fac*vi[k]) - fac*gamma*p.data[i]*dv[(dim+1)*k][i]
+#                pr.data[m] += dp[k][j]*(sepj - fac*vj[k]) - fac*gamma*p.data[j]*dv[(dim+1)*k][j]
+#
+#                # pressure term already added before loop 
+#                for n in range(dim): # over velocity components
+#                    vl[n][m] += dv[n*dim+k][i]*(sepi - fac*vi[k])
+#                    vr[n][m] += dv[n*dim+k][j]*(sepj - fac*vj[k])
+#
+#            if dl.data[m] <= 0.0:
+#                raise RuntimeError('left density less than zero...... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
+#            if dr.data[m] <= 0.0:
+#                raise RuntimeError('right density less than zero..... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))
+#            if pl.data[m] <= 0.0:
+#                raise RuntimeError('left pressure less than zero..... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
+#            if pr.data[m] <= 0.0:
+#                raise RuntimeError('right pressure less than zero.... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))
 #
 #
-## ---------------------------------- color fields functions ----------------------------------
+# ---------------------------------- color fields functions ----------------------------------
 #
-##cdef class ReconstructionBase:
-#    #def set_fields_to_reconstruct(CarrayContainer particles):
-#    #    msg = "Reconstruction::set_fields_to_reconstruct called!"
-#    #    raise NotImplementedError(msg)
+#cdef class ReconstructionBase:
+#    def set_fields_to_reconstruct(CarrayContainer particles):
+#        msg = "Reconstruction::set_fields_to_reconstruct called!"
+#        raise NotImplementedError(msg)
 #
-##cdef class PieceWiseConstant(ReconstructionBase):
-##    def __dealloc__(self):
-##        """Release pointers"""
-##
-##        if self.do_colors:
-##            stdlib.free(self.col)
-##            stdlib.free(self.coll)
-##            stdlib.free(self.colr)
-##
-##    def set_fields_to_reconstruct(CarrayContainer particles):
+#cdef class PieceWiseConstant(ReconstructionBase):
+#    def __dealloc__(self):
+#        """Release pointers"""
+#
+#        if self.do_colors:
+#            stdlib.free(self.col)
+#            stdlib.free(self.coll)
+#            stdlib.free(self.colr)
+#
+#    def set_fields_to_reconstruct(CarrayContainer particles):
 #        # add species
-##        if "species" in particles.named_groups.keys():
-##            for field in particles.named_groups["species"]:
-##                named_groups["primitive"].append(field)
-##                named_groups["species"].append(field)
-##                state_vars[field] = "double"
-##
-##        # add passive-scalars
-##        if "passive-scalars" in particles.named_groups.keys():
-##            for field in particles.named_groups["passive-scalars"]:
-##                named_groups["primitive"].append(field)
-##                named_groups["passive-scalars"].append(field)
-##                state_vars[field] = "double"
-##
-##        # create extra groups for convenience
-##        if "species" in particles.named_groups.keys() or\
-##                "passive-scalars" in particles.named_groups.keys():
-##            self.do_colors = True
-##    def initialize(self):
-##        """Setup initial arrays and routines for computation"""
-##        if self.reconstruct_fields or self.reconstruct_field_groups:
-##            raise RuntimeError("fields to reconstruct not specified")
-##
-##        # create states
-##        self.left_state  = CarrayContainer(var_dict=self.reconstruct_fields)
-##        self.right_state = CarrayContainer(var_dict=self.reconstruct_fields)
-##
-##        if self.do_colors:
-##            num_colors = len(particles.named_groups["colors"])
-##            self.col  = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
-##            self.coll = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
-##            self.colr = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
-##    cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
-##            RiemannBase riemann, DomainManager domain_manager, double dt, int dim):
-##
-##        cdef int i, j, k, n#, c, num_colors
-##        cdef bint do_colors = self.do_colors
-##        if do_colors:
-##            num_colors = len(self.named_groups["colors"])
-##            particles.pointer_groups(self.col, self.particles.named_groups["colors"])
-##            self.left_state.pointer_groups(self.coll, self.particles.named_groups["colors"])
-##            self.right_state.pointer_groups(self.colr, self.particles.named_groups["colors"])
-##
-##            if do_colors:
-##                for c in range(num_colors):
-##                    self.coll[c][m] = self.col[c][i]
-##                    self.colr[c][m] = self.col[c][j]
+#        if "species" in particles.named_groups.keys():
+#            for field in particles.named_groups["species"]:
+#                named_groups["primitive"].append(field)
+#                named_groups["species"].append(field)
+#                state_vars[field] = "double"
+#
+#        # add passive-scalars
+#        if "passive-scalars" in particles.named_groups.keys():
+#            for field in particles.named_groups["passive-scalars"]:
+#                named_groups["primitive"].append(field)
+#                named_groups["passive-scalars"].append(field)
+#                state_vars[field] = "double"
+#
+#        # create extra groups for convenience
+#        if "species" in particles.named_groups.keys() or\
+#                "passive-scalars" in particles.named_groups.keys():
+#            self.do_colors = True
+#    def initialize(self):
+#        """Setup initial arrays and routines for computation"""
+#        if self.reconstruct_fields or self.reconstruct_field_groups:
+#            raise RuntimeError("fields to reconstruct not specified")
+#
+#        # create states
+#        self.left_state  = CarrayContainer(var_dict=self.reconstruct_fields)
+#        self.right_state = CarrayContainer(var_dict=self.reconstruct_fields)
+#
+#        if self.do_colors:
+#            num_colors = len(particles.named_groups["colors"])
+#            self.col  = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
+#            self.coll = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
+#            self.colr = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
+#    cpdef compute_states(self, CarrayContainer particles, Mesh mesh, EquationStateBase eos,
+#            RiemannBase riemann, DomainManager domain_manager, double dt, int dim):
+#
+#        cdef int i, j, k, n#, c, num_colors
+#        cdef bint do_colors = self.do_colors
+#        if do_colors:
+#            num_colors = len(self.named_groups["colors"])
+#            particles.pointer_groups(self.col, self.particles.named_groups["colors"])
+#            self.left_state.pointer_groups(self.coll, self.particles.named_groups["colors"])
+#            self.right_state.pointer_groups(self.colr, self.particles.named_groups["colors"])
+#
+#            if do_colors:
+#                for c in range(num_colors):
+#                    self.coll[c][m] = self.col[c][i]
+#                    self.colr[c][m] = self.col[c][j]

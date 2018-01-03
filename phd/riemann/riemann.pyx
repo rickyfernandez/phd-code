@@ -11,66 +11,131 @@ from ..utils.carray cimport DoubleArray, IntArray
 cdef int Real = ParticleTAGS.Real
 
 cdef class RiemannBase:
+    """Riemann base that all riemann solvers need to inherit.
+
+    Attributes
+    ----------
+    cfl : float
+        The Courant Friedrichs Lewy condition.
+    boost : bool
+        Solve equations in moving reference frame.
+
     """
-    Riemann base that all riemann solvers need to inherit.
-    """
-    def __init__(self, double param_cfl=0.5, bint param_boost=True):
-        self.param_cfl = param_cfl
-        self.param_boost = param_boost
+    def __init__(self, double cfl=0.5, bint boost=True):
+        """Constructor for RiemannBase.
+
+        Parameters
+        ----------
+        cfl : float
+            The Courant Friedrichs Lewy condition.
+        boost : bool
+            Solve equations in moving reference frame.
+
+        """
+        self.cfl = cfl
+        self.boost = boost
         self.registered_fields = False
 
     def initialize(self):
-        """
-        Setup all connections for computation classes. Should check always
-        check if registered_fields is True.
+        """Setup all connections for computation classes. Should check
+        always if registered_fields is True.
         """
         msg = "Reconstruction::initialize called!"
         raise NotImplementedError(msg)
 
     def set_fields_for_riemann(self, CarrayContainer particles):
-        """
-        Create lists of variables to calculate fluxes.
+        """Create fields to calculate fluxes.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         cdef str field, dtype
         cdef dict fields_to_add = {}, named_groups = {}
 
         # add standard primitive fields
-        named_groups["conserative"] = []
-        for field in particles.named_groups["conserative"]:
+        named_groups["conservative"] = []
+        for field in particles.named_groups["conservative"]:
 
             # add field to group
-            named_groups["conserative"].append(field)
+            named_groups["conservative"].append(field)
 
             # check type of field
             dtype = particles.carray_info[field]
             if dtype != "double":
-                raise RuntimeError("Riemann: %s field non double type" % field)
+                raise RuntimeError("Riemann: %s field non double type!" % field)
             fields_to_add[field] = "double"
 
-        named_groups['momentum'] = particles.named_groups['momentum']
+        named_groups["momentum"] = particles.named_groups["momentum"]
 
         # store fields info
         self.registered_fields = True
         self.flux_fields = fields_to_add
         self.flux_field_groups = named_groups
 
-    cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh, ReconstructionBase reconstruction,
-            EquationStateBase eos):
-        """Compute fluxes for each face in the mesh"""
-        cdef int dim = len(particles.named_groups['position'])
+    cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh, 
+                         ReconstructionBase reconstruction, EquationStateBase eos):
+        """Compute fluxes for each face in the mesh.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        reconstruction : ReconstructionBase
+            Class that performs field reconstruction inputs for the
+            riemann problem.
+
+        eos : EquationStateBase
+            Thermodynamic equation of state.
+        
+        """
+        cdef int dim = len(particles.named_groups["position"])
 
         # resize to hold fluxes for each face in mesh
         self.fluxes.resize(mesh.faces.get_number_of_items())
         self.riemann_solver(mesh, reconstruction, eos.get_gamma(), dim)
 
-    cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
-        """Riemann solver"""
+    cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction,
+                        double gamma, int dim):
+        """Solve the riemann problem.
+
+        Parameters
+        ----------
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        reconstruction : ReconstructionBase
+            Class that performs field reconstruction inputs for the
+            riemann problem.
+
+        gamma : float
+            Ratio of specific heats.
+
+        """
         msg = "RiemannBase::riemann_solver called!"
         raise NotImplementedError(msg)
 
-    cpdef double compute_time_step(self, CarrayContainer particles, EquationStateBase eos):
-        """
-        Compute time step for next integration step.
+    cpdef double compute_time_step(self, CarrayContainer particles,
+                                   EquationStateBase eos):
+        """Compute time step for next integration step.
+
+        particles : CarrayContainer
+            Container of particles.
+
+        eos : EquationStateBase
+            Thermodynamic equation of state.
+
+        Returns
+        -------
+        double
+            Time step 
+
         """
         cdef IntArray tags   = particles.get_carray("tag")
         cdef DoubleArray vol = particles.get_carray("volume")
@@ -81,10 +146,10 @@ cdef class RiemannBase:
         cdef int i, k, dim
         cdef np.float64_t* v[3]
         cdef double c, R, dt, vsq
-        cdef bint boost = self.param_boost
+        cdef bint boost = self.boost
 
-        dim = len(particles.named_groups['position'])
-        particles.pointer_groups(v, particles.named_groups['velocity'])
+        dim = len(particles.named_groups["position"])
+        particles.pointer_groups(v, particles.named_groups["velocity"])
 
         # calculate first value for min
         c = eos.sound_speed(d.data[0], p.data[0])
@@ -121,11 +186,22 @@ cdef class RiemannBase:
                     for k in range(dim):
                         vsq += v[k][i]*v[k][i]
                     dt = fmin(R/(c + sqrt(vsq)), dt)
-        return self.param_cfl*dt
+        return self.cfl*dt
 
     cdef deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim):
-        """
-        Deboost riemann solution of fluxes from face reference to lab frame.
+        """Deboost riemann solution of fluxes from face reference to lab frame.
+
+        Parameters
+        ----------
+        fluxes : CarrayContainer
+            Container of fluxes.
+
+        faces : CarrayContainer
+            Container of faces from the mesh.
+
+        dim : int
+            Dimension of the problem.
+
         """
         cdef DoubleArray fm = fluxes.get_carray("mass")
         cdef DoubleArray fe = fluxes.get_carray("energy")
@@ -133,8 +209,8 @@ cdef class RiemannBase:
         cdef int m, k
         cdef np.float64_t *fmv[3], *wx[3]
 
-        fluxes.pointer_groups(fmv, fluxes.named_groups['momentum'])
-        faces.pointer_groups(wx, faces.named_groups['velocity'])
+        fluxes.pointer_groups(fmv, fluxes.named_groups["momentum"])
+        faces.pointer_groups(wx, faces.named_groups["velocity"])
 
         # return flux to lab frame (Pakmor 2011)
         for m in range(faces.get_number_of_items()):
@@ -142,11 +218,16 @@ cdef class RiemannBase:
                 fe.data[m] += wx[k][m]*(0.5*wx[k][m]*fm.data[m] + fmv[k][m])
                 fmv[k][m]  += wx[k][m]*fm.data[m]
 
+
 cdef class HLL(RiemannBase):
-    def __init__(self, double param_cfl=0.5, bint param_boost=True):
-        super(HLL, self).__init__(param_cfl, param_boost)
+    def __init__(self, double cfl=0.5, bint boost=True):
+        """HLL riemann solver"""
+        super(HLL, self).__init__(cfl, boost)
 
     def initialize(self):
+        """Setup all connections for computation classes. Should check
+        always if registered_fields is True.
+        """
         if not self.registered_fields:
             raise RuntimeError("Riemann did not set fields for flux!")
 
@@ -154,7 +235,21 @@ cdef class HLL(RiemannBase):
         self.fluxes.named_groups = self.flux_field_groups
 
     cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
+        """Solve the riemann problem.
 
+        Parameters
+        ----------
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        reconstruction : ReconstructionBase
+            Class that performs field reconstruction inputs for the
+            riemann problem.
+
+        gamma : float
+            Ratio of specific heats.
+
+        """
         # left state primitive variables
         cdef DoubleArray dl = reconstruction.left_states.get_carray("density")
         cdef DoubleArray pl = reconstruction.left_states.get_carray("pressure")
@@ -175,21 +270,21 @@ cdef class HLL(RiemannBase):
         cdef double vl_tmp, vr_tmp, nx_tmp, vl_sq, vr_sq
         cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3], *wx[3]
 
-        cdef bint boost = self.param_boost
+        cdef bint boost = self.boost
         cdef int num_faces = mesh.faces.get_number_of_items()
 
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
-                reconstruction.left_states.named_groups['velocity'])
+                reconstruction.left_states.named_groups["velocity"])
         reconstruction.right_states.pointer_groups(vr,
-                reconstruction.right_states.named_groups['velocity'])
+                reconstruction.right_states.named_groups["velocity"])
 
         # face momentum fluxes
-        self.fluxes.pointer_groups(fmv, self.fluxes.named_groups['momentum'])
+        self.fluxes.pointer_groups(fmv, self.fluxes.named_groups["momentum"])
 
         # face normal and velocity
-        mesh.faces.pointer_groups(nx, mesh.faces.named_groups['normal'])
-        mesh.faces.pointer_groups(wx, mesh.faces.named_groups['velocity'])
+        mesh.faces.pointer_groups(nx, mesh.faces.named_groups["normal"])
+        mesh.faces.pointer_groups(wx, mesh.faces.named_groups["velocity"])
 
         # solve riemann for each face
         for i in range(num_faces):
@@ -269,7 +364,44 @@ cdef class HLL(RiemannBase):
     cdef inline void get_waves(self, double dl, double ul, double pl,
             double dr, double ur, double pr,
             double gamma, double *sl, double *sc, double *sr):
+        """Solve wave estimates for hll type solvers.
 
+        Parameters
+        ----------
+        dl : double
+            Left state density.
+
+        ul : double
+            Left state velocity.
+            
+        pl : double
+            Left state pressure.
+
+        dr : double
+            Right state density.
+
+        ur : double
+            Right state velocity.
+            
+        pr : double
+            Right state pressure.
+
+        gamma : double
+            Ratio of specific heats.
+
+        Returns
+        -------
+
+        sl : double
+            Left wave.
+
+        sc : double
+            Contact wave.
+
+        sr : double
+            Right wave.
+
+        """
         cdef double p_star, u_star
         cdef double d_avg, c_avg
 
@@ -360,7 +492,9 @@ cdef class HLL(RiemannBase):
         sc[0] = _sc
         sr[0] = _sr
 
+
 cdef class HLLC(HLL):
+    """HLLC riemann solver."""
 
     cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
 
@@ -389,21 +523,21 @@ cdef class HLLC(HLL):
 
         cdef double fac1, fac2, fac3
 
-        cdef int boost = self.param_boost
+        cdef int boost = self.boost
         cdef int num_faces = mesh.faces.get_number_of_items()
 
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
-                reconstruction.left_states.named_groups['velocity'])
+                reconstruction.left_states.named_groups["velocity"])
         reconstruction.right_states.pointer_groups(vr,
-                reconstruction.right_states.named_groups['velocity'])
+                reconstruction.right_states.named_groups["velocity"])
 
         # face momentum fluxes
-        self.fluxes.pointer_groups(fmv, self.fluxes.named_groups['momentum'])
+        self.fluxes.pointer_groups(fmv, self.fluxes.named_groups["momentum"])
 
         # face normal and velocity
-        mesh.faces.pointer_groups(nx, mesh.faces.named_groups['normal'])
-        mesh.faces.pointer_groups(wx, mesh.faces.named_groups['velocity'])
+        mesh.faces.pointer_groups(nx, mesh.faces.named_groups["normal"])
+        mesh.faces.pointer_groups(wx, mesh.faces.named_groups["velocity"])
 
         for i in range(num_faces):
 
@@ -506,544 +640,544 @@ cdef class HLLC(HLL):
         if boost:
             self.deboost(self.fluxes, mesh.faces, dim)
 
-#cdef class Exact(RiemannBase):
-#    def __init__(self ):
-#        # self.reconstruction = None
-#        pass
-#
-#    cdef riemann_solver(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces,
-#            CarrayContainer faces, double gamma, int dim):
-#
-#        # left state primitive variables
-#        cdef DoubleArray dl = left_faces.get_carray("density")
-#        cdef DoubleArray pl = left_faces.get_carray("pressure")
-#
-#        # left state primitive variables
-#        cdef DoubleArray dr = right_faces.get_carray("density")
-#        cdef DoubleArray pr = right_faces.get_carray("pressure")
-#
-#        cdef DoubleArray fm  = fluxes.get_carray("mass")
-#        cdef DoubleArray fe  = fluxes.get_carray("energy")
-#
-#        cdef int i, k
-#        cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3]
-#        cdef np.float64_t _vl[3], _vr[3], n[3]
-#
-#        # state values
-#        cdef double _dl, _pl
-#        cdef double _dr, _pr
-#        cdef double _d, v[3], _p, vn, v_sq
-#
-#        cdef double vnl, vnr, vl_sq, vr_sq
-#
-#        # wave estimates
-#        cdef double fr, fl, u_tmp
-#        cdef double p_star, u_star
-#        cdef double s_hl, s_tl, sl, sr
-#        cdef double c, cl, cr, c_star_l, c_star_r
-#
-#        cdef int num_faces = faces.get_number_of_items()
-#
-#        left_faces.pointer_groups(vl,  left_faces.named_groups['velocity'])
-#        right_faces.pointer_groups(vr, right_faces.named_groups['velocity'])
-#        fluxes.pointer_groups(fmv, fluxes.named_groups['momentum'])
-#        faces.pointer_groups(nx, faces.named_groups['normal'])
-#
-#        for i in range(num_faces):
-#
-#            # left state
-#            _dl = dl.data[i]
-#            _pl = pl.data[i]
-#
-#            # right state
-#            _dr = dr.data[i]
-#            _pr = pr.data[i]
-#
-#            # sound speed
-#            cl = sqrt(gamma*_pl/_dl)
-#            cr = sqrt(gamma*_pr/_dr)
-#
-#            vnl = vnr = 0.0
-#            vl_sq = vr_sq = 0.0
-#            for k in range(dim):
-#
-#                _vl[k] = vl[k][i]
-#                _vr[k] = vr[k][i]
-#                n[k]   = nx[k][i]
-#
-#                # project left/righ velocity to face normal
-#                vnl += _vl[k]*n[k]
-#                vnr += _vr[k]*n[k]
-#
-#                # left/right velocity square
-#                vl_sq += _vl[k]*_vl[k]
-#                vr_sq += _vr[k]*_vr[k]
-#
-#            # hack - delete later >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-#            if _dl < 0. or _dr < 0.:
-#
-#                print 'vacuum left/right'
-#
-#                self.vacuum(_dl, _vl, _pl, vnl, cl,\
-#                       _dr, _vr, _pr, vnr, cr,\
-#                       &_d,  v, &_p, &vn, &v_sq,\
-#                       gamma, n, dim)
-#
-#                fm.data[i] = _d*vn
-#                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#                for k in range(dim):
-#                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                continue
-#
-#            if (2.*cl/(gamma-1.) + 2.*cr/(gamma-1.)) <= (vnr - vnl):
-#
-#                print 'vacuum generation'
-#
-#                self.vacuum(_dl, _vl, _pl, vnl, cl,\
-#                       _dr, _vr, _pr, vnr, cr,\
-#                       &_d,  v, &_p, &vn, &v_sq,\
-#                       gamma, n, dim)
-#
-#                fm.data[i] = _d*vn
-#                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#                for k in range(dim):
-#                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                continue
-#            # hack - delete later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
-#
-#            # newton rhapson 
-#            p_star = self.get_pstar(_dl, vnl, _pl, cl,
-#                    _dr, vnr, _pr, cr, gamma)
-#
-#            # calculate the contact wave speed
-#            fl = self.p_func(_dl, vnl, _pl, cl, gamma, p_star)
-#            fr = self.p_func(_dr, vnr, _pr, cr, gamma, p_star)
-#            u_star = 0.5*(vnl + vnr + fr - fl)
-#
-#            if(0.0 <= u_star): # left of contact discontinuity
-#                if(p_star <= _pl): # left rarefraction
-#
-#                    # sound speed of head
-#                    s_hl = vnl - cl
-#
-#                    if(0.0 <= s_hl): # left state
-#                        fm.data[i]  = _dl*vnl
-#                        fe.data[i]  = (0.5*_dl*vl_sq + gamma*_pl/(gamma - 1.0))*vnl
-#
-#                        for k in range(dim):
-#                            fmv[k][i] = _dl*vl[k][i]*vnl + _pl*nx[k][i]
-#
-#                    else: # left rarefaction
-#
-#                        # sound speed of star state and tail of rarefraction
-#                        c_star_l = cl*pow(p_star/_pl, (gamma - 1.0)/(2.0*gamma))
-#                        s_tl = u_star - c_star_l
-#
-#                        if(0.0 >= s_tl): # star left state
-#                            _d = _dl*pow(p_star/_pl, 1.0/gamma)
-#                            _p = p_star
-#
-#                            v_sq = vn = 0.
-#                            for k in range(dim):
-#                                v[k]  = vl[k][i] + (u_star - vnl)*nx[k][i]
-#                                vn   += v[k]*nx[k][i]
-#                                v_sq += v[k]*v[k]
-#
-#                            fm.data[i]  = _d*vn
-#                            fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#
-#                            for k in range(dim):
-#                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                        else: # inside left fan
-#
-#                            c  = (2.0/(gamma + 1.0))*(cl + 0.5*(gamma - 1.0)*vnl)
-#                            _d = _dl*pow(c/cl, 2.0/(gamma - 1.0))
-#                            _p = _pl*pow(c/cl, 2.0*gamma/(gamma - 1.0))
-#
-#                            v_sq = vn = 0.
-#                            for k in range(dim):
-#                                v[k]  = vl[k][i] + (c - vnl)*nx[k][i]
-#                                vn   += v[k]*nx[k][i]
-#                                v_sq += v[k]*v[k]
-#
-#                            fm.data[i] = _d*vn
-#                            fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#
-#                            for k in range(dim):
-#                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                else: # left shock
-#
-#                    sl = vnl - cl*sqrt((gamma + 1.0)*p_star/(2.0*gamma*_pl)\
-#                            + (gamma - 1.0)/(2.0*gamma))
-#
-#                    if(0.0 <= sl): # left state
-#                        fm.data[i] = _dl*vnl
-#                        fe.data[i] = (0.5*_dl*vl_sq + gamma*_pl/(gamma - 1.0))*vnl
-#
-#                        for k in range(dim):
-#                            fmv[k][i] = _dl*vl[k][i]*vnl + _pl*nx[k][i]
-#
-#                    else: # star left state
-#
-#                        _d = _dl*(p_star/_pl + (gamma - 1.0)/(gamma + 1.0))\
-#                                /(p_star*(gamma - 1.0)/((gamma + 1.0)*_pl) + 1.0)
-#                        _p = p_star
-#
-#                        v_sq = vn = 0.
-#                        for k in range(dim):
-#                            v[k]  = vl[k][i] + (u_star - vnl)*nx[k][i]
-#                            vn   += v[k]*nx[k][i]
-#                            v_sq += v[k]*v[k]
-#
-#                        fm.data[i]  = _d*vn
-#                        fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#
-#                        for k in range(dim):
-#                            fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#            else: # right of contact
-#
-#                if(p_star >= _pr): # right shock
-#
-#                    sr = vnr + cr*sqrt((gamma + 1.0)*p_star/(2.0*gamma*_pr)\
-#                            + (gamma-1.0)/(2.0*gamma))
-#
-#                    if(0.0 >= sr): # right state
-#                        fm.data[i] = _dr*vnr
-#                        fe.data[i] = (0.5*_dr*vr_sq + gamma*_pr/(gamma - 1.0))*vnr
-#
-#                        for k in range(dim):
-#                            fmv[k][i] = _dr*vr[k][i]*vnr + _pr*nx[k][i]
-#
-#                    else: # star right state
-#
-#                        _d = _dr*(p_star/_pr + (gamma - 1.0)/(gamma + 1.0))\
-#                                /(p_star*(gamma - 1.0)/((gamma + 1.0)*_pr) + 1.0)
-#                        _p = p_star
-#
-#                        v_sq = vn = 0.
-#                        for k in range(dim):
-#                            v[k]  = vr[k][i] + (u_star - vnr)*nx[k][i]
-#                            vn   += v[k]*nx[k][i]
-#                            v_sq += v[k]*v[k]
-#
-#                        fm.data[i]  = _d*vn
-#                        fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#
-#                        for k in range(dim):
-#                            fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                else: # right rarefaction
-#
-#                    s_hr = vnr + cr
-#
-#                    if(0.0 >= s_hr): # right data state
-#                        fm.data[i]  = _dr*vnr
-#                        fe.data[i]  = (0.5*_dr*vr_sq + gamma*_pr/(gamma - 1.0))*vnr
-#
-#                        for k in range(dim):
-#                            fmv[k][i] = _dr*vr[k][i]*vnr + _pr*nx[k][i]
-#
-#                    else:
-#
-#                        # sound speed of the star state and sound speed
-#                        # of the tail of the rarefraction
-#                        c_star_r = cr*pow(p_star/_pr, (gamma-1.0)/(2.0*gamma))
-#                        s_tr = u_star + c_star_r
-#
-#                        if(0.0 <= s_tr): # star left state
-#                            _d = _dr*pow(p_star/_pr, 1.0/gamma)
-#                            _p = p_star
-#
-#                            v_sq = vn = 0.
-#                            for k in range(dim):
-#                                v[k]  = vr[k][i] + (u_star - vnr)*nx[k][i]
-#                                vn   += v[k]*nx[k][i]
-#                                v_sq += v[k]*v[k]
-#
-#                            fm.data[i]  = _d*vn
-#                            fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#
-#                            for k in range(dim):
-#                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                        else:
-#
-#                            # sampled point is inside right fan
-#                            c = (2.0/(gamma + 1.0))*(cr - 0.5*(gamma - 1.0)*vnr)
-#                            u_tmp = (2.0/(gamma + 1.0))*(-cr + 0.5*(gamma-1.0)*vnr)
-#
-#                            _d = _dr*pow(c/cr, 2.0/(gamma - 1.0))
-#                            _p = _pr*pow(c/cr, 2.0*gamma/(gamma - 1.0))
-#
-#                            v_sq = vn = 0.
-#                            for k in range(dim):
-#                                v[k]  = vr[k][i] + (u_tmp - vnr)*nx[k][i]
-#                                vn   += v[k]*nx[k][i]
-#                                v_sq += v[k]*v[k]
-#
-#                            fm.data[i]  = _d*vn
-#                            fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#
-#                            for k in range(dim):
-#                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#        self._deboost(fluxes, faces, dim)
-#
-#    @cython.cdivision(True)
-#    cdef inline double p_guess(self, double dl, double ul, double pl, double cl,
-#            double dr, double ur, double pr, double cr, double gamma) nogil:
-#        """
-#        Calculate  starting pressure for iterative exact scheme
-#        Reference: Toro (2009): Chapter 4
-#        """
-#        cdef double ppv
-#        cdef double p_lr, p_tl
-#        cdef double gl, gr, p0
-#        cdef double p_star, p_max, p_min, q_max
-#
-#        # initial guess for pressure eq: 4.47
-#        ppv = .5*(pl + pr) - .125*(ur - ul)*(dl + dr)*(cl + cr)
-#
-#        p_star = max(0., ppv)
-#        p_max  = max(pl, pr)
-#        p_min  = min(pl, pr)
-#        q_max  = p_max/p_min
-#
-#        if ((q_max <= 2.) and (p_min <= ppv <= p_max)):
-#            p0 = ppv
-#
-#        elif (ppv <= p_min):
-#            p_lr   = pow(pl/pr, (gamma - 1.)/(2.*gamma))
-#            u_star = (p_lr*ul/cl + ur/cr + 2.*(p_lr - 1.)/(gamma - 1.))
-#            u_star = u_star/(p_lr/cl + 1./cr)
-#            p_tl   = pow(1. + (gamma - 1.)*(ul - u_star)/(2.*cl), 2.*gamma/(gamma - 1.))
-#            p_tr   = pow(1. + (gamma - 1.)*(u_star - ur)/(2.*cr), 2.*gamma/(gamma - 1.))
-#            p0 = .5*(pl*p_tl + pr*p_tr)
-#
-#        else:
-#            gl = sqrt((2./(dl*(gamma + 1.)))/((gamma - 1.)*pl/(gamma + 1.) + ppv))
-#            gr = sqrt((2./(dr*(gamma + 1.)))/((gamma - 1.)*pr/(gamma + 1.) + ppv))
-#            p0 = (gl*pl + gr*pr - (ur - ul))/(gr + gl)
-#
-#        return p0
-#
-#    @cython.cdivision(True)
-#    cdef inline double p_func(self, double d, double u, double p,
-#            double c, double gamma, double p_old) nogil:
-#        """
-#        Calculate the derivative of the jump across the wave.
-#        Reference: Toro (2009): Chapter 4
-#        """
-#        cdef double f, Ak, Bk
-#
-#        # rarefaction wave eq: 4.6b and 4.7b
-#        if (p_old <= p):
-#            f = 2.*c/(gamma - 1.)*(pow(p_old/p, (gamma - 1.)/(2.*gamma)) - 1.)
-#
-#        # shock wave eq: 4.6a and 4.7a
-#        else:
-#            Ak = 2./(d*(gamma + 1.))
-#            Bk = p*(gamma - 1.)/(gamma + 1.)
-#            f = (p_old - p)*sqrt(Ak/(p_old + Bk))
-#
-#        return f
-#
-#    @cython.cdivision(True)
-#    cdef inline double p_func_deriv(self, double d, double u, double p,
-#            double c, double gamma, double p_old) nogil:
-#        """
-#        Calculate the derivative of the jump across the wave.
-#        Reference: Toro (2009): Chapter 4
-#        """
-#        cdef double df, Ak, Bk
-#
-#        # derivative for rarefaction wave eq. 4.37
-#        if (p_old <= p):
-#            df = pow(p_old/p, -(gamma + 1.)/(2.*gamma))/(c*d)
-#
-#        # derivative for shock wave
-#        else:
-#            # eq: 4.8 and 4.37
-#            Ak = 2./(d*(gamma + 1.))
-#            Bk = p*(gamma - 1.)/(gamma + 1.)
-#            df = sqrt(Ak/(p_old + Bk))*(1. - .5*(p_old - p)/(Bk + p_old))
-#
-#        return df
-#
-#    @cython.cdivision(True)
-#    cdef inline double get_pstar(self, double dl, double ul, double pl, double cl,
-#            double dr, double ur, double pr, double cr, double gamma) nogil:
-#        """
-#        Calculate star pressure by iteration.
-#        Reference: Toro (2009): Chapter 4
-#        """
-#        cdef double TOL = 1.0e-6
-#        cdef int MAX_ITER = 1000
-#
-#        cdef int i = 0
-#        cdef double p_old, p_new, p
-#        cdef double fr, fl, df_r, df_l
-#
-#        p_old = self.p_guess(dl, ul, pl, cl, dr, ur, pr, cr, gamma)
-#        while(i < MAX_ITER):
-#
-#            fl  = self.p_func(dl, ul, pl, cl, gamma, p_old)
-#            fr  = self.p_func(dr, ur, pr, cr, gamma, p_old)
-#            dfl = self.p_func_deriv(dl, ul, pl, cl, gamma, p_old)
-#            dfr = self.p_func_deriv(dr, ur, pr, cr, gamma, p_old)
-#
-#            p_new = p_old - (fl + fr + ur - ul)/(dfl + dfr)
-#
-#            if ( 2.*fabs((p_new - p_old)/(p_new + p_old)) ) <= TOL:
-#                return p_new
-#
-#            if (p_new < 0.):
-#                p_new = TOL
-#
-#            p_old = p_new
-#            i += 1
-#
-#        # failed to converge
-#        with gil:
-#            raise RuntimeError('No convergence in Exact Riemann Solver')
-#
-#    cdef inline void vacuum(self,
-#            double dl, double vl[3], double pl, double vnl, double cl,
-#            double dr, double vr[3], double pr, double vnr, double cr,
-#            double *d, double  v[3], double *p, double *vn, double *vsq,
-#            double gamma, double n[3], int dim) nogil:
-#        """
-#        Calculate vacuum solution.
-#        Reference: Toro (2009): Chapter 4
-#        """
-#        cdef int i
-#        cdef double c, u_tmp
-#
-#        cdef double sl = vnl + 2.*cl/(gamma-1.)
-#        cdef double sr = vnr - 2.*cr/(gamma-1.)
-#
-#        if(dr < 0): # right vacuum eq 4.77
-#            if(0. <= vnl - cl): # left state 
-#                d[0] = dl
-#                p[0] = pl
-#
-#                vn[0] = vsq[0] = 0.
-#                for i in range(dim):
-#                    v[i]    = vl[i]
-#                    vn[0]  += v[i]*n[i]
-#                    vsq[0] += v[i]*v[i]
-#
-#            elif(0. < sl): # left fan
-#                c    = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl)
-#                d[0] = dl*pow(c/cl, 2./(gamma - 1.))
-#                p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
-#
-#                vn[0] = vsq[0] = 0.
-#                for i in range(dim):
-#                    v[i]    = vl[i] + (c - vnl)*n[i]
-#                    vn[0]  += v[i]*n[i]
-#                    vsq[0] += v[i]*v[i]
-#
-#            else: # right vacuum
-#                d[0] = 0.
-#                p[0] = 0.
-#
-#                vn[0] = vsq[0] = 0
-#                for i in range(dim):
-#                    v[i] = 0.
-#
-#        elif(dl < 0): # left vacuum
-#            if 0. <= sr: # left vacuum
-#                d[0] = 0.
-#                p[0] = 0.
-#
-#                vn[0] = vsq[0] = 0.
-#                for i in range(dim):
-#                    v[i] = 0.
-#
-#            elif(0. < vnr + cr): # right fan
-#                # sampled point is inside right fan
-#                c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*vnr)
-#                u_tmp = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr)
-#
-#                d[0] = dr*pow(c/cr, 2./(gamma - 1.))
-#                p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
-#
-#                vn[0] = vsq[0] = 0
-#                for i in range(dim):
-#                    v[i]    = vr[i] + (u_tmp - vnr)*n[i]
-#                    vn[0]  += v[i]*n[i]
-#                    vsq[0] += v[i]*v[i]
-#
-#            else: # right state
-#                d[0] = dr
-#                p[0] = pr
-#
-#                vn[0] = vsq[0] = 0
-#                for i in range(dim):
-#                    v[i]    = vr[i]
-#                    vn[0]  += v[i]*n[i]
-#                    vsq[0] += v[i]*v[i]
-#
-#        else: # vacuum generation
-#
-#            if(sl < 0.) and (0. < sr): # vacuum
-#                d[0] = 0.
-#                p[0] = 0.
-#
-#                vn[0] = vsq[0] = 0
-#                for i in range(dim):
-#                    v[i] = 0.
-#
-#            elif(0. <= sl):
-#                if 0. <= vnl - cl: # left state 
-#                    d[0] = dl
-#                    p[0] = pl
-#
-#                    vn[0] = vsq[0] = 0.
-#                    for i in range(dim):
-#                        v[i]    = vl[i]
-#                        vn[0]  += v[i]*n[i]
-#                        vsq[0] += v[i]*v[i]
-#
-#                else: # left fan
-#                    c    = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl)
-#                    d[0] = dl*pow(c/cl, 2./(gamma - 1.))
-#                    p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
-#
-#                    vn[0] = vsq[0] = 0.
-#                    for i in range(dim):
-#                        v[i]    = vl[i] + (c - vnl)*n[i]
-#                        vn[0]  += v[i]*n[i]
-#                        vsq[0] += v[i]*v[i]
-#
-#            else:
-#                if(0. < vnr + cr): # right fan
-#                    # sample inside right fan
-#                    c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*vnr)
-#                    u_tmp = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr)
-#
-#                    d[0] = dr*pow(c/cr, 2./(gamma - 1.))
-#                    p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
-#
-#                    vn[0] = vsq[0] = 0.
-#                    for i in range(dim):
-#                        v[i]    = vr[i] + (u_tmp - vnr)*n[i]
-#                        vn[0]  += v[i]*n[i]
-#                        vsq[0] += v[i]*v[i]
-#
-#                else: # right state
-#                    d[0] = dr
-#                    p[0] = pr
-#
-#                    vn[0] = vsq[0] = 0.
-#                    for i in range(dim):
-#                        v[i]    = vr[i]
-#                        vn[0]  += v[i]*n[i]
-#                        vsq[0] += v[i]*v[i]
-#
+cdef class Exact(RiemannBase):
+    """Exact riemann solver."""
+    def __init__(self, double cfl=0.5):
+        self.cfl = 0.5
+
+    cdef riemann_solver(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces,
+            CarrayContainer faces, double gamma, int dim):
+
+        # left state primitive variables
+        cdef DoubleArray dl = left_faces.get_carray("density")
+        cdef DoubleArray pl = left_faces.get_carray("pressure")
+
+        # left state primitive variables
+        cdef DoubleArray dr = right_faces.get_carray("density")
+        cdef DoubleArray pr = right_faces.get_carray("pressure")
+
+        cdef DoubleArray fm  = fluxes.get_carray("mass")
+        cdef DoubleArray fe  = fluxes.get_carray("energy")
+
+        cdef int i, k
+        cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3]
+        cdef np.float64_t _vl[3], _vr[3], n[3]
+
+        # state values
+        cdef double _dl, _pl
+        cdef double _dr, _pr
+        cdef double _d, v[3], _p, vn, v_sq
+
+        cdef double vnl, vnr, vl_sq, vr_sq
+
+        # wave estimates
+        cdef double fr, fl, u_tmp
+        cdef double p_star, u_star
+        cdef double s_hl, s_tl, sl, sr
+        cdef double c, cl, cr, c_star_l, c_star_r
+
+        cdef int num_faces = faces.get_number_of_items()
+
+        left_faces.pointer_groups(vl,  left_faces.named_groups['velocity'])
+        right_faces.pointer_groups(vr, right_faces.named_groups['velocity'])
+        fluxes.pointer_groups(fmv, fluxes.named_groups['momentum'])
+        faces.pointer_groups(nx, faces.named_groups['normal'])
+
+        for i in range(num_faces):
+
+            # left state
+            _dl = dl.data[i]
+            _pl = pl.data[i]
+
+            # right state
+            _dr = dr.data[i]
+            _pr = pr.data[i]
+
+            # sound speed
+            cl = sqrt(gamma*_pl/_dl)
+            cr = sqrt(gamma*_pr/_dr)
+
+            vnl = vnr = 0.0
+            vl_sq = vr_sq = 0.0
+            for k in range(dim):
+
+                _vl[k] = vl[k][i]
+                _vr[k] = vr[k][i]
+                n[k]   = nx[k][i]
+
+                # project left/righ velocity to face normal
+                vnl += _vl[k]*n[k]
+                vnr += _vr[k]*n[k]
+
+                # left/right velocity square
+                vl_sq += _vl[k]*_vl[k]
+                vr_sq += _vr[k]*_vr[k]
+
+            # hack - delete later >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+            if _dl < 0. or _dr < 0.:
+
+                print 'vacuum left/right'
+
+                self.vacuum(_dl, _vl, _pl, vnl, cl,\
+                       _dr, _vr, _pr, vnr, cr,\
+                       &_d,  v, &_p, &vn, &v_sq,\
+                       gamma, n, dim)
+
+                fm.data[i] = _d*vn
+                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+                for k in range(dim):
+                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+                continue
+
+            if (2.*cl/(gamma-1.) + 2.*cr/(gamma-1.)) <= (vnr - vnl):
+
+                print 'vacuum generation'
+
+                self.vacuum(_dl, _vl, _pl, vnl, cl,\
+                       _dr, _vr, _pr, vnr, cr,\
+                       &_d,  v, &_p, &vn, &v_sq,\
+                       gamma, n, dim)
+
+                fm.data[i] = _d*vn
+                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+                for k in range(dim):
+                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+                continue
+            # hack - delete later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
+
+            # newton rhapson 
+            p_star = self.get_pstar(_dl, vnl, _pl, cl,
+                    _dr, vnr, _pr, cr, gamma)
+
+            # calculate the contact wave speed
+            fl = self.p_func(_dl, vnl, _pl, cl, gamma, p_star)
+            fr = self.p_func(_dr, vnr, _pr, cr, gamma, p_star)
+            u_star = 0.5*(vnl + vnr + fr - fl)
+
+            if(0.0 <= u_star): # left of contact discontinuity
+                if(p_star <= _pl): # left rarefraction
+
+                    # sound speed of head
+                    s_hl = vnl - cl
+
+                    if(0.0 <= s_hl): # left state
+                        fm.data[i]  = _dl*vnl
+                        fe.data[i]  = (0.5*_dl*vl_sq + gamma*_pl/(gamma - 1.0))*vnl
+
+                        for k in range(dim):
+                            fmv[k][i] = _dl*vl[k][i]*vnl + _pl*nx[k][i]
+
+                    else: # left rarefaction
+
+                        # sound speed of star state and tail of rarefraction
+                        c_star_l = cl*pow(p_star/_pl, (gamma - 1.0)/(2.0*gamma))
+                        s_tl = u_star - c_star_l
+
+                        if(0.0 >= s_tl): # star left state
+                            _d = _dl*pow(p_star/_pl, 1.0/gamma)
+                            _p = p_star
+
+                            v_sq = vn = 0.
+                            for k in range(dim):
+                                v[k]  = vl[k][i] + (u_star - vnl)*nx[k][i]
+                                vn   += v[k]*nx[k][i]
+                                v_sq += v[k]*v[k]
+
+                            fm.data[i]  = _d*vn
+                            fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+
+                            for k in range(dim):
+                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+                        else: # inside left fan
+
+                            c  = (2.0/(gamma + 1.0))*(cl + 0.5*(gamma - 1.0)*vnl)
+                            _d = _dl*pow(c/cl, 2.0/(gamma - 1.0))
+                            _p = _pl*pow(c/cl, 2.0*gamma/(gamma - 1.0))
+
+                            v_sq = vn = 0.
+                            for k in range(dim):
+                                v[k]  = vl[k][i] + (c - vnl)*nx[k][i]
+                                vn   += v[k]*nx[k][i]
+                                v_sq += v[k]*v[k]
+
+                            fm.data[i] = _d*vn
+                            fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+
+                            for k in range(dim):
+                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+                else: # left shock
+
+                    sl = vnl - cl*sqrt((gamma + 1.0)*p_star/(2.0*gamma*_pl)\
+                            + (gamma - 1.0)/(2.0*gamma))
+
+                    if(0.0 <= sl): # left state
+                        fm.data[i] = _dl*vnl
+                        fe.data[i] = (0.5*_dl*vl_sq + gamma*_pl/(gamma - 1.0))*vnl
+
+                        for k in range(dim):
+                            fmv[k][i] = _dl*vl[k][i]*vnl + _pl*nx[k][i]
+
+                    else: # star left state
+
+                        _d = _dl*(p_star/_pl + (gamma - 1.0)/(gamma + 1.0))\
+                                /(p_star*(gamma - 1.0)/((gamma + 1.0)*_pl) + 1.0)
+                        _p = p_star
+
+                        v_sq = vn = 0.
+                        for k in range(dim):
+                            v[k]  = vl[k][i] + (u_star - vnl)*nx[k][i]
+                            vn   += v[k]*nx[k][i]
+                            v_sq += v[k]*v[k]
+
+                        fm.data[i]  = _d*vn
+                        fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+
+                        for k in range(dim):
+                            fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+            else: # right of contact
+
+                if(p_star >= _pr): # right shock
+
+                    sr = vnr + cr*sqrt((gamma + 1.0)*p_star/(2.0*gamma*_pr)\
+                            + (gamma-1.0)/(2.0*gamma))
+
+                    if(0.0 >= sr): # right state
+                        fm.data[i] = _dr*vnr
+                        fe.data[i] = (0.5*_dr*vr_sq + gamma*_pr/(gamma - 1.0))*vnr
+
+                        for k in range(dim):
+                            fmv[k][i] = _dr*vr[k][i]*vnr + _pr*nx[k][i]
+
+                    else: # star right state
+
+                        _d = _dr*(p_star/_pr + (gamma - 1.0)/(gamma + 1.0))\
+                                /(p_star*(gamma - 1.0)/((gamma + 1.0)*_pr) + 1.0)
+                        _p = p_star
+
+                        v_sq = vn = 0.
+                        for k in range(dim):
+                            v[k]  = vr[k][i] + (u_star - vnr)*nx[k][i]
+                            vn   += v[k]*nx[k][i]
+                            v_sq += v[k]*v[k]
+
+                        fm.data[i]  = _d*vn
+                        fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+
+                        for k in range(dim):
+                            fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+                else: # right rarefaction
+
+                    s_hr = vnr + cr
+
+                    if(0.0 >= s_hr): # right data state
+                        fm.data[i]  = _dr*vnr
+                        fe.data[i]  = (0.5*_dr*vr_sq + gamma*_pr/(gamma - 1.0))*vnr
+
+                        for k in range(dim):
+                            fmv[k][i] = _dr*vr[k][i]*vnr + _pr*nx[k][i]
+
+                    else:
+
+                        # sound speed of the star state and sound speed
+                        # of the tail of the rarefraction
+                        c_star_r = cr*pow(p_star/_pr, (gamma-1.0)/(2.0*gamma))
+                        s_tr = u_star + c_star_r
+
+                        if(0.0 <= s_tr): # star left state
+                            _d = _dr*pow(p_star/_pr, 1.0/gamma)
+                            _p = p_star
+
+                            v_sq = vn = 0.
+                            for k in range(dim):
+                                v[k]  = vr[k][i] + (u_star - vnr)*nx[k][i]
+                                vn   += v[k]*nx[k][i]
+                                v_sq += v[k]*v[k]
+
+                            fm.data[i]  = _d*vn
+                            fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+
+                            for k in range(dim):
+                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+                        else:
+
+                            # sampled point is inside right fan
+                            c = (2.0/(gamma + 1.0))*(cr - 0.5*(gamma - 1.0)*vnr)
+                            u_tmp = (2.0/(gamma + 1.0))*(-cr + 0.5*(gamma-1.0)*vnr)
+
+                            _d = _dr*pow(c/cr, 2.0/(gamma - 1.0))
+                            _p = _pr*pow(c/cr, 2.0*gamma/(gamma - 1.0))
+
+                            v_sq = vn = 0.
+                            for k in range(dim):
+                                v[k]  = vr[k][i] + (u_tmp - vnr)*nx[k][i]
+                                vn   += v[k]*nx[k][i]
+                                v_sq += v[k]*v[k]
+
+                            fm.data[i]  = _d*vn
+                            fe.data[i]  = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+
+                            for k in range(dim):
+                                fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+
+        self._deboost(fluxes, faces, dim)
+
+    @cython.cdivision(True)
+    cdef inline double p_guess(self, double dl, double ul, double pl, double cl,
+            double dr, double ur, double pr, double cr, double gamma) nogil:
+        """
+        Calculate  starting pressure for iterative exact scheme
+        Reference: Toro (2009): Chapter 4
+        """
+        cdef double ppv
+        cdef double p_lr, p_tl
+        cdef double gl, gr, p0
+        cdef double p_star, p_max, p_min, q_max
+
+        # initial guess for pressure eq: 4.47
+        ppv = .5*(pl + pr) - .125*(ur - ul)*(dl + dr)*(cl + cr)
+
+        p_star = max(0., ppv)
+        p_max  = max(pl, pr)
+        p_min  = min(pl, pr)
+        q_max  = p_max/p_min
+
+        if ((q_max <= 2.) and (p_min <= ppv <= p_max)):
+            p0 = ppv
+
+        elif (ppv <= p_min):
+            p_lr   = pow(pl/pr, (gamma - 1.)/(2.*gamma))
+            u_star = (p_lr*ul/cl + ur/cr + 2.*(p_lr - 1.)/(gamma - 1.))
+            u_star = u_star/(p_lr/cl + 1./cr)
+            p_tl   = pow(1. + (gamma - 1.)*(ul - u_star)/(2.*cl), 2.*gamma/(gamma - 1.))
+            p_tr   = pow(1. + (gamma - 1.)*(u_star - ur)/(2.*cr), 2.*gamma/(gamma - 1.))
+            p0 = .5*(pl*p_tl + pr*p_tr)
+
+        else:
+            gl = sqrt((2./(dl*(gamma + 1.)))/((gamma - 1.)*pl/(gamma + 1.) + ppv))
+            gr = sqrt((2./(dr*(gamma + 1.)))/((gamma - 1.)*pr/(gamma + 1.) + ppv))
+            p0 = (gl*pl + gr*pr - (ur - ul))/(gr + gl)
+
+        return p0
+
+    @cython.cdivision(True)
+    cdef inline double p_func(self, double d, double u, double p,
+            double c, double gamma, double p_old) nogil:
+        """
+        Calculate the derivative of the jump across the wave.
+        Reference: Toro (2009): Chapter 4
+        """
+        cdef double f, Ak, Bk
+
+        # rarefaction wave eq: 4.6b and 4.7b
+        if (p_old <= p):
+            f = 2.*c/(gamma - 1.)*(pow(p_old/p, (gamma - 1.)/(2.*gamma)) - 1.)
+
+        # shock wave eq: 4.6a and 4.7a
+        else:
+            Ak = 2./(d*(gamma + 1.))
+            Bk = p*(gamma - 1.)/(gamma + 1.)
+            f = (p_old - p)*sqrt(Ak/(p_old + Bk))
+
+        return f
+
+    @cython.cdivision(True)
+    cdef inline double p_func_deriv(self, double d, double u, double p,
+            double c, double gamma, double p_old) nogil:
+        """
+        Calculate the derivative of the jump across the wave.
+        Reference: Toro (2009): Chapter 4
+        """
+        cdef double df, Ak, Bk
+
+        # derivative for rarefaction wave eq. 4.37
+        if (p_old <= p):
+            df = pow(p_old/p, -(gamma + 1.)/(2.*gamma))/(c*d)
+
+        # derivative for shock wave
+        else:
+            # eq: 4.8 and 4.37
+            Ak = 2./(d*(gamma + 1.))
+            Bk = p*(gamma - 1.)/(gamma + 1.)
+            df = sqrt(Ak/(p_old + Bk))*(1. - .5*(p_old - p)/(Bk + p_old))
+
+        return df
+
+    @cython.cdivision(True)
+    cdef inline double get_pstar(self, double dl, double ul, double pl, double cl,
+            double dr, double ur, double pr, double cr, double gamma) nogil:
+        """
+        Calculate star pressure by iteration.
+        Reference: Toro (2009): Chapter 4
+        """
+        cdef double TOL = 1.0e-6
+        cdef int MAX_ITER = 1000
+
+        cdef int i = 0
+        cdef double p_old, p_new, p
+        cdef double fr, fl, df_r, df_l
+
+        p_old = self.p_guess(dl, ul, pl, cl, dr, ur, pr, cr, gamma)
+        while(i < MAX_ITER):
+
+            fl  = self.p_func(dl, ul, pl, cl, gamma, p_old)
+            fr  = self.p_func(dr, ur, pr, cr, gamma, p_old)
+            dfl = self.p_func_deriv(dl, ul, pl, cl, gamma, p_old)
+            dfr = self.p_func_deriv(dr, ur, pr, cr, gamma, p_old)
+
+            p_new = p_old - (fl + fr + ur - ul)/(dfl + dfr)
+
+            if ( 2.*fabs((p_new - p_old)/(p_new + p_old)) ) <= TOL:
+                return p_new
+
+            if (p_new < 0.):
+                p_new = TOL
+
+            p_old = p_new
+            i += 1
+
+        # failed to converge
+        with gil:
+            raise RuntimeError('No convergence in Exact Riemann Solver')
+
+    cdef inline void vacuum(self,
+            double dl, double vl[3], double pl, double vnl, double cl,
+            double dr, double vr[3], double pr, double vnr, double cr,
+            double *d, double  v[3], double *p, double *vn, double *vsq,
+            double gamma, double n[3], int dim) nogil:
+        """
+        Calculate vacuum solution.
+        Reference: Toro (2009): Chapter 4
+        """
+        cdef int i
+        cdef double c, u_tmp
+
+        cdef double sl = vnl + 2.*cl/(gamma-1.)
+        cdef double sr = vnr - 2.*cr/(gamma-1.)
+
+        if(dr < 0): # right vacuum eq 4.77
+            if(0. <= vnl - cl): # left state 
+                d[0] = dl
+                p[0] = pl
+
+                vn[0] = vsq[0] = 0.
+                for i in range(dim):
+                    v[i]    = vl[i]
+                    vn[0]  += v[i]*n[i]
+                    vsq[0] += v[i]*v[i]
+
+            elif(0. < sl): # left fan
+                c    = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl)
+                d[0] = dl*pow(c/cl, 2./(gamma - 1.))
+                p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
+
+                vn[0] = vsq[0] = 0.
+                for i in range(dim):
+                    v[i]    = vl[i] + (c - vnl)*n[i]
+                    vn[0]  += v[i]*n[i]
+                    vsq[0] += v[i]*v[i]
+
+            else: # right vacuum
+                d[0] = 0.
+                p[0] = 0.
+
+                vn[0] = vsq[0] = 0
+                for i in range(dim):
+                    v[i] = 0.
+
+        elif(dl < 0): # left vacuum
+            if 0. <= sr: # left vacuum
+                d[0] = 0.
+                p[0] = 0.
+
+                vn[0] = vsq[0] = 0.
+                for i in range(dim):
+                    v[i] = 0.
+
+            elif(0. < vnr + cr): # right fan
+                # sampled point is inside right fan
+                c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*vnr)
+                u_tmp = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr)
+
+                d[0] = dr*pow(c/cr, 2./(gamma - 1.))
+                p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
+
+                vn[0] = vsq[0] = 0
+                for i in range(dim):
+                    v[i]    = vr[i] + (u_tmp - vnr)*n[i]
+                    vn[0]  += v[i]*n[i]
+                    vsq[0] += v[i]*v[i]
+
+            else: # right state
+                d[0] = dr
+                p[0] = pr
+
+                vn[0] = vsq[0] = 0
+                for i in range(dim):
+                    v[i]    = vr[i]
+                    vn[0]  += v[i]*n[i]
+                    vsq[0] += v[i]*v[i]
+
+        else: # vacuum generation
+
+            if(sl < 0.) and (0. < sr): # vacuum
+                d[0] = 0.
+                p[0] = 0.
+
+                vn[0] = vsq[0] = 0
+                for i in range(dim):
+                    v[i] = 0.
+
+            elif(0. <= sl):
+                if 0. <= vnl - cl: # left state 
+                    d[0] = dl
+                    p[0] = pl
+
+                    vn[0] = vsq[0] = 0.
+                    for i in range(dim):
+                        v[i]    = vl[i]
+                        vn[0]  += v[i]*n[i]
+                        vsq[0] += v[i]*v[i]
+
+                else: # left fan
+                    c    = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl)
+                    d[0] = dl*pow(c/cl, 2./(gamma - 1.))
+                    p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
+
+                    vn[0] = vsq[0] = 0.
+                    for i in range(dim):
+                        v[i]    = vl[i] + (c - vnl)*n[i]
+                        vn[0]  += v[i]*n[i]
+                        vsq[0] += v[i]*v[i]
+
+            else:
+                if(0. < vnr + cr): # right fan
+                    # sample inside right fan
+                    c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*vnr)
+                    u_tmp = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr)
+
+                    d[0] = dr*pow(c/cr, 2./(gamma - 1.))
+                    p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
+
+                    vn[0] = vsq[0] = 0.
+                    for i in range(dim):
+                        v[i]    = vr[i] + (u_tmp - vnr)*n[i]
+                        vn[0]  += v[i]*n[i]
+                        vsq[0] += v[i]*v[i]
+
+                else: # right state
+                    d[0] = dr
+                    p[0] = pr
+
+                    vn[0] = vsq[0] = 0.
+                    for i in range(dim):
+                        v[i]    = vr[i]
+                        vn[0]  += v[i]*n[i]
+                        vsq[0] += v[i]*v[i]
+

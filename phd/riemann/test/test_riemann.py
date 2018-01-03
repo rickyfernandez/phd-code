@@ -24,11 +24,11 @@ class TestHLLSetup(unittest.TestCase):
         # check if reconstruction has fields registered
        self.assertTrue(self.riemann.registered_fields)
 
-       # check for conserative fields, these are the fields that
+       # check for conservative fields, these are the fields that
        # the riemann solver will use 
        self.assertEqual(
-               self.riemann.flux_field_groups["conserative"],
-               self.particles.named_groups["conserative"])
+               self.riemann.flux_field_groups["conservative"],
+               self.particles.named_groups["conservative"])
 
        # check for momentum fields
        self.assertEqual(
@@ -49,8 +49,8 @@ class TestHLLSetup(unittest.TestCase):
 
        # check if flux states have correct fields
        self.assertEqual(
-               self.riemann.fluxes.named_groups["conserative"],
-               self.particles.named_groups["conserative"])
+               self.riemann.fluxes.named_groups["conservative"],
+               self.particles.named_groups["conservative"])
 
        # check if flux have correct momentum fields
        self.assertEqual(
@@ -72,7 +72,7 @@ class TestHLLFlux(unittest.TestCase):
         self.mesh.initialize()
 
         # equation of state class
-        self.eos = IdealGas(param_gamma=1.4)
+        self.eos = IdealGas(gamma=1.4)
 
         # reconstruction class
         self.reconstruction = PieceWiseConstant()
@@ -81,7 +81,7 @@ class TestHLLFlux(unittest.TestCase):
         self.reconstruction.initialize()
 
         # riemann class
-        self.riemann = HLL(param_boost=False)
+        self.riemann = HLL(boost=False)
         self.riemann.set_fields_for_riemann(self.particles)
         self.riemann.initialize()
 
