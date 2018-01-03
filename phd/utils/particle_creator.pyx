@@ -34,10 +34,10 @@ def HydroParticleCreator(num=0, dim=2, parallel=False):
     pc.register_property(num, 'energy', 'double')
 
     # information for prallel runs
-    if parallel:
-
-        pc.register_property(num, 'key', 'longlong')
-        pc.register_property(num, 'process', 'long')
+#    if parallel:
+#
+#        pc.register_property(num, 'key', 'longlong')
+#        pc.register_property(num, 'process', 'long')
 
     # ghost labels 
     pc.register_property(num, 'tag', 'int')
@@ -45,21 +45,7 @@ def HydroParticleCreator(num=0, dim=2, parallel=False):
 
     # ** remove and place in boundary **
     pc.register_property(num, 'ids', 'long')
-    pc.register_property(num, 'map', 'long')
-
-    # particle geometry
-    named_groups['w'] = []
-    named_groups['dcom'] = []
-    pc.register_property(num, 'volume', 'double')
-    pc.register_property(num, 'radius', 'double')
-
-    for axis in dimension:
-
-        pc.register_property(num, 'w-' + axis, 'double')
-        pc.register_property(num, 'dcom-' + axis, 'double')
-
-        named_groups['w'].append('w-' + axis)
-        named_groups['dcom'].append('dcom-' + axis)
+    #pc.register_property(num, 'map', 'long')
 
     named_groups['primitive'] = ['density'] +\
             named_groups['velocity'] +\
