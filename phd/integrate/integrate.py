@@ -217,7 +217,6 @@ class StaticMesh(IntegrateBase):
         self.riemann.set_fields_for_riemann(self.particles)
         self.riemann.initialize()
 
-
     def evolve_timestep(self):
         '''
         Solve the compressible gas equations
@@ -281,7 +280,7 @@ class MovingMesh(StaticMesh):
 
         # update mesh generator positions
         self.domain_manager.move_generators(self.particles, self.dt)
-#        self.domain_manager.migrate_particles(self.particles)
+        self.domain_manager.migrate_particles(self.particles)
 
         # ignored if serial run
 #        if self.domain_manager.check_for_partion():
