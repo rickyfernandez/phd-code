@@ -3,27 +3,55 @@ import numpy as np
 from ..utils.logger import phdLogger
 from ..utils.particle_tags import ParticleTAGS
 
-class ReaderWriter(object):
-    #def __init__(self, folder_name="data", pad=4):
-    def __init__(self):
-        #self.folder_name = folder_name
-        #self.pad = pad
-        pass
-
+class ReaderWriterBase(object):
     def write(self, base_name, output_directory, integrator):
-        pass
+        """Write simulation to disk.
 
-    def read(self):
-        pass
+        This base class is the api for writing and reading
+        of data. Note the user is free to write any type of
+        output. For example, this can be used to create 
+        runtime plots or diagnostics.
 
-class Hdf5(ReaderWriter):
+        Parameters
+        ----------
+        base_name : str
+            File name for output data.
+
+        output_directory : str
+            Directory where to store the data.
+
+        integrator : IntegrateBase
+            Advances the fluid equations by one step.
+        """
+        msg = "ReaderWriterBase::write called!"
+        raise NotImplementedError(msg)
+
+    def read(self, file_name):
+        """Read data and return particles.
+
+        For formats where the data is being stored, a read
+        function must be defined. This function reads the
+        data outputted by `write` and returns a CarrayContainer
+        of particles to be used by the simulation.
+
+        Parameters
+        ----------
+        file_name : str
+            File name to be read in.
+
+        Returns
+        -------
+        particles : CarrayContainer
+            Complete container of particles for a simulation.
+
+        """
+        msg = "ReaderWriterBase::read called!"
+        raise NotImplementedError(msg)
+
+class Hdf5(ReaderWriterBase):
     def write(self, base_name, output_directory, integrator):
-        '''
-        Write particle data to hdf5 file
-        '''
-        file_name = output_directory + '/' + base_name + '.hdf5'
-        #file_name = output_directory + '/' + self.folder_name
-        #file_name += '_' + str(integrator.iteration).zfill(self.pad) + '.hdf5'
+        """Write simulation data to hdf5 file."""
+        file_name = output_directory + "/" + base_name + ".hdf5"
 
         phdLogger.info(
                 "hdf5 format: Writting %s at "
@@ -33,7 +61,7 @@ class Hdf5(ReaderWriter):
                  integrator.time,
                  integrator.dt))
 
-        with h5py.File(file_name, 'w') as f:
+        with h5py.File(file_name, "w") as f:
 
             # store current time
             f.attrs["dt"] = integrator.dt
@@ -41,18 +69,18 @@ class Hdf5(ReaderWriter):
             f.attrs["iteration"] = integrator.iteration
 
             # store particle data
-            particle_grp = f.create_group('particles')
+            particle_grp = f.create_group("particles")
 
             # common information 
-            particle_grp.attrs['Real'] = ParticleTAGS.Real
-            particle_grp.attrs['Ghost'] = ParticleTAGS.Real
-            particle_grp.attrs['number_particles'] = integrator.particles.get_number_of_items()
+            particle_grp.attrs["Real"] = ParticleTAGS.Real
+            particle_grp.attrs["Ghost"] = ParticleTAGS.Ghost
+            particle_grp.attrs["number_particles"] = integrator.particles.get_number_of_items()
 
             # store particle data for each field
             for prop_name in integrator.particles.properties.keys():
                 data_grp = particle_grp.create_group(prop_name)
-                data_grp.attrs['dtype'] = integrator.particles.carray_info[prop_name]
-                data_grp.create_dataset('data', data=integrator.particles[prop_name])
+                data_grp.attrs["dtype"] = integrator.particles.carray_info[prop_name]
+                data_grp.create_dataset("data", data=integrator.particles[prop_name])
 
             f.close()
 
@@ -60,28 +88,21 @@ class Hdf5(ReaderWriter):
                 file_name)
 
     def read(self, file_name):
-        '''
-        Read hdf5 file of particles
-
-        Parameters
-        ----------
-        file_name : str
-            File name to be read in
-        '''
+        """Read hdf5 file of particles."""
         phdLogger.info("hdf5 format: Reading filename %s" %\
                 file_name)
 
-        with h5py.File(file_name, 'r') as f:
+        with h5py.File(file_name, "r") as f:
 
-            particle_grp = f['particles']
-            num_particles = particles_grp.attrs['number_particles']
+            particle_grp = f["particles"]
+            num_particles = particles_grp.attrs["number_particles"]
             particles = CarrayContainer(num_particles)
 
             # populate arrays with data
             for field in particle_grp.keys():
                 field_grp = particle_grp[field]
-                particles.register(num_particles, field, field_grp['dtype'])
-                particles[field][:] = field_grp['data'][:]
+                particles.register(num_particles, field, field_grp["dtype"])
+                particles[field][:] = field_grp["data"][:]
 
         phdLogger.sucess("hdf5 format: particles created successfully from %s" %\
                 file_name)
