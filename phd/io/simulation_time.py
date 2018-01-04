@@ -4,8 +4,7 @@ from ..utils.tools import check_class
 class SimulationTime(object):
     """Collection of data outputters and simulation finishers.
 
-    Controls when the simulation needs to output data or needs
-    to end the simulation.
+    Controls when the simulation needs to output data or needs to end the simulation.
 
     Attributes
     ----------
@@ -52,14 +51,14 @@ class SimulationTime(object):
             finish_sim = finish.finished(integrator) or finish_sim
         return finish_sim
 
-    def output(self, output_directory, integrator):
+    def output(self, output_directory, simulation):
         """Cycle through all outputs and check for flag to write out
         simulation data.
 
         Parameters
         ----------
-        integrator : IntegrateBase
-            Integrator that solves the equations.
+        simulation : Simulation
+           Class that marshalls the simulation of the fluid equations.
 
         Returns
         -------
@@ -67,7 +66,7 @@ class SimulationTime(object):
             True if should output False otherwise.
         """
         for output in self.outputs:
-            output.output(output_directory, integrator)
+            output.output(output_directory, simulation)
 
     def modify_timestep(self, integrator):
         """Return the smallest time step from each finish and output
