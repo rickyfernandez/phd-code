@@ -9,6 +9,14 @@ from ..utils.logo import logo_str
 from ..utils.tools import check_class, class_dict
 from ..utils.logger import phdLogger, ufstring, original_emitter
 
+class SimulationTAGS:
+    """Tags to signal what state the simulation is in."""
+    PRE_EVOLVE = 0
+    BEFORE_LOOP = 1
+    MAIN_LOOP = 2
+    AFTER_LOOP = 3
+    POST_EVOLVE = 4
+
 
 class Simulation(object):
     """Marshalls the simulation.
@@ -47,9 +55,13 @@ class Simulation(object):
     simulation_time : SimulationTime
         Signals when to output data and finish the simulation.
 
+    state : int
+        Integer describing if simulation is before, in, or after
+        main loop.
+
     """
     def __init__(
-            self, max_dt_change=1.e33, initial_timestep_factor=1.0,
+            self, max_dt_change=2.0, initial_timestep_factor=1.0,
             simulation_name='simulation', mesh_relax_iterations,
             colored_logs=True, log_level='debug', restart=False):
         """Constructor for simulation.
@@ -78,6 +90,10 @@ class Simulation(object):
         # integrator uses a setter 
         self.integrator = None
         self.simulation_time = None
+
+        # state of the simulation
+        self.restart = restart
+        self.state = None
 
         # perform lloyd relaxtion scheme if non-zero
         self.mesh_relax_iterations = mesh_relax_iterations
@@ -149,21 +165,22 @@ class Simulation(object):
         self.start_up_message()
 
         # output initial state of simulation
+        self.state = SimulationTAGS.PRE_EVOLVE
         integrator.before_loop(self)
 
         # output initial data
+        self.state = SimulationTAGS.BEFORE_LOOP
         simulation.simulation_time.output(
                 self.output_directory,
-                integrator,
-                force=True)
+                self)
 
         # evolve the simulation
+        self.state = SimulationTAGS.MAIN_LOOP
         phdLogger.info("Beginning integration loop")
-        while not simulation_time.finished(integrator):
+        while not simulation_time.finished(self):
 
             # compute new time step
-            integrator.compute_time_step()
-            self.modify_timestep()
+            self.compute_time_step()
 
             # advance one time step
             integrator.evolve_timestep()
@@ -171,10 +188,18 @@ class Simulation(object):
             # output if needed
             simulation_time.output(
                     self.output_directory,
-                    integrator)
+                    self)
+
+        # output final data
+        self.state = SimulationTAGS.AFTER_LOOP
+        simulation.simulation_time.output(
+                self.output_directory,
+                self)
 
         # clean up or last calculations
+        self.state = SimulationTAGS.POST_EVOLVE
         integrator.after_loop(self)
+
         phdLogger.success("Simulation successfully finished!")
 
     def start_up_message(self):
@@ -205,22 +230,25 @@ class Simulation(object):
 
         phdLogger.info(message)
 
-    def modify_timestep(self):
+    def compute_time_step(self):
         """Modify time step for the next iteration.
         
-        Once the time step is calculated from the integrator, then
-        constrain by outputters and simulation.
-
+        Calculate the time step is calculated from the integrator,
+        then constrain by outputters and simulation.
         """
+        # calculate new time step for integrator
+        self.integrator.compute_time_step()
+
+        # modify time step
         dt = self.integrator.dt
-        #if self.integrator.iteration == 0:
-        #    # shrink if first iteration
-        #    dt = self.initial_timestep_factor*dt
-        #else:
-        #    # constrain rate of change
-        #    dt = min(self.max_dt_change*self.old_dt, dt)
-        #self.old_dt = dt
+        if self.integrator.iteration == 0 and not self.restart:
+            # shrink if first iteration
+            dt = self.initial_timestep_factor*dt
+        else:
+            # constrain rate of change
+            dt = min(self.max_dt_change*self.integrator.old_dt, dt)
+        self.integrator.old_dt = dt
 
         # ensure the simulation outputs and finishes at selected time
-        dt = min(self.simulation_time.modify_timestep(self.integrator), dt)
+        dt = min(self.simulation_time.modify_timestep(self), dt)
         self.integrator.set_dt(dt)
