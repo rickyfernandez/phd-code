@@ -367,6 +367,7 @@ class SelectedTimes(SimulationOutputer):
     """
     def __init__(self, output_times):
 
+        # TODO should remove output times instead of bool array
         if type(output_times) is not list:
             raise RuntimeError("ERROR: output_times needs to be type list")
 
