@@ -5,18 +5,28 @@ class SimulationFinisherBase(object):
     Attributes
     ----------
     """
-    def finished(self, integrator):
-        """Check for flag to end the simulation."""
+    def finished(self, simulation):
+        """Check for flag to end the simulation.
+        Parameters
+        ----------
+        simulation : Simulation
+           Class that marshalls the simulation of the fluid equations.
+
+        Returns
+        -------
+        bool
+           True if main loop should be exited 
+        """
         msg = "SimulationFinisher::finish called!"
         raise NotImplementedError(msg)
 
-    def modify_timestep(self, integrator):
+    def modify_timestep(self, simulation):
         """Return consistent time step.
 
         Parameters
         ----------
-        integrator : IntegrateBase
-            Integrator that solves the equations.
+        simulation : Simulation
+           Class that marshalls the simulation of the fluid equations.
 
         Returns
         -------
@@ -24,7 +34,7 @@ class SimulationFinisherBase(object):
             Modified dt if needed otherwise integrator dt.
 
         """
-        return integrator.dt
+        return simulation.integrator.dt
 
 class Iteration(SimulationFinisherBase):
     """Signal simulation complete if reached desired iteration
@@ -39,22 +49,11 @@ class Iteration(SimulationFinisherBase):
     def __init__(self, iteration_max):
         self.iteration_max = iteration_max
 
-    def finished(self, integrator):
+    def finished(self, simulation):
         """Return True to signal the simulation is finished
-        if the simulation reached max iteration number.
-
-        Parameters
-        ----------
-        integrator : IntegrateBase
-            Integrator that solves the equations.
-
-        Returns
-        -------
-        bool
-            True if simulation finished False otherwise.
-
+        if reached max iteration number.
         """
-        if integrator.iteration == self.iteration_max:
+        if simulation.integrator.iteration == self.iteration_max:
             return True
         else:
             return False
@@ -71,40 +70,18 @@ class Time(SimulationFinisherBase):
     def __init__(self, time_max):
         self.time_max = time_max
 
-    def finished(self, integrator):
+    def finished(self, simulation):
         """Return True to signal the simulation is finished
-        if the simulation reached a certain time
-
-        Parameters
-        ----------
-        integrator : phd.IntegrateBase
-            Integrator that solves the equations.
-
-        Returns
-        -------
-        bool
-            True if simulation finished False otherwise.
-
+        if the simulation reached a certain time.
         """
-        if integrator.time >= self.time_max:
+        if simulation.integrator.time >= self.time_max:
             return True
         else:
             return False
 
     def modify_timestep(self, integrator):
-        """Check if the simulation has reached final time.
-
-        Parameters
-        ----------
-        integrator : IntegrateBase
-            Integrator that solves the equations.
-
-        Returns
-        -------
-        float
-            Modified dt if needed otherwise integrator dt.
-
-        """
+        """Check if the simulation has reached final time."""
+        integrator = simulation.integrator
         if integrator.time + integrator.dt >= self.time_max:
             return self.time_max - integrator.time
         else:
