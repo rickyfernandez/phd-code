@@ -13,7 +13,7 @@ from ..domain.boundary import BoundaryConditionBase
 from ..equation_state.equation_state import EquationStateBase
 from ..reconstruction.reconstruction import ReconstructionBase
 
-phdLogger = logging.getLogger('phd')
+phdLogger = logging.getLogger("phd")
 callbacks = []
 
 class IntegrateBase(object):
@@ -40,6 +40,9 @@ class IntegrateBase(object):
     mesh : Mesh
         Class that builds the domain mesh.
 
+    old_dt : float
+        Previous time step.
+
     particles : CarrayContainer
         Class that holds all information pertaining to the particles
         in the simulation.
@@ -58,13 +61,16 @@ class IntegrateBase(object):
         Current iteration of the simulation.
 
     """
-    def __init__(self, dt=0., time=0., iteration=0):
+    def __init__(self, dt=0., time=0., iteration=0, old_dt=np.inf):
         """Constructor for Integrate base class.
         
         Parameters
         ----------
         dt : float
             Time step of the simulation.
+
+        old_dt : float
+            Previous time step.
 
         time : float
             Current time of the simulation.
@@ -77,6 +83,8 @@ class IntegrateBase(object):
         self.time = time
         self.iteration = iteration
 
+        self.old_dt = old_dt
+
         # required objects to be set
         self.mesh = None
         self.riemann = None
@@ -87,8 +95,8 @@ class IntegrateBase(object):
         self.boundary_condition = None
 
         # for communication dt across processors
-        self.loc_dt = np.zeros(1, dtype=np.float64)
-        self.glb_dt = np.zeros(1, dtype=np.float64)
+        self.loc_dt = np.zeros(1, dtype=np.float64)  # local dt
+        self.glb_dt = np.zeros(1, dtype=np.float64)  # global dt
 
     @check_class(BoundaryConditionBase)
     def set_boundary_condition(self, boundary_condition):
@@ -156,18 +164,18 @@ class IntegrateBase(object):
         """
         # ignored if in serial 
         self.domain_manager.partition(self.particles)
-        phdLogger.info('IntegrateBase: Building initial mesh')
+        phdLogger.info("IntegrateBase: Building initial mesh")
 
         # build mesh with ghost particles and
         # geometric quantities (volumes, faces, area, ...)
         self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # relax mesh if needed 
-        if simulation.mesh_relax_iterations > 0:
-            phdLogger.info('Relaxing mesh:')
+        if simulation.mesh_relax_iterations > 0 and not simulation.restart:
+            phdLogger.info("Relaxing mesh:")
 
             for i in range(simulation.mesh_relax_iterations):
-                phdLogger.info('Relaxing iteration %d' % i)
+                phdLogger.info("Relaxing iteration %d" % i)
 
                 simulation.simulation_time.output(
                         simulation.output_directory,
@@ -183,10 +191,10 @@ class IntegrateBase(object):
 
         # should this be removed? TODO
         # assign cell and face velocities to zero 
-        dim = len(self.particles.named_groups['position'])
-        for axis in 'xyz'[:dim]:
-            self.particles['w-' + axis][:] = 0.
-            self.mesh.faces['velocity-' + axis][:] = 0.
+        dim = len(self.particles.named_groups["position"])
+        for axis in "xyz"[:dim]:
+            self.particles["w-" + axis][:] = 0.
+            self.mesh.faces["velocity-" + axis][:] = 0.
 
     def compute_time_step(self):
         """Compute time step for current state of simulation."""
@@ -200,6 +208,9 @@ class IntegrateBase(object):
         """Evolve the simulation for one time step."""
         msg = "IntegrateBase::evolve_timestep called!"
         raise NotImplementedError(msg)
+
+    def after_loop(self, simulation):
+        pass
 
 
 class StaticMesh(IntegrateBase):
@@ -265,9 +276,6 @@ class StaticMesh(IntegrateBase):
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
 
-    def after_loop(self, simulation):
-        pass
-
 class MovingMesh(StaticMesh):
     """Moving mesh integrator."""
     def evolve_timestep(self):
@@ -298,10 +306,10 @@ class MovingMesh(StaticMesh):
         self.domain_manager.migrate_particles(self.particles)
 
         # ignored if serial run
-#        if self.domain_manager.check_for_partion():
-#            phdLogger.info('Moving Mesh Integrator: Starting domain decomposition...')
-#            self.domain_manager.partion()
-#            phdLogger.success('Moving Mesh Integrator: Finished domain decomposition')
+        if self.domain_manager.check_for_partion(self.particles):
+            phdLogger.info("Moving Mesh Integrator: Starting domain decomposition...")
+            self.domain_manager.partion(self.particles)
+            phdLogger.success("Moving Mesh Integrator: Finished domain decomposition")
 
         # setup the mesh for the next setup 
         phdLogger.info("Moving Mesh Integrator: Rebuilding mesh...")
@@ -313,29 +321,3 @@ class MovingMesh(StaticMesh):
                 self.iteration)
 
         self.iteration += 1; self.time += self.dt
-
-
-
-
-
-
-## --------------------- to add after serial working ---------------------------
-#class StaticMesh(IntegrateBase):
-#    def begin_loop(self, simulation):
-#        # relax mesh if needed
-#        if self.mesh.param_relax_mesh and not simulation.param_restart:
-#            for i in range(self.mesh.param_number_relaxations):
-#
-#                # lloyd relaxation
-#                self.mesh.relax(self.particles)
-#
-#                # output data if requested
-#                simulation.simulation_time(self)
-#    def compute_time_step(self):
-#
-#        # if in parallel find smallest dt across
-#        # all meshes 
-#        if phd._in_parallel:
-#            self.domain_manager.reduction(send=local_dt,
-#                    rec=global_dt, op='min')
-#            return self.glb_dt[0]
