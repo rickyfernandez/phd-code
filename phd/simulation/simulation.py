@@ -2,11 +2,10 @@ import os
 import phd
 import logging
 
-from ..integrate.integrate import IntegrateBase
-from ..io.simulation_time import SimulationTime
-
 from ..utils.logo import logo_str
+from ..integrate.integrate import IntegrateBase
 from ..utils.tools import check_class, class_dict
+from ..io.simulation_time_manager import SimulationTimeManager
 from ..utils.logger import phdLogger, ufstring, original_emitter
 
 class SimulationTAGS:
@@ -28,10 +27,7 @@ class Simulation(object):
     Attributes
     ----------
     colored_logs : bool
-        Output colored logs to screen if True otherwise revmove color.
-
-    initial_timestep_factor : float
-        For dt at the first iteration, reduce by this factor.
+        Output colored logs to screen if True otherwise remove color.
 
     integrator : IntegrateBase
         Advances the fluid equations by one step.
@@ -39,20 +35,13 @@ class Simulation(object):
     log_level : str
         Level which logger is outputted.
 
-    max_dt_change : float
-        Largest change allowed of dt relative to old_dt.
-
-    mesh_relax_iterations : int
-        If non zero it signals the integrator to perform that
-        many numbers of mesh relaxtion in before_loop.
-
     output_type : str
         Format which data is written to disk.
 
     simulation_name : str
        Name of problem solving, this name prefixs output data.
 
-    simulation_time : SimulationTime
+    simulation_time_manager : SimulationTimeManager
         Signals when to output data and finish the simulation.
 
     state : int
@@ -60,10 +49,8 @@ class Simulation(object):
         main loop.
 
     """
-    def __init__(
-            self, max_dt_change=2.0, initial_timestep_factor=1.0,
-            simulation_name='simulation', mesh_relax_iterations,
-            colored_logs=True, log_level='debug', restart=False):
+    def __init__(self, simulation_name='simulation', colored_logs=True,
+                 log_level='debug', **kwargs):
         """Constructor for simulation.
 
         Parameters:
@@ -71,66 +58,54 @@ class Simulation(object):
         colored_logs : bool
             Output colored logs to screen if True otherwise remove color.
 
-        initial_timestep_factor : float
-            For dt at the first iteration, reduce by this factor.
-
         log_level : str
             Level which logger is outputted.outputted.
-
-        max_dt_change : float
-            Largest change allowed of dt relative to old_dt.
-
-        restart : bool
-            Flag to signal if the simulation is a restart.
 
         simulation_name : str
            Name of problem solving, this name prefixs output data.
 
         """
-        # integrator uses a setter 
+        # variables use setters 
         self.integrator = None
-        self.simulation_time = None
+        self.simulation_time_manager = None
 
-        # state of the simulation
-        self.restart = restart
         self.state = None
 
-        # perform lloyd relaxtion scheme if non-zero
-        self.mesh_relax_iterations = mesh_relax_iterations
-
-        # time step parameters
-        self.max_dt_change = max_dt_change
-        self.initial_timestep_factor = initial_timestep_factor
+        self.log_level = log_level
+        self.colored_logs = colored_logs
 
         self.simulation_name = simulation_name
         self.output_directory = self.simulation_name + "_output"
 
-        # create log file
+        # all log output stored in this file
         self.log_filename = self.simulation_name + ".log"
+
+    def initialize(self):
+
+        if not self.integrator or self.simulation_time_manager:
+            raise RuntimeError("Not all setters defined in Simulation!")
+
         file_handler = logging.FileHandler(self.log_filename)
         file_handler.setFormatter(logging.Formatter(ufstring))
         phdLogger.addHandler(file_handler)
 
         # set logger level for outputs
-        if log_level == "debug":
+        if self.log_level == "debug":
             phdLogger.setLevel(logging.DEBUG)
-        elif log_level == "info":
+        elif self.log_level == "info":
             phdLogger.setLevel(logging.INFO)
-        elif log_level == "success":
+        elif self.log_level == "success":
             phdLogger.setLevel(logging.SUCCESS)
-        elif log_level == "warning":
+        elif self.log_level == "warning":
             phdLogger.setLevel(logging.WARNING)
         else:
-            raise RuntimeError("Unknown log level: %s" % log_level)
-
-        self.log_level = log_level
+            raise RuntimeError("Unknown log level: %s" % self.log_level)
 
         # remove color output if desired
-        if not colored_logs:
+        if not self.colored_logs:
             sh = phdLogger.handlers[0]
             sh.setFormatter(logging.Formatter(ufstring))
             sh.emit = original_emitter
-        self.colored_logs = colored_logs
 
         # create directory to store outputs
         if phd._rank == 0:
@@ -140,15 +115,18 @@ class Simulation(object):
             else:
                 os.mkdir(self.output_directory)
 
+        # initialize all classes, riemann, reconstruction, ...
+        integrator.initialize()
+
     @check_class(IntegrateBase)
     def set_integrator(self, integrator):
         """Set integrator to evolve the simulation."""
         self.integrator = integrator
 
     @check_class(SimulationTime)
-    def set_simulation_time(self, simulation_time):
-        """Set time outputer for data outputs and ending the simulation"""
-        self.simulation_time = simulation_time
+    def set_simulation_time_manager(self, simulation_time_manager):
+        """Set time outputter for data outputs and ending the simulation"""
+        self.simulation_time_manager = simulation_time_manager
 
     def solve(self):
         """Advance the simulation to final time.
@@ -158,47 +136,43 @@ class Simulation(object):
         times.
 
         """
-        integrator = self.integrator
-        simulation_time = self.simulation_time
-
-        integrator.initialize()
         self.start_up_message()
 
-        # output initial state of simulation
+        # perform any initial computation 
         self.state = SimulationTAGS.PRE_EVOLVE
-        integrator.before_loop(self)
+        self.integrator.before_loop(self)
 
         # output initial data
         self.state = SimulationTAGS.BEFORE_LOOP
-        simulation.simulation_time.output(
+        self.simulation_time_manager.output(
                 self.output_directory,
                 self)
 
         # evolve the simulation
         self.state = SimulationTAGS.MAIN_LOOP
         phdLogger.info("Beginning integration loop")
-        while not simulation_time.finished(self):
+        while not self.simulation_time_manager.finished(self):
 
             # compute new time step
             self.compute_time_step()
 
             # advance one time step
-            integrator.evolve_timestep()
+            self.integrator.evolve_timestep()
 
             # output if needed
-            simulation_time.output(
+            self.simulation_time_manger.output(
                     self.output_directory,
                     self)
 
         # output final data
         self.state = SimulationTAGS.AFTER_LOOP
-        simulation.simulation_time.output(
+        self.simulation_time_manager.output(
                 self.output_directory,
                 self)
 
         # clean up or last calculations
         self.state = SimulationTAGS.POST_EVOLVE
-        integrator.after_loop(self)
+        self.integrator.after_loop(self)
 
         phdLogger.success("Simulation successfully finished!")
 
@@ -210,8 +184,7 @@ class Simulation(object):
 
         if phd._in_parallel:
             message += "\nRunning in parallel: number of " +\
-                "processors = %d" % phd._comm.Get_size()
-                #"processors = %d" % self.num_procs
+                "processors = %d" % phd._size
         else:
             message += "\nRunning in serial"
 
@@ -232,23 +205,12 @@ class Simulation(object):
 
     def compute_time_step(self):
         """Modify time step for the next iteration.
-        
+
         Calculate the time step is calculated from the integrator,
         then constrain by outputters and simulation.
         """
-        # calculate new time step for integrator
-        self.integrator.compute_time_step()
-
-        # modify time step
-        dt = self.integrator.dt
-        if self.integrator.iteration == 0 and not self.restart:
-            # shrink if first iteration
-            dt = self.initial_timestep_factor*dt
-        else:
-            # constrain rate of change
-            dt = min(self.max_dt_change*self.integrator.old_dt, dt)
-        self.integrator.old_dt = dt
+        dt = self.integrator.compute_time_step()
 
         # ensure the simulation outputs and finishes at selected time
-        dt = min(self.simulation_time.modify_timestep(self), dt)
+        dt = min(self.simulation_time_manager.modify_timestep(self), dt)
         self.integrator.set_dt(dt)
