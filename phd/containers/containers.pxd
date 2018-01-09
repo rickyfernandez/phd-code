@@ -6,7 +6,7 @@ cdef class CarrayContainer:
 
     cdef readonly dict properties
     cdef readonly dict carray_info
-    cdef readonly dict named_groups
+    cdef readonly dict carray_named_groups
 
     cpdef register_carray(self, int size, str name, str dtype=*)
 

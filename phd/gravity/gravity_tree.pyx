@@ -54,7 +54,7 @@ cdef class GravityTree:
         cdef str axis
         cdef Splitter splitter
         cdef dict state_vars = {}
-        cdef dict named_groups = {}
+        cdef dict carray_named_groups = {}
 
         self.dim = self.domain.dim
         self.number_nodes = 2**self.dim
@@ -85,14 +85,14 @@ cdef class GravityTree:
             state_vars['proc'] = 'long'
             state_vars['mass'] = 'double'
 
-            named_groups['com'] = []
+            carray_named_groups['com'] = []
             for axis in 'xyz'[:self.dim]:
                 state_vars['com-' + axis] = 'double'
-                named_groups['com'].append('com-' + axis)
-            named_groups['moments'] = ['mass'] + named_groups['com']
+                carray_named_groups['com'].append('com-' + axis)
+            carray_named_groups['moments'] = ['mass'] + carray_named_groups['com']
 
-            self.toptree_leafs = CarrayContainer(var_dict=state_vars)
-            self.toptree_leafs.named_groups = named_groups
+            self.toptree_leafs = CarrayContainer(carray_to_register=state_vars)
+            self.toptree_leafs.carray_named_groups = carray_named_groups
 
             # particle id and send processors buffers
             self.buffer_ids = <PairId*> stdlib.malloc(
@@ -109,22 +109,22 @@ cdef class GravityTree:
             self.buffer_export = CarrayContainer(0)
 
             # add fields that will be communicated
-            for field in self.pc.named_groups['gravity']:
+            for field in self.pc.carray_named_groups['gravity']:
                 self.buffer_export.register_carray(0, field,
                         self.export_interaction.fields[field])
                 self.buffer_import.register_carray(0, field,
                         self.export_interaction.fields[field])
 
             # add name groups as well
-            self.buffer_export.named_groups['acceleration'] =\
-                    list(self.pc.named_groups['acceleration'])
-            self.buffer_export.named_groups['position'] =\
-                    list(self.pc.named_groups['position'])
+            self.buffer_export.carray_named_groups['acceleration'] =\
+                    list(self.pc.carray_named_groups['acceleration'])
+            self.buffer_export.carray_named_groups['position'] =\
+                    list(self.pc.carray_named_groups['position'])
 
-            self.buffer_import.named_groups['acceleration'] =\
-                    list(self.pc.named_groups['acceleration'])
-            self.buffer_import.named_groups['position'] =\
-                    list(self.pc.named_groups['position'])
+            self.buffer_import.carray_named_groups['acceleration'] =\
+                    list(self.pc.carray_named_groups['acceleration'])
+            self.buffer_import.carray_named_groups['position'] =\
+                    list(self.pc.carray_named_groups['position'])
 
             self.import_interaction = GravityAcceleration(self.pc,
                     self.domain, splitter, 0, self.calc_potential)
@@ -401,7 +401,7 @@ cdef class GravityTree:
         cdef double xi[3], xj[3]
 
         # pointer to particle position and mass
-        self.pc.pointer_groups(self.x, self.pc.named_groups['position'])
+        self.pc.pointer_groups(self.x, self.pc.carray_named_groups['position'])
         self.m = mass.get_data_ptr()
 
         self._create_root()
@@ -621,7 +621,7 @@ cdef class GravityTree:
         cdef DoubleArray mass = self.toptree_leafs.get_carray('mass')
 
         self.toptree_leafs.pointer_groups(comx,
-                self.toptree_leafs.named_groups['com'])
+                self.toptree_leafs.carray_named_groups['com'])
 
         # collect toptree leaf moments belonging to our processor
         for i in range(self.toptree_leafs.get_number_of_items()):
@@ -634,7 +634,7 @@ cdef class GravityTree:
                 mass.data[i] = node.group.data.mass
 
         # exchange toptree leaf moments
-        for field in self.toptree_leafs.named_groups['moments']:
+        for field in self.toptree_leafs.carray_named_groups['moments']:
             self.load_bal.comm.Allgatherv(MPI.IN_PLACE,
                     [self.toptree_leafs[field], self.send_cnts,
                         self.send_disp, MPI.DOUBLE])
@@ -856,7 +856,7 @@ cdef class GravityTree:
                 # copy flagged particles into buffer
                 self.buffer_export.resize(self.buffer_size)
                 self.buffer_export.copy(self.pc, self.indices,
-                        self.pc.named_groups['gravity-walk-export'])
+                        self.pc.carray_named_groups['gravity-walk-export'])
 
             # send number of exports to all processors
             self.load_bal.comm.Alltoall([self.send_cnts, MPI.INT],
@@ -880,7 +880,7 @@ cdef class GravityTree:
             exchange_particles(self.buffer_import, self.buffer_export,
                     self.send_cnts, self.recv_cnts,
                     0, self.load_bal.comm,
-                    self.pc.named_groups['gravity-walk-export'],
+                    self.pc.carray_named_groups['gravity-walk-export'],
                     self.send_disp, self.recv_disp)
 
             # walk imported particles
@@ -891,12 +891,12 @@ cdef class GravityTree:
             exchange_particles(self.buffer_export, self.buffer_import,
                     self.recv_cnts, self.send_cnts,
                     0, self.load_bal.comm,
-                    self.pc.named_groups['gravity-walk-import'],
+                    self.pc.carray_named_groups['gravity-walk-import'],
                     self.recv_disp, self.send_disp)
 
             # copy back our data
             self.pc.add(self.buffer_export, self.indices,
-                    self.pc.named_groups['gravity-walk-import'])
+                    self.pc.carray_named_groups['gravity-walk-import'])
 
             # let all processors know if walk is complete 
             glb_done[0] = 0

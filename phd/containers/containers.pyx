@@ -25,7 +25,7 @@ cdef class CarrayContainer:
 
         self.properties = {}
         self.carray_info = {}
-        self.named_groups = {}
+        self.carray_named_groups = {}
 
         if carrays_to_register != None:
             for name in carrays_to_register:
@@ -315,19 +315,3 @@ cdef class CarrayContainer:
             else:
                 msg = 'Unknown field in pointer_groups'
                 raise ValueError, msg
-
-
-
-
-
-
-
-
-#        if "species" in particles.named_groups.keys():
-#            named_groups["colors"] = named_groups["species"]
-#            if "passive-scalars" in particles.named_groups.keys():
-#            named_groups["colors"] += named_groups["passive-scalars"]
-#
-#        elif "passive-scalars" in particles.named_groups.keys():
-#            self.do_colors = True
-#            named_groups["colors"] = named_groups["species"]

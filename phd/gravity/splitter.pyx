@@ -29,7 +29,7 @@ cdef class BarnesHut(Splitter):
         self.dim = dim
         self.open_angle = open_angle
 
-    def add_fields_to_interaction(self, dict fields, dict named_groups):
+    def add_fields_to_interaction(self, dict fields, dict carray_named_groups):
         pass
 
     cdef void initialize_particles(self, CarrayContainer pc):
@@ -41,7 +41,7 @@ cdef class BarnesHut(Splitter):
         pc : CarrayContainer
             Container of particles that are going to walk the tree
         """
-        pc.pointer_groups(self.x, pc.named_groups['position'])
+        pc.pointer_groups(self.x, pc.carray_named_groups['position'])
 
     cdef int split(self, Node* node):
         """

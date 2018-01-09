@@ -16,7 +16,7 @@ cdef class Interaction:
     cdef bint local_particles       # flag indicating local or imported particles
 
     cdef public dict fields         # fields to use in computation
-    cdef public dict named_groups   # vector of fields for ease
+    cdef public dict carray_named_groups   # vector of fields for ease
 
     cdef IntArray tags              # reference to particle tags
     cdef Splitter splitter          # criteria to open node

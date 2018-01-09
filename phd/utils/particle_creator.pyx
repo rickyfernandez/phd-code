@@ -3,13 +3,13 @@ from ..containers.containers cimport CarrayContainer
 
 def HydroParticleCreator(num=0, dim=2, parallel=False):
 
-    cdef dict named_groups = {}
+    cdef dict carray_named_groups = {}
     cdef str axis, dimension = 'xyz'[:dim]
     cdef CarrayContainer pc = CarrayContainer(num)
 
     # register primitive fields
-    named_groups['position'] = []
-    named_groups['velocity'] = []
+    carray_named_groups['position'] = []
+    carray_named_groups['velocity'] = []
     pc.register_carray(num, 'density', 'double')
 
     for axis in dimension:
@@ -17,19 +17,19 @@ def HydroParticleCreator(num=0, dim=2, parallel=False):
         pc.register_carray(num, 'position-' + axis, 'double')
         pc.register_carray(num, 'velocity-' + axis, 'double')
 
-        named_groups['position'].append('position-' + axis)
-        named_groups['velocity'].append('velocity-' + axis)
+        carray_named_groups['position'].append('position-' + axis)
+        carray_named_groups['velocity'].append('velocity-' + axis)
 
     pc.register_carray(num, 'pressure', 'double')
 
     # register conservative fields
-    named_groups['momentum'] = []
+    carray_named_groups['momentum'] = []
     pc.register_carray(num, 'mass', 'double')
 
     for axis in dimension:
 
         pc.register_carray(num, 'momentum-' + axis, 'double')
-        named_groups['momentum'].append('momentum-' + axis)
+        carray_named_groups['momentum'].append('momentum-' + axis)
 
     pc.register_carray(num, 'energy', 'double')
 
@@ -47,16 +47,16 @@ def HydroParticleCreator(num=0, dim=2, parallel=False):
     pc.register_carray(num, 'ids', 'long')
     #pc.register_carray(num, 'map', 'long')
 
-    named_groups['primitive'] = ['density'] +\
-            named_groups['velocity'] +\
+    carray_named_groups['primitive'] = ['density'] +\
+            carray_named_groups['velocity'] +\
             ['pressure']
-    named_groups['conservative'] = ['mass'] +\
-            named_groups['momentum'] +\
+    carray_named_groups['conservative'] = ['mass'] +\
+            carray_named_groups['momentum'] +\
             ['energy']
 
     # set initial particle tags to be real
     pc['tag'][:] = ParticleTAGS.Real
-    pc.named_groups = named_groups
+    pc.carray_named_groups = carray_named_groups
 
     return pc
 

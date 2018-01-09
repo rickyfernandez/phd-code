@@ -28,12 +28,12 @@ class TestHLLSetup(unittest.TestCase):
        # the riemann solver will use 
        self.assertEqual(
                self.riemann.flux_field_groups["conservative"],
-               self.particles.named_groups["conservative"])
+               self.particles.carray_named_groups["conservative"])
 
        # check for momentum fields
        self.assertEqual(
                self.riemann.flux_field_groups["momentum"],
-               self.particles.named_groups["momentum"])
+               self.particles.carray_named_groups["momentum"])
 
        # check if fields type are correct
        for field in self.riemann.flux_fields.keys():
@@ -49,13 +49,13 @@ class TestHLLSetup(unittest.TestCase):
 
        # check if flux states have correct fields
        self.assertEqual(
-               self.riemann.fluxes.named_groups["conservative"],
-               self.particles.named_groups["conservative"])
+               self.riemann.fluxes.carray_named_groups["conservative"],
+               self.particles.carray_named_groups["conservative"])
 
        # check if flux have correct momentum fields
        self.assertEqual(
-               self.riemann.fluxes.named_groups["momentum"],
-               self.particles.named_groups["momentum"])
+               self.riemann.fluxes.carray_named_groups["momentum"],
+               self.particles.carray_named_groups["momentum"])
 
 
 class TestHLLFlux(unittest.TestCase):

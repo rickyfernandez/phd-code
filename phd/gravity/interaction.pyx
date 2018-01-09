@@ -40,14 +40,14 @@ cdef class Interaction:
                         self.fields[field])
 
         # add needed groups as well
-        for group in self.named_groups.iterkeys():
-            if group in pc.named_groups:
+        for group in self.carray_named_groups.iterkeys():
+            if group in pc.carray_named_groups:
                 for field in group:
-                    if field not in pc.named_groups[group]:
-                        pc.named_groups[group] = list(self.named_groups[group])
+                    if field not in pc.carray_named_groups[group]:
+                        pc.carray_named_groups[group] = list(self.carray_named_groups[group])
                         break
             else:
-                pc.named_groups[group] = list(self.named_groups[group])
+                pc.carray_named_groups[group] = list(self.carray_named_groups[group])
 
     cdef void particle_not_finished(self, long node_index):
         """
@@ -135,30 +135,30 @@ cdef class GravityAcceleration(Interaction):
         self.calc_potential = calculate_potential
 
         self.fields = {}
-        self.named_groups = {}
+        self.carray_named_groups = {}
 
         self.fields['mass'] = 'double'
-        self.named_groups['position'] = []
-        self.named_groups['acceleration'] = []
+        self.carray_named_groups['position'] = []
+        self.carray_named_groups['acceleration'] = []
 
         for axis in 'xyz'[:self.dim]:
             self.fields['position-' + axis] = 'double'
             self.fields['acceleration-' + axis] = 'double'
-            self.named_groups['position'].append('position-' + axis)
-            self.named_groups['acceleration'].append('acceleration-' + axis)
+            self.carray_named_groups['position'].append('position-' + axis)
+            self.carray_named_groups['acceleration'].append('acceleration-' + axis)
 
-        self.named_groups['gravity'] = ['mass'] + self.named_groups['position'] +\
-                self.named_groups['acceleration']
-        self.named_groups['gravity-walk-export'] = ['mass'] + pc.named_groups['position']
-        self.named_groups['gravity-walk-import'] = list(self.named_groups['acceleration'])
+        self.carray_named_groups['gravity'] = ['mass'] + self.carray_named_groups['position'] +\
+                self.carray_named_groups['acceleration']
+        self.carray_named_groups['gravity-walk-export'] = ['mass'] + pc.carray_named_groups['position']
+        self.carray_named_groups['gravity-walk-import'] = list(self.carray_named_groups['acceleration'])
 
         if self.calc_potential:
             self.fields['potential'] = 'double'
-            self.named_groups['gravity-walk-import'] = self.named_groups['gravity-walk-import']\
+            self.carray_named_groups['gravity-walk-import'] = self.carray_named_groups['gravity-walk-import']\
                     + ['potential']
 
         # if splitter has fields add as well 
-        self.splitter.add_fields_to_interaction(self.fields, self.named_groups)
+        self.splitter.add_fields_to_interaction(self.fields, self.carray_named_groups)
 
         # add new fields to container
         if add_fields:
@@ -187,8 +187,8 @@ cdef class GravityAcceleration(Interaction):
         # set reference for acceleration calculation
         if self.local_particles:
             self.tags = pc.get_carray('tag')
-        pc.pointer_groups(self.a, pc.named_groups['acceleration'])
-        pc.pointer_groups(self.x, pc.named_groups['position'])
+        pc.pointer_groups(self.a, pc.carray_named_groups['acceleration'])
+        pc.pointer_groups(self.x, pc.carray_named_groups['position'])
 
         # reference for potential calculation
         if self.calc_potential:

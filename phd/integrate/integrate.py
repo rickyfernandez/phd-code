@@ -14,7 +14,6 @@ from ..equation_state.equation_state import EquationStateBase
 from ..reconstruction.reconstruction import ReconstructionBase
 
 phdLogger = logging.getLogger("phd")
-callbacks = []
 
 class IntegrateBase(object):
     """Class that solves the fluid equations.
@@ -36,6 +35,12 @@ class IntegrateBase(object):
 
     dt : float
         Time step of the simulation.
+
+    initial_timestep_factor : float
+        For dt at the first iteration, reduce by this factor.
+
+    max_dt_change : float
+        Largest change allowed of dt relative to old_dt.
 
     mesh : Mesh
         Class that builds the domain mesh.
@@ -61,13 +66,21 @@ class IntegrateBase(object):
         Current iteration of the simulation.
 
     """
-    def __init__(self, dt=0., time=0., iteration=0, old_dt=np.inf):
+    def __init__(self, dt=0., time=0., iteration=0, old_dt=-np.inf,
+                 max_dt_change=2.0, initial_timestep_factor=1.0,
+                 restart=False, **kwargs):
         """Constructor for Integrate base class.
-        
+
         Parameters
         ----------
         dt : float
             Time step of the simulation.
+
+        initial_timestep_factor : float
+            For dt at the first iteration, reduce by this factor.
+
+        max_dt_change : float
+            Largest change allowed of dt relative to old_dt.
 
         old_dt : float
             Previous time step.
@@ -78,12 +91,20 @@ class IntegrateBase(object):
         iteration : int
             Current iteration of the simulation.
 
+        restart : bool
+            Flag to signal if the simulation is a restart.
+
         """
         self.dt = dt
         self.time = time
+        self.old_dt = old_dt
         self.iteration = iteration
 
-        self.old_dt = old_dt
+        self.restart = restart
+
+        # time step parameters
+        self.max_dt_change = max_dt_change
+        self.initial_timestep_factor = initial_timestep_factor
 
         # required objects to be set
         self.mesh = None
@@ -138,6 +159,10 @@ class IntegrateBase(object):
         """Set riemann solver."""
         self.riemann = riemann
 
+    @check_class(SourceTermBase)
+    def add_source_term(self, source_term):
+        self.sources[source_term.__class__.__name__] = source_term
+
     def initialize(self):
         """Setup all connections for computation classes."""
         msg = "IntegrateBase::initialize called!"
@@ -153,7 +178,7 @@ class IntegrateBase(object):
 
         Any calculations or setups should be performed in this call. When
         creating a new class ovewrite this method but be sure to call this
-        base method or copy the parts to needed. This base implementation 
+        base method or copy the parts to needed. This base implementation
         performs the first domain split if in parallel and mesh relaxation.
 
         Parameters
@@ -171,10 +196,10 @@ class IntegrateBase(object):
         self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # relax mesh if needed 
-        if simulation.mesh_relax_iterations > 0 and not simulation.restart:
+        if mesh.relax_iterations > 0 and not self.restart:
             phdLogger.info("Relaxing mesh:")
 
-            for i in range(simulation.mesh_relax_iterations):
+            for i in range(mesh.relax_iterations):
                 phdLogger.info("Relaxing iteration %d" % i)
 
                 simulation.simulation_time.output(
@@ -191,18 +216,33 @@ class IntegrateBase(object):
 
         # should this be removed? TODO
         # assign cell and face velocities to zero 
-        dim = len(self.particles.named_groups["position"])
+        dim = len(self.particles.carray_named_groups["position"])
         for axis in "xyz"[:dim]:
             self.particles["w-" + axis][:] = 0.
             self.mesh.faces["velocity-" + axis][:] = 0.
 
     def compute_time_step(self):
-        """Compute time step for current state of simulation."""
-        self.dt = self.riemann.compute_time_step(
+        """Compute time step for current state of simulation.
+
+        Calculate the time step is then constrain by outputters
+        and simulation.
+        """
+        # calculate new time step for integrator
+        dt = self.riemann.compute_time_step(
                 self.particles, self.equation_state)
 
+        # modify time step
+        if self.iteration == 0 and not self.restart:
+            # shrink if first iteration
+            dt = self.initial_timestep_factor*dt
+        else:
+            # constrain rate of change
+            dt = min(self.max_dt_change*self.old_dt, dt)
+            self.old_dt = self.dt
+        self.dt = dt
+
         # if in parallel find smallest dt across TODO
-        return self.dt
+        return dt
 
     def evolve_timestep(self):
         """Evolve the simulation for one time step."""
@@ -213,9 +253,9 @@ class IntegrateBase(object):
         pass
 
 
-class StaticMesh(IntegrateBase):
+class StaticMeshMUSCLHancock(IntegrateBase):
     """Static mesh integrator.
-    
+
     Once the mesh is created in `begin_loop` method
     the mesh will stay static throughout the simulation.
 
@@ -229,7 +269,8 @@ class StaticMesh(IntegrateBase):
                 not self.equation_state or\
                 not self.reconstruction or\
                 not self.boundary_condition:
-            raise RuntimeError("Not all setters defined in StaticMesh!")
+            raise RuntimeError("ERROR: Not all setters defined in %s!" %\
+                    self.__class__.__name__)
 
         # initialize domain manager
         self.domain_manager.set_domain_limits(self.domain_limits)
@@ -246,7 +287,7 @@ class StaticMesh(IntegrateBase):
         self.reconstruction.initialize()
 
         # intialize riemann
-        self.riemann.set_fields_for_riemann(self.particles)
+        self.riemann.fields_to_add(self.particles)
         self.riemann.initialize()
 
     def evolve_timestep(self):
@@ -276,7 +317,7 @@ class StaticMesh(IntegrateBase):
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
 
-class MovingMesh(StaticMesh):
+class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
     """Moving mesh integrator."""
     def evolve_timestep(self):
         """Evolve the simulation for one time step."""

@@ -90,7 +90,7 @@ cdef class Mesh:
         cdef int num_particles = particles.get_number_of_items()
 
         # dimension of the problem
-        dim = len(particles.named_groups['position'])
+        dim = len(particles.carray_named_groups['position'])
         if self.param_dim != dim:
             raise RuntimeError("Inconsistent dimension with particles")
 
@@ -99,18 +99,18 @@ cdef class Mesh:
                 if field not in particles.carray_info.keys():
                     particles.register_carray(num_particles, field, dtype)
 
-            particles.named_groups["w"] = []
-            particles.named_groups["dcom"] = []
+            particles.carray_named_groups["w"] = []
+            particles.carray_named_groups["dcom"] = []
             for axis in dimension:
-                particles.named_groups["w"].append("w-" + axis)
-                particles.named_groups["dcom"].append("dcom-" + axis)
+                particles.carray_named_groups["w"].append("w-" + axis)
+                particles.carray_named_groups["dcom"].append("dcom-" + axis)
 
 #        elif dim == 3:
 #            for field, dtype in fields_to_register_3d.iteritems():
 #                if field not in particles.carray_info.keys():
 #                    particles.register(num_particles, field, dtype)
 
-        self.update_ghost_fields = list(particles.named_groups['dcom'])
+        self.update_ghost_fields = list(particles.carray_named_groups['dcom'])
         self.update_ghost_fields.append('volume')
 
         # record fields have been registered
@@ -128,7 +128,7 @@ cdef class Mesh:
         if self.param_dim == 2:
             self.tess = PyTess2d()
             self.faces = CarrayContainer(carrays_to_register=face_vars_2d)
-            self.faces.named_groups = named_group_2d
+            self.faces.carray_named_groups = named_group_2d
 
         #elif self.dim == 3:
         #    self.tess = PyTess3d()
@@ -153,7 +153,7 @@ cdef class Mesh:
 
         # reference position and radius 
         rp = r.get_data_ptr()
-        particles.pointer_groups(xp, particles.named_groups["position"])
+        particles.pointer_groups(xp, particles.carray_named_groups["position"])
 
         # first attempt of mesh, radius updated
         #assert(self.tess.build_initial_tess(xp, rp, end_particles) != -1)
@@ -172,7 +172,7 @@ cdef class Mesh:
 
             # because of malloc
             rp = r.get_data_ptr()
-            particles.pointer_groups(xp, particles.named_groups['position'])
+            particles.pointer_groups(xp, particles.carray_named_groups['position'])
 
             # add ghost particle to mesh
             if start_new_ghost != stop_new_ghost:
@@ -225,13 +225,13 @@ cdef class Mesh:
         self.faces.resize(num_faces)
 
         # pointers to particle data 
-        particles.pointer_groups(x, particles.named_groups['position'])
-        particles.pointer_groups(dcom, particles.named_groups['dcom'])
+        particles.pointer_groups(x, particles.carray_named_groups['position'])
+        particles.pointer_groups(dcom, particles.carray_named_groups['dcom'])
         vol = p_vol.get_data_ptr()
 
         # pointers to face data
-        self.faces.pointer_groups(nx,  self.faces.named_groups['normal'])
-        self.faces.pointer_groups(com, self.faces.named_groups['com'])
+        self.faces.pointer_groups(nx,  self.faces.carray_named_groups['normal'])
+        self.faces.pointer_groups(com, self.faces.carray_named_groups['com'])
         pair_i = f_pair_i.get_data_ptr()
         pair_j = f_pair_j.get_data_ptr()
         area   = f_area.get_data_ptr()
@@ -269,7 +269,7 @@ cdef class Mesh:
         cdef int i, k, dim, num_real_particles
         cdef IntArray tags = particles.get_carray("tag")
 
-        dim = len(particles.named_groups['position'])
+        dim = len(particles.carray_named_groups['position'])
 
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
         num_real_particles = particles.get_number_of_items()
@@ -278,8 +278,8 @@ cdef class Mesh:
         self.build_geometry(particles, domain_manager)
 
         # update real particle positions
-        particles.pointer_groups(x,   particles.named_groups['position'])
-        particles.pointer_groups(dcx, particles.named_groups['dcom'])
+        particles.pointer_groups(x,   particles.carray_named_groups['position'])
+        particles.pointer_groups(dcx, particles.carray_named_groups['dcom'])
         for i in range(num_real_particles):
             for k in range(dim):
                 x[k][i] += dcx[k][i]
@@ -304,12 +304,12 @@ cdef class Mesh:
         cdef double eta = self.param_eta
         cdef np.float64_t *x[3], *v[3], *wx[3], *dcx[3]
 
-        dim = len(particles.named_groups['position'])
+        dim = len(particles.carray_named_groups['position'])
 
-        particles.pointer_groups(x,   particles.named_groups['position'])
-        particles.pointer_groups(v,   particles.named_groups['velocity'])
-        particles.pointer_groups(wx,  particles.named_groups['w'])
-        particles.pointer_groups(dcx, particles.named_groups['dcom'])
+        particles.pointer_groups(x,   particles.carray_named_groups['position'])
+        particles.pointer_groups(v,   particles.carray_named_groups['velocity'])
+        particles.pointer_groups(wx,  particles.carray_named_groups['w'])
+        particles.pointer_groups(dcx, particles.carray_named_groups['dcom'])
 
         for i in range(particles.get_number_of_items()):
 
@@ -359,13 +359,13 @@ cdef class Mesh:
         cdef double factor, denom
         cdef np.float64_t *x[3], *wx[3], *fv[3], *fij[3]
 
-        dim = len(particles.named_groups['position'])
+        dim = len(particles.carray_named_groups['position'])
 
-        particles.pointer_groups(wx, particles.named_groups['w'])
-        particles.pointer_groups(x,  particles.named_groups['position'])
+        particles.pointer_groups(wx, particles.carray_named_groups['w'])
+        particles.pointer_groups(x,  particles.carray_named_groups['position'])
 
-        self.faces.pointer_groups(fij, self.faces.named_groups['com'])
-        self.faces.pointer_groups(fv,  self.faces.named_groups['velocity'])
+        self.faces.pointer_groups(fij, self.faces.carray_named_groups['com'])
+        self.faces.pointer_groups(fv,  self.faces.carray_named_groups['velocity'])
 
         # loop over each face in mesh
         for n in range(self.faces.get_number_of_items()):
@@ -406,10 +406,10 @@ cdef class Mesh:
         cdef int i, j, k, n, dim
         cdef np.float64_t *x[3], *wx[3], *mv[3], *fmv[3]
 
-        dim = len(particles.named_groups['position'])
+        dim = len(particles.carray_named_groups['position'])
 
-        particles.pointer_groups(mv, particles.named_groups['momentum'])
-        riemann.fluxes.pointer_groups(fmv, riemann.fluxes.named_groups['momentum'])
+        particles.pointer_groups(mv, particles.carray_named_groups['momentum'])
+        riemann.fluxes.pointer_groups(fmv, riemann.fluxes.carray_named_groups['momentum'])
 
         # update conserved quantities
         for n in range(self.faces.get_number_of_items()):

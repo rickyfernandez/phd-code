@@ -53,31 +53,31 @@ cdef class RiemannBase:
 
         """
         cdef str field, dtype
-        cdef dict fields_to_add = {}, named_groups = {}
+        cdef dict carray_to_register = {}, carray_named_groups = {}
 
-        if "conservative" not in particles.named_groups or\
-                "momentum" not in particles.named_groups:
+        if "conservative" not in particles.carray_named_groups or\
+                "momentum" not in particles.carray_named_groups:
                     raise RuntimeError("ERROR: Missing fields in particles!")
 
         # add standard primitive fields
-        named_groups["conservative"] = []
-        for field in particles.named_groups["conservative"]:
+        carray_named_groups["conservative"] = []
+        for field in particles.carray_named_groups["conservative"]:
 
             # add field to group
-            named_groups["conservative"].append(field)
+            carray_named_groups["conservative"].append(field)
 
             # check type of field
             dtype = particles.carray_info[field]
             if dtype != "double":
                 raise RuntimeError("Riemann: %s field non double type!" % field)
-            fields_to_add[field] = "double"
+            carray_to_register[field] = "double"
 
-        named_groups["momentum"] = particles.named_groups["momentum"]
+        carray_named_groups["momentum"] = particles.carray_named_groups["momentum"]
 
         # store fields info
         self.registered_fields = True
-        self.flux_fields = fields_to_add
-        self.flux_field_groups = named_groups
+        self.flux_fields = carray_to_register
+        self.flux_field_groups = carray_named_groups
 
     cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh,
                          ReconstructionBase reconstruction, EquationStateBase eos):
@@ -99,7 +99,7 @@ cdef class RiemannBase:
             Thermodynamic equation of state.
 
         """
-        cdef int dim = len(particles.named_groups["position"])
+        cdef int dim = len(particles.carray_named_groups["position"])
 
         # resize to hold fluxes for each face in mesh
         self.fluxes.resize(mesh.faces.get_number_of_items())
@@ -152,8 +152,8 @@ cdef class RiemannBase:
         cdef double c, R, dt, vsq
         cdef bint boost = self.boost
 
-        dim = len(particles.named_groups["position"])
-        particles.pointer_groups(v, particles.named_groups["velocity"])
+        dim = len(particles.carray_named_groups["position"])
+        particles.pointer_groups(v, particles.carray_named_groups["velocity"])
 
         # calculate first value for min
         c = eos.sound_speed(d.data[0], p.data[0])
@@ -214,8 +214,8 @@ cdef class RiemannBase:
         cdef int m, k
         cdef np.float64_t *fmv[3], *wx[3]
 
-        fluxes.pointer_groups(fmv, fluxes.named_groups["momentum"])
-        faces.pointer_groups(wx, faces.named_groups["velocity"])
+        fluxes.pointer_groups(fmv, fluxes.carray_named_groups["momentum"])
+        faces.pointer_groups(wx, faces.carray_named_groups["velocity"])
 
         # return flux to lab frame (Pakmor 2011)
         for m in range(faces.get_number_of_items()):
@@ -237,7 +237,7 @@ cdef class HLL(RiemannBase):
             raise RuntimeError("Riemann did not set fields for flux!")
 
         self.fluxes = CarrayContainer(carrays_to_register=self.flux_fields)
-        self.fluxes.named_groups = self.flux_field_groups
+        self.fluxes.carray_named_groups = self.flux_field_groups
 
     cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
         """Solve the riemann problem.
@@ -280,16 +280,16 @@ cdef class HLL(RiemannBase):
 
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
-                reconstruction.left_states.named_groups["velocity"])
+                reconstruction.left_states.carray_named_groups["velocity"])
         reconstruction.right_states.pointer_groups(vr,
-                reconstruction.right_states.named_groups["velocity"])
+                reconstruction.right_states.carray_named_groups["velocity"])
 
         # face momentum fluxes
-        self.fluxes.pointer_groups(fmv, self.fluxes.named_groups["momentum"])
+        self.fluxes.pointer_groups(fmv, self.fluxes.carray_named_groups["momentum"])
 
         # face normal and velocity
-        mesh.faces.pointer_groups(nx, mesh.faces.named_groups["normal"])
-        mesh.faces.pointer_groups(wx, mesh.faces.named_groups["velocity"])
+        mesh.faces.pointer_groups(nx, mesh.faces.carray_named_groups["normal"])
+        mesh.faces.pointer_groups(wx, mesh.faces.carray_named_groups["velocity"])
 
         # solve riemann for each face
         for i in range(num_faces):
@@ -533,16 +533,16 @@ cdef class HLLC(HLL):
 
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
-                reconstruction.left_states.named_groups["velocity"])
+                reconstruction.left_states.carray_named_groups["velocity"])
         reconstruction.right_states.pointer_groups(vr,
-                reconstruction.right_states.named_groups["velocity"])
+                reconstruction.right_states.carray_named_groups["velocity"])
 
         # face momentum fluxes
-        self.fluxes.pointer_groups(fmv, self.fluxes.named_groups["momentum"])
+        self.fluxes.pointer_groups(fmv, self.fluxes.carray_named_groups["momentum"])
 
         # face normal and velocity
-        mesh.faces.pointer_groups(nx, mesh.faces.named_groups["normal"])
-        mesh.faces.pointer_groups(wx, mesh.faces.named_groups["velocity"])
+        mesh.faces.pointer_groups(nx, mesh.faces.carray_named_groups["normal"])
+        mesh.faces.pointer_groups(wx, mesh.faces.carray_named_groups["velocity"])
 
         for i in range(num_faces):
 
@@ -683,10 +683,10 @@ cdef class Exact(RiemannBase):
 
         cdef int num_faces = faces.get_number_of_items()
 
-        left_faces.pointer_groups(vl,  left_faces.named_groups['velocity'])
-        right_faces.pointer_groups(vr, right_faces.named_groups['velocity'])
-        fluxes.pointer_groups(fmv, fluxes.named_groups['momentum'])
-        faces.pointer_groups(nx, faces.named_groups['normal'])
+        left_faces.pointer_groups(vl,  left_faces.carray_named_groups['velocity'])
+        right_faces.pointer_groups(vr, right_faces.carray_named_groups['velocity'])
+        fluxes.pointer_groups(fmv, fluxes.carray_named_groups['momentum'])
+        faces.pointer_groups(nx, faces.carray_named_groups['normal'])
 
         for i in range(num_faces):
 

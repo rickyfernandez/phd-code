@@ -20,8 +20,8 @@ class TestPieceWiseConstantSetup(unittest.TestCase):
 
     def test_set_fields_for_reconstruction_error(self):
         particles = CarrayContainer(1, {"wrong_type": "int"})
-        particles.named_groups["primitive"] = []
-        particles.named_groups["primitive"].append("wrong_type")
+        particles.carray_named_groups["primitive"] = []
+        particles.carray_named_groups["primitive"].append("wrong_type")
 
         self.assertRaises(RuntimeError,
                 self.reconstruction.set_fields_for_reconstruction, particles)
@@ -38,12 +38,12 @@ class TestPieceWiseConstantSetup(unittest.TestCase):
        # will be reconstructed
        self.assertEqual(
                self.reconstruction.reconstruct_field_groups["primitive"],
-               self.particles.named_groups["primitive"])
+               self.particles.carray_named_groups["primitive"])
 
        # check for velocity fields
        self.assertEqual(
                self.reconstruction.reconstruct_field_groups["velocity"],
-               self.particles.named_groups["velocity"])
+               self.particles.carray_named_groups["velocity"])
 
        # check if fields type are correct
        for field in self.reconstruction.reconstruct_fields.keys():
@@ -59,30 +59,30 @@ class TestPieceWiseConstantSetup(unittest.TestCase):
 
        # check if left states have correct fields
        self.assertEqual(
-               self.reconstruction.left_states.named_groups["primitive"],
-               self.particles.named_groups["primitive"])
+               self.reconstruction.left_states.carray_named_groups["primitive"],
+               self.particles.carray_named_groups["primitive"])
 
        # check if rigth states have correct fields
        self.assertEqual(
-               self.reconstruction.right_states.named_groups["primitive"],
-               self.particles.named_groups["primitive"])
+               self.reconstruction.right_states.carray_named_groups["primitive"],
+               self.particles.carray_named_groups["primitive"])
 
        # check if left states have correct velocity fields
        self.assertEqual(
-               self.reconstruction.left_states.named_groups["velocity"],
-               self.particles.named_groups["velocity"])
+               self.reconstruction.left_states.carray_named_groups["velocity"],
+               self.particles.carray_named_groups["velocity"])
 
        # check if rigth states have correct fields
        self.assertEqual(
-               self.reconstruction.right_states.named_groups["velocity"],
-               self.particles.named_groups["velocity"])
+               self.reconstruction.right_states.carray_named_groups["velocity"],
+               self.particles.carray_named_groups["velocity"])
 
 class TestPieceWiseConstantComputeStates(unittest.TestCase):
     def setUp(self):
 
         # create 2 particles with constant values
         self.particles = HydroParticleCreator(num=2, dim=2)
-        for field in self.particles.named_groups["primitive"]:
+        for field in self.particles.carray_named_groups["primitive"]:
             self.particles[field][:] = 1.0
 
         # reconstruction class

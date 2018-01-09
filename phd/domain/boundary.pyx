@@ -1,5 +1,9 @@
 import phd
 
+from ..utils.carray cimport IntArray
+from ..utils.particle_tags import ParticleTAGS
+
+cdef int REAL = ParticleTAGS.Real
 
 cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
     """
@@ -106,35 +110,26 @@ cdef class Reflective(BoundaryConditionBase):
                                     p.index, 0, REFLECTIVE, dim))
 
     cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
-        pass
-#
-#        cdef np.float64_t xp[3], *x[3]
-#        cdef int i, j, dim, is_outside
-#
-#        particles.remove_tagged_particles(ParticleTAGS.Ghost)
-#
-#        dim = len(particles.named_groups['position'])
-#        particles.pointer_groups(x, particles.named_groups['position'])
-#
-#        for i in range(particles.get_number_of_items()):
-#
-#            # did particle leave domain
-#            is_outside = 0
-#            for j in range(dim):
-#                xp[j] = x[j][i]
-#                is_outside += xp[j] <= domain_manager.domain.bounds[0][j] or domain_manager.domain.bounds[1][j] <= xp[j]
-#
-#            if is_outside: # particle left domain
-#                raise RuntimeError("particle left domain in reflective boundary condition!!")
+        cdef int k, dim
+        cdef double xs[3]
+        cdef np.float64_t *x[3]
+
+        cdef IntArray tags = particles.get_carray('tag')
+
+        dim = len(particles.carray_named_groups['position'])
+        particles.pointer_groups(x, particles.carray_named_groups['position'])
+
+        for i in range(particles.get_number_of_items()):
+            if tags.data[i] == REAL:
+                for k in range(dim):
+                    xs[k] = x[k][i]
+
+                if not in_box(xs, 0.0, domain_manager.domain.bounds, dim):
+                    raise RuntimeError("particle left domain in reflective boundary condition!!")
+
 
 
 #    cdef void create_ghost_particle_serial(self, np.float64_t xp[3], DomainManager domain_manager):
-#        cdef int k
-#        cdef int dim = domain_manager.domain.dim
-#
-#        for k in range(dim):
-#            if not in_box(p.x, 0.0, domain_manager.domain.bounds, dim):
-#                raise RuntimeError("particle left domain in reflective boundary condition!!")
 
 cdef class Periodic(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):

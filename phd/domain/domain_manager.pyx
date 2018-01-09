@@ -117,10 +117,10 @@ cdef class DomainManager:
         cdef DoubleArray r = particles.get_carray("radius")
         cdef DoubleArray rold = particles.get_carray("old_radius")
 
-        dim = len(particles.named_groups["position"])
+        dim = len(particles.carray_named_groups["position"])
 
-        particles.pointer_groups(x, particles.named_groups['position'])
-        particles.pointer_groups(mv, particles.named_groups['momentum'])
+        particles.pointer_groups(x, particles.carray_named_groups['position'])
+        particles.pointer_groups(mv, particles.carray_named_groups['momentum'])
 
         # set ghost buffer to zero
         self.ghost_vec.clear()
@@ -259,7 +259,7 @@ cdef class DomainManager:
 
         cdef np.float64_t *xg[3], *mvg[3]
 
-        dim = len(particles.named_groups['position'])
+        dim = len(particles.carray_named_groups['position'])
 
         if self.ghost_vec.size() == 0:
             return
@@ -277,8 +277,8 @@ cdef class DomainManager:
         types = ghosts.get_carray("type")
         maps  = ghosts.get_carray("map")
 
-        ghosts.pointer_groups(mvg, particles.named_groups['momentum'])
-        ghosts.pointer_groups(xg,  particles.named_groups['position'])
+        ghosts.pointer_groups(mvg, particles.carray_named_groups['momentum'])
+        ghosts.pointer_groups(xg,  particles.carray_named_groups['position'])
 
         # transfer ghost position and velocity 
         for i in range(self.ghost_vec.size()):
@@ -347,9 +347,9 @@ cdef class DomainManager:
         cdef IntArray tags = particles.get_carray("tag")
         cdef LongArray ids = particles.get_carray("ids")
 
-        dim = len(particles.named_groups['position'])
-        particles.pointer_groups(x,  particles.named_groups['position'])
-        particles.pointer_groups(wx, particles.named_groups['w'])
+        dim = len(particles.carray_named_groups['position'])
+        particles.pointer_groups(x,  particles.carray_named_groups['position'])
+        particles.pointer_groups(wx, particles.carray_named_groups['w'])
 
         for i in range(particles.get_number_of_items()):
             if tags.data[i] == REAL:
@@ -406,10 +406,10 @@ cdef class DomainManager:
 #                self.send_cnts[p.proc] += 1
 #
 #            # transfer updated position and velocity
-#            ghosts.pointer_groups(xg, particles.named_groups['position'])
-#            ghosts.pointer_groups(vg, particles.named_groups['velocity'])
+#            ghosts.pointer_groups(xg, particles.carray_named_groups['position'])
+#            ghosts.pointer_groups(vg, particles.carray_named_groups['velocity'])
 #            mass = ghosts.get_carray("mass")
-#            ghosts.pointer_groups(mv, particles.named_groups['momentum'])
+#            ghosts.pointer_groups(mv, particles.carray_named_groups['momentum'])
 #
 #        # transfer new data to ghost 
 #        for i in range(ghosts.get_number_of_items()):
@@ -446,7 +446,7 @@ cdef class DomainManager:
 #        self.exchange_particles(particles, ghosts,
 #                self.send_cnts, self.recv_cnts,
 #                0, self.comm,
-#                self.pc.named_groups['gravity-walk-export'],
+#                self.pc.carray_named_groups['gravity-walk-export'],
 #                self.send_disp, self.recv_disp)
 #    cdef bint ghost_complete(self):
 #        if phd._in_parallel:

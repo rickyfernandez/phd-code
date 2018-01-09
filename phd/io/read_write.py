@@ -114,7 +114,7 @@ class Hdf5(ReaderWriterBase):
 # --- scratch
 #            # store named groups
 #            named_grp = f.create_group('named_group')
-#            for grp, grp_list in pc.named_groups.iteritems():
+#            for grp, grp_list in pc.carray_named_groups.iteritems():
 #                named_grp.attrs[grp] = ','.join(grp_list)
 #            particle_grp = f['named_group']
 #            for grp in named_grp.keys():

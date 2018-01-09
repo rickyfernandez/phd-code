@@ -32,9 +32,9 @@ class TestMeshSetup2d(unittest.TestCase):
                 (fields + reg_fields_2d).sort())
 
         # check named groups added correctly
-        self.assertEqual(particles.named_groups["w"],
+        self.assertEqual(particles.carray_named_groups["w"],
                 ["w-x", "w-y"])
-        self.assertEqual(particles.named_groups["dcom"],
+        self.assertEqual(particles.carray_named_groups["dcom"],
                 ["dcom-x", "dcom-y"])
 
     def test_register_fields_errors(self):

@@ -26,14 +26,14 @@ cdef class ReconstructionBase:
         gradients and reconstructions
         """
         cdef str field, dtype
-        cdef dict fields_to_add = {}, named_groups = {}
+        cdef dict fields_to_add = {}, carray_named_groups = {}
 
         # add standard primitive fields
-        named_groups["primitive"] = []
-        for field in particles.named_groups["primitive"]:
+        carray_named_groups["primitive"] = []
+        for field in particles.carray_named_groups["primitive"]:
 
             # add field to group
-            named_groups["primitive"].append(field)
+            carray_named_groups["primitive"].append(field)
 
             # check type of field
             dtype = particles.carray_info[field]
@@ -42,12 +42,12 @@ cdef class ReconstructionBase:
                         "Reconstruction: %s field non double type" % dtype)
             fields_to_add[field] = "double"
 
-        named_groups["velocity"] = particles.named_groups["velocity"]
+        carray_named_groups["velocity"] = particles.carray_named_groups["velocity"]
 
         # store fields info
         self.registered_fields = True
         self.reconstruct_fields = fields_to_add
-        self.reconstruct_field_groups = named_groups
+        self.reconstruct_field_groups = carray_named_groups
 
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
             bint boost, DomainManager domain_manager, double dt):
@@ -72,8 +72,8 @@ cdef class PieceWiseConstant(ReconstructionBase):
         self.right_states = CarrayContainer(carrays_to_register=self.reconstruct_fields)
 
         # add groups
-        self.left_states.named_groups  = self.reconstruct_field_groups
-        self.right_states.named_groups = self.reconstruct_field_groups
+        self.left_states.carray_named_groups  = self.reconstruct_field_groups
+        self.right_states.carray_named_groups = self.reconstruct_field_groups
 
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
             bint boost, DomainManager domain_manager, double dt):
@@ -98,19 +98,19 @@ cdef class PieceWiseConstant(ReconstructionBase):
         cdef int i, j, k, n, dim
         cdef np.float64_t *v[3], *vl[3], *vr[3], *wx[3]
 
-        dim = len(particles.named_groups["position"])
+        dim = len(particles.carray_named_groups["position"])
 
         # particle and face velocity pointer
-        particles.pointer_groups(v, particles.named_groups["velocity"])
-        mesh.faces.pointer_groups(wx, mesh.faces.named_groups["velocity"])
+        particles.pointer_groups(v, particles.carray_named_groups["velocity"])
+        mesh.faces.pointer_groups(wx, mesh.faces.carray_named_groups["velocity"])
 
         # resize left/right states to hold each face
         self.left_states.resize(mesh.faces.get_number_of_items())
         self.right_states.resize(mesh.faces.get_number_of_items())
 
         # face state velocity pointer
-        self.left_states.pointer_groups(vl,  self.left_states.named_groups["velocity"])
-        self.right_states.pointer_groups(vr, self.right_states.named_groups["velocity"])
+        self.left_states.pointer_groups(vl,  self.left_states.carray_named_groups["velocity"])
+        self.right_states.pointer_groups(vr, self.right_states.carray_named_groups["velocity"])
 
         # loop through each face
         for n in range(mesh.faces.get_number_of_items()):
@@ -177,7 +177,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        grad_groups["reconstruct-field"]  = []
 #
 #        # add primitive fields
-#        for field in particles.named_groups["primitive"]:
+#        for field in particles.carray_named_groups["primitive"]:
 #
 #            # add field to group
 #            field_groups["reconstruct-field"].append(field)
@@ -202,9 +202,9 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #                    grad_groups["velocity"].append(grad_name)
 #
 #        # add passive-scalars if any 
-#        if "passive-scalars" in particles.named_groups.keys():
+#        if "passive-scalars" in particles.carray_named_groups.keys():
 #            if self.passive_scalars = True
-#            for field in particles.named_groups["passive-scalars"]:
+#            for field in particles.carray_named_groups["passive-scalars"]:
 #                state_vars[field] = "double"
 #                for i in range(dim):
 #
@@ -217,7 +217,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        # store fields
 #        self.registered_fields = True
 #        self.reconstruct_fields = fields_to_add
-#        self.reconstruct_field_groups = named_groups
+#        self.reconstruct_field_groups = carray_named_groups
 #
 #        # store gradients
 #        self.reconstruct_grads = grad_fields_to_add
@@ -235,7 +235,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        self.grad = CarrayContainer(carrays_to_register=self.reconstruct_grads)
 #
 #        # allocate helper pointers
-#        dim = len(named_groups["velocity"])
+#        dim = len(carray_named_groups["velocity"])
 #        num_fields = len(self.fields_to_reconstruct_groups["reconstruct-fields"])
 #
 #        if self.passive_scalars:
@@ -276,7 +276,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        cdef double cfx[3], *fij[3], area
 #        cdef double xi[3], xj[3], dr[3], cx[3], r, _vol
 #
-#        cdef int num_fields = len(self.grad.named_groups["reconstruct-fields")
+#        cdef int num_fields = len(self.grad.carray_named_groups["reconstruct-fields")
 #
 #        cdef np.float64_t** prim = self.reco_ptr
 #        cdef np.float64_t** grad = self.grad_ptr
@@ -287,15 +287,15 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        cdef np.float64_t* df      = self.df
 #
 #        # pointer to particle information
-#        particles.pointer_groups(x, particles.named_groups['position'])
-#        particles.pointer_groups(dcx, particles.named_groups['dcom'])
-#        particles.pointer_groups(prim, self.grad.named_groups['reconstruct-fields'])
+#        particles.pointer_groups(x, particles.carray_named_groups['position'])
+#        particles.pointer_groups(dcx, particles.carray_named_groups['dcom'])
+#        particles.pointer_groups(prim, self.grad.carray_named_groups['reconstruct-fields'])
 #
 #        # pointer to face center of mass
-#        mesh.faces.pointer_groups(fij, mesh.faces.named_groups['com'])
+#        mesh.faces.pointer_groups(fij, mesh.faces.carray_named_groups['com'])
 #
 #        # pointer to primitive gradients with dimension stacked
-#        self.grad.pointer_groups(grad, self.grad.named_groups['reconstruct-fields'])
+#        self.grad.pointer_groups(grad, self.grad.carray_named_groups['reconstruct-fields'])
 #
 #        # calculate gradients
 #        for i in range(particles.get_number_of_items()):
@@ -413,7 +413,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #                        grad[dim*n+k][i] = alpha[n]*df[dim*n+k]
 #
 #        # transfer gradients to ghost particles
-#        domain_manager.update_gradients(particles, self.grad, self.grad.named_groups['primitive'])
+#        domain_manager.update_gradients(particles, self.grad, self.grad.carray_named_groups['primitive'])
 #
 #    def compute_states(self, CarrayContainer particles, Mesh mesh,
 #            RiemannBase riemann, double dt):
@@ -447,15 +447,15 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        cdef DoubleArray pr = self.right_state.get_carray("pressure")
 #
 #        # extract pointers
-#        particles.pointer_groups(x, particles.named_groups['position'])
-#        particles.pointer_groups(dcx, particles.named_groups['dcom'])
-#        particles.pointer_groups(v, particles.named_groups['velocity'])
+#        particles.pointer_groups(x, particles.carray_named_groups['position'])
+#        particles.pointer_groups(dcx, particles.carray_named_groups['dcom'])
+#        particles.pointer_groups(v, particles.carray_named_groups['velocity'])
 #
-#        self.left_state.pointer_groups(vl,  self.left_state.named_groups['velocity'])
-#        self.right_state.pointer_groups(vr, self.right_state.named_groups['velocity'])
+#        self.left_state.pointer_groups(vl,  self.left_state.carray_named_groups['velocity'])
+#        self.right_state.pointer_groups(vr, self.right_state.carray_named_groups['velocity'])
 #
-#        mesh.faces.pointer_groups(fij, mesh.faces.named_groups['com'])
-#        mesh.faces.pointer_groups(wx,  mesh.faces.named_groups['velocity'])
+#        mesh.faces.pointer_groups(fij, mesh.faces.carray_named_groups['com'])
+#        mesh.faces.pointer_groups(wx,  mesh.faces.carray_named_groups['velocity'])
 #
 #        # allocate space and compute gradients
 #        self.grad.resize(particles.get_number_of_items())
@@ -466,9 +466,9 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        self.grad.pointer_groups(dp, self.reconstruct_grad_groups['pressure'])
 #
 #        if do_colors:
-#            self.particles(self.col, particles.named_groups["colors"])
-#            self.left_state.pointer_groups(self.coll,  self.named_groups['colors'])
-#            self.right_state.pointer_groups(self.colr, self.named_groups['colors'])
+#            self.particles(self.col, particles.carray_named_groups["colors"])
+#            self.left_state.pointer_groups(self.coll,  self.carray_named_groups['colors'])
+#            self.right_state.pointer_groups(self.colr, self.carray_named_groups['colors'])
 #            self.grad.pointer_groups(dc, self.reconstruct_grad_groups['colors'])
 #
 #        # create left/right states for each face
@@ -559,22 +559,22 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #
 #    def set_fields_to_reconstruct(CarrayContainer particles):
 #        # add species
-#        if "species" in particles.named_groups.keys():
-#            for field in particles.named_groups["species"]:
-#                named_groups["primitive"].append(field)
-#                named_groups["species"].append(field)
+#        if "species" in particles.carray_named_groups.keys():
+#            for field in particles.carray_named_groups["species"]:
+#                carray_named_groups["primitive"].append(field)
+#                carray_named_groups["species"].append(field)
 #                state_vars[field] = "double"
 #
 #        # add passive-scalars
-#        if "passive-scalars" in particles.named_groups.keys():
-#            for field in particles.named_groups["passive-scalars"]:
-#                named_groups["primitive"].append(field)
-#                named_groups["passive-scalars"].append(field)
+#        if "passive-scalars" in particles.carray_named_groups.keys():
+#            for field in particles.carray_named_groups["passive-scalars"]:
+#                carray_named_groups["primitive"].append(field)
+#                carray_named_groups["passive-scalars"].append(field)
 #                state_vars[field] = "double"
 #
 #        # create extra groups for convenience
-#        if "species" in particles.named_groups.keys() or\
-#                "passive-scalars" in particles.named_groups.keys():
+#        if "species" in particles.carray_named_groups.keys() or\
+#                "passive-scalars" in particles.carray_named_groups.keys():
 #            self.do_colors = True
 #    def initialize(self):
 #        """Setup initial arrays and routines for computation"""
@@ -586,7 +586,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        self.right_state = CarrayContainer(carrays_to_register=self.reconstruct_fields)
 #
 #        if self.do_colors:
-#            num_colors = len(particles.named_groups["colors"])
+#            num_colors = len(particles.carray_named_groups["colors"])
 #            self.col  = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
 #            self.coll = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
 #            self.colr = <np.float64_t**> stdlib.malloc(num_colors*sizeof(void*))
@@ -596,10 +596,10 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #        cdef int i, j, k, n#, c, num_colors
 #        cdef bint do_colors = self.do_colors
 #        if do_colors:
-#            num_colors = len(self.named_groups["colors"])
-#            particles.pointer_groups(self.col, self.particles.named_groups["colors"])
-#            self.left_state.pointer_groups(self.coll, self.particles.named_groups["colors"])
-#            self.right_state.pointer_groups(self.colr, self.particles.named_groups["colors"])
+#            num_colors = len(self.carray_named_groups["colors"])
+#            particles.pointer_groups(self.col, self.particles.carray_named_groups["colors"])
+#            self.left_state.pointer_groups(self.coll, self.particles.carray_named_groups["colors"])
+#            self.right_state.pointer_groups(self.colr, self.particles.carray_named_groups["colors"])
 #
 #            if do_colors:
 #                for c in range(num_colors):
