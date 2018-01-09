@@ -30,9 +30,9 @@ cdef class CarrayContainer:
         if var_dict != None:
             for name in var_dict:
                 dtype = var_dict[name]
-                self.register_property(num_items, name, dtype)
+                self.register_carray(num_items, name, dtype)
 
-    cpdef register_property(self, int size, str name, str dtype="double"):
+    cpdef register_carray(self, int size, str name, str dtype="double"):
         """
         Register new carray
 
@@ -190,7 +190,7 @@ cdef class CarrayContainer:
         # allocate carrays
         for prop in prop_names:
             dtype = self.carray_info[prop]
-            result_array.register_property(size, prop, dtype)
+            result_array.register_carray(size, prop, dtype)
 
         # copy the required indices for each property
         for prop in prop_names:

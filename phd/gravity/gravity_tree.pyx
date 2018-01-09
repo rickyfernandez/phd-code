@@ -110,9 +110,9 @@ cdef class GravityTree:
 
             # add fields that will be communicated
             for field in self.pc.named_groups['gravity']:
-                self.buffer_export.register_property(0, field,
+                self.buffer_export.register_carray(0, field,
                         self.export_interaction.fields[field])
-                self.buffer_import.register_property(0, field,
+                self.buffer_import.register_carray(0, field,
                         self.export_interaction.fields[field])
 
             # add name groups as well

@@ -7,29 +7,6 @@ from ..utils.particle_tags import ParticleTAGS
 from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, LongArray, IntArray
 
-#cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
-#    """
-#    Check if particle bounding box overlaps with a box defined by bounds.
-#
-#    Parameters
-#    ----------
-#    x : array[3]
-#        Particle position
-#    r : np.float64_t
-#        Particle radius
-#    bounds : array[2][3]
-#        min/max of bounds in each dimension
-#    dim : int
-#        Problem dimension
-#    """
-#    cdef int i
-#    for i in range(dim):
-#        if x[i] + r < bounds[0][i]:
-#            return False
-#        if x[i] - r > bounds[1][i]:
-#            return False
-#    return True
-
 cdef int REAL = ParticleTAGS.Real
 
 # face fields in 2d 
@@ -81,12 +58,21 @@ cdef dict fields_to_register_3d = dict(fields_to_register_2d, **{
 
 cdef class Mesh:
     def __init__(self, int param_dim=2, bint param_regularize=True,
-            double param_eta=0.25, int param_num_neighbors=128):
+                 int relax_iterations = 0, double param_eta=0.25,
+                 int param_num_neighbors=128):
         """
         Constructor for Mesh base class.
+
+        relax_iterations : int
+            If non zero it signals the integrator to perform that
+            many numbers of mesh relaxtion in before_loop.
+
         """
         # domain manager needs to be set
         self.particle_fields_registered = False
+
+        # perform lloyd relaxtion scheme if non-zero
+        self.relax_iterations = relax_iterations
 
         self.param_dim = param_dim
         self.param_eta = param_eta
@@ -111,7 +97,7 @@ cdef class Mesh:
         if self.param_dim == 2:
             for field, dtype in fields_to_register_2d.iteritems():
                 if field not in particles.carray_info.keys():
-                    particles.register_property(num_particles, field, dtype)
+                    particles.register_carray(num_particles, field, dtype)
 
             particles.named_groups["w"] = []
             particles.named_groups["dcom"] = []

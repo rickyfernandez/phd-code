@@ -8,7 +8,7 @@ cdef class CarrayContainer:
     cdef readonly dict carray_info
     cdef readonly dict named_groups
 
-    cpdef register_property(self, int size, str name, str dtype=*)
+    cpdef register_carray(self, int size, str name, str dtype=*)
 
     cpdef int get_number_of_items(self)
     cpdef remove_items(self, np.ndarray index_list)

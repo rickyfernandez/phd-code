@@ -10,42 +10,42 @@ def HydroParticleCreator(num=0, dim=2, parallel=False):
     # register primitive fields
     named_groups['position'] = []
     named_groups['velocity'] = []
-    pc.register_property(num, 'density', 'double')
+    pc.register_carray(num, 'density', 'double')
 
     for axis in dimension:
 
-        pc.register_property(num, 'position-' + axis, 'double')
-        pc.register_property(num, 'velocity-' + axis, 'double')
+        pc.register_carray(num, 'position-' + axis, 'double')
+        pc.register_carray(num, 'velocity-' + axis, 'double')
 
         named_groups['position'].append('position-' + axis)
         named_groups['velocity'].append('velocity-' + axis)
 
-    pc.register_property(num, 'pressure', 'double')
+    pc.register_carray(num, 'pressure', 'double')
 
     # register conservative fields
     named_groups['momentum'] = []
-    pc.register_property(num, 'mass', 'double')
+    pc.register_carray(num, 'mass', 'double')
 
     for axis in dimension:
 
-        pc.register_property(num, 'momentum-' + axis, 'double')
+        pc.register_carray(num, 'momentum-' + axis, 'double')
         named_groups['momentum'].append('momentum-' + axis)
 
-    pc.register_property(num, 'energy', 'double')
+    pc.register_carray(num, 'energy', 'double')
 
     # information for prallel runs
 #    if parallel:
 #
-#        pc.register_property(num, 'key', 'longlong')
-#        pc.register_property(num, 'process', 'long')
+#        pc.register_carray(num, 'key', 'longlong')
+#        pc.register_carray(num, 'process', 'long')
 
     # ghost labels 
-    pc.register_property(num, 'tag', 'int')
-    pc.register_property(num, 'type', 'int')
+    pc.register_carray(num, 'tag', 'int')
+    pc.register_carray(num, 'type', 'int')
 
     # ** remove and place in boundary **
-    pc.register_property(num, 'ids', 'long')
-    #pc.register_property(num, 'map', 'long')
+    pc.register_carray(num, 'ids', 'long')
+    #pc.register_carray(num, 'map', 'long')
 
     named_groups['primitive'] = ['density'] +\
             named_groups['velocity'] +\

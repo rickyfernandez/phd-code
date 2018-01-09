@@ -49,11 +49,11 @@ cdef class DomainManager:
         if phd._in_parallel:
             for field, dtype in fields_for_parallel.iteritems():
                 if field not in particles.carray_info.keys():
-                    particles.register_property(num_particles, field, dtype)
+                    particles.register_carray(num_particles, field, dtype)
 
-        particles.register_property(num_particles, 'map', 'long')
-        particles.register_property(num_particles, 'radius', 'double')
-        particles.register_property(num_particles, 'old_radius', 'double')
+        particles.register_carray(num_particles, 'map', 'long')
+        particles.register_carray(num_particles, 'radius', 'double')
+        particles.register_carray(num_particles, 'old_radius', 'double')
 
         # set initial radius for mesh generation
         self.setup_initial_radius(particles)
@@ -355,6 +355,8 @@ cdef class DomainManager:
             if tags.data[i] == REAL:
                 for k in range(dim):
                     x[k][i] += dt*wx[k][i]
+
+        self.migrate_particles(particles)
 
     cpdef migrate_particles(self, CarrayContainer particles):
         """

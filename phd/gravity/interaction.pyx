@@ -36,7 +36,7 @@ cdef class Interaction:
         # add needed fields for computation
         for field in self.fields.iterkeys():
             if field not in pc.properties:
-                pc.register_property(num_particles, field,
+                pc.register_carray(num_particles, field,
                         self.fields[field])
 
         # add needed groups as well
