@@ -36,7 +36,7 @@ class TestParticleArray(unittest.TestCase):
                 "momentum-y": "double",
                 "energy": "double",
                 }
-        cc = CarrayContainer(var_dict=flux_vars)
+        cc = CarrayContainer(carrays_to_register=flux_vars)
 
         self.assertEqual(cc.get_number_of_items(), 0)
         self.assertItemsEqual(cc.properties.keys(), flux_vars.keys())
@@ -137,7 +137,7 @@ class TestParticleArray(unittest.TestCase):
         """
         Tests the extend function.
         """
-        cc = CarrayContainer(var_dict={"tmp": "int"})
+        cc = CarrayContainer(carrays_to_register={"tmp": "int"})
         self.assertEqual(cc.get_number_of_items(), 0)
         print "num:", cc.get_number_of_items()
 

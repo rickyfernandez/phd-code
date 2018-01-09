@@ -12,7 +12,7 @@ cdef int Ghost = ParticleTAGS.Ghost
 
 cdef class CarrayContainer:
 
-    def __init__(self, int num_items=0, dict var_dict=None, **kwargs):
+    def __init__(self, int num_items=0, dict carrays_to_register=None, **kwargs):
         """
         Create container of carrays of size num_items
 
@@ -27,9 +27,9 @@ cdef class CarrayContainer:
         self.carray_info = {}
         self.named_groups = {}
 
-        if var_dict != None:
-            for name in var_dict:
-                dtype = var_dict[name]
+        if carrays_to_register != None:
+            for name in carrays_to_register:
+                dtype = carrays_to_register[name]
                 self.register_carray(num_items, name, dtype)
 
     cpdef register_carray(self, int size, str name, str dtype="double"):

@@ -127,12 +127,12 @@ cdef class Mesh:
 
         if self.param_dim == 2:
             self.tess = PyTess2d()
-            self.faces = CarrayContainer(var_dict=face_vars_2d)
+            self.faces = CarrayContainer(carrays_to_register=face_vars_2d)
             self.faces.named_groups = named_group_2d
 
         #elif self.dim == 3:
         #    self.tess = PyTess3d()
-        #    self.faces = CarrayContainer(var_dict=face_vars_3d)
+        #    self.faces = CarrayContainer(carrays_to_register=face_vars_3d)
 
     cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
         """

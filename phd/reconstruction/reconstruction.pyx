@@ -68,8 +68,8 @@ cdef class PieceWiseConstant(ReconstructionBase):
                     "Reconstruction did not set fields to reconstruct!")
 
         # initialize left/right face states for riemann solver
-        self.left_states  = CarrayContainer(var_dict=self.reconstruct_fields)
-        self.right_states = CarrayContainer(var_dict=self.reconstruct_fields)
+        self.left_states  = CarrayContainer(carrays_to_register=self.reconstruct_fields)
+        self.right_states = CarrayContainer(carrays_to_register=self.reconstruct_fields)
 
         # add groups
         self.left_states.named_groups  = self.reconstruct_field_groups
@@ -230,9 +230,9 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #                    "Reconstruction did not set fields to reconstruct!")
 #
 #        # create states
-#        self.left_state  = CarrayContainer(var_dict=self.reconstruct_fields)
-#        self.right_state = CarrayContainer(var_dict=self.reconstruct_fields)
-#        self.grad = CarrayContainer(var_dict=self.reconstruct_grads)
+#        self.left_state  = CarrayContainer(carrays_to_register=self.reconstruct_fields)
+#        self.right_state = CarrayContainer(carrays_to_register=self.reconstruct_fields)
+#        self.grad = CarrayContainer(carrays_to_register=self.reconstruct_grads)
 #
 #        # allocate helper pointers
 #        dim = len(named_groups["velocity"])
@@ -582,8 +582,8 @@ cdef class PieceWiseConstant(ReconstructionBase):
 #            raise RuntimeError("fields to reconstruct not specified")
 #
 #        # create states
-#        self.left_state  = CarrayContainer(var_dict=self.reconstruct_fields)
-#        self.right_state = CarrayContainer(var_dict=self.reconstruct_fields)
+#        self.left_state  = CarrayContainer(carrays_to_register=self.reconstruct_fields)
+#        self.right_state = CarrayContainer(carrays_to_register=self.reconstruct_fields)
 #
 #        if self.do_colors:
 #            num_colors = len(particles.named_groups["colors"])
