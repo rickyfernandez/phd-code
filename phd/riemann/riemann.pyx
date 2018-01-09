@@ -44,7 +44,6 @@ cdef class RiemannBase:
         raise NotImplementedError(msg)
 
     def fields_to_add(self, CarrayContainer particles):
-    #def set_fields_for_riemann(self, CarrayContainer particles):
         """Create fields to calculate fluxes.
 
         Parameters
@@ -98,7 +97,7 @@ cdef class RiemannBase:
 
         eos : EquationStateBase
             Thermodynamic equation of state.
-        
+
         """
         cdef int dim = len(particles.named_groups["position"])
 
@@ -139,7 +138,7 @@ cdef class RiemannBase:
         Returns
         -------
         double
-            Time step 
+            Time step
 
         """
         cdef IntArray tags   = particles.get_carray("tag")
@@ -173,6 +172,7 @@ cdef class RiemannBase:
             dt = R/(c + sqrt(vsq))
 
         for i in range(particles.get_number_of_items()):
+            # use only real particles
             if tags.data[i] == Real:
 
                 # sound speed
