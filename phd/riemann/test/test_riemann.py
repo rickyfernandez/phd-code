@@ -19,7 +19,7 @@ class TestHLLSetup(unittest.TestCase):
 
     def test_set_fields_for_flux(self):
 
-       self.riemann.set_fields_for_riemann(self.particles)
+       self.riemann.fields_to_add(self.particles)
 
         # check if reconstruction has fields registered
        self.assertTrue(self.riemann.registered_fields)
@@ -42,7 +42,7 @@ class TestHLLSetup(unittest.TestCase):
                    self.particles.carray_info[field])
 
     def test_initialize(self):
-       self.riemann.set_fields_for_riemann(self.particles)
+       self.riemann.fields_to_add(self.particles)
 
        # create left/right states containers
        self.riemann.initialize()
@@ -82,7 +82,7 @@ class TestHLLFlux(unittest.TestCase):
 
         # riemann class
         self.riemann = HLL(boost=False)
-        self.riemann.set_fields_for_riemann(self.particles)
+        self.riemann.fields_to_add(self.particles)
         self.riemann.initialize()
 
     def test_left_state(self):

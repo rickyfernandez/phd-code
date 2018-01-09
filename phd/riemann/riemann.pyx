@@ -43,7 +43,8 @@ cdef class RiemannBase:
         msg = "Reconstruction::initialize called!"
         raise NotImplementedError(msg)
 
-    def set_fields_for_riemann(self, CarrayContainer particles):
+    def fields_to_add(self, CarrayContainer particles):
+    #def set_fields_for_riemann(self, CarrayContainer particles):
         """Create fields to calculate fluxes.
 
         Parameters
@@ -54,6 +55,10 @@ cdef class RiemannBase:
         """
         cdef str field, dtype
         cdef dict fields_to_add = {}, named_groups = {}
+
+        if "conservative" not in particles.named_groups or\
+                "momentum" not in particles.named_groups:
+                    raise RuntimeError("ERROR: Missing fields in particles!")
 
         # add standard primitive fields
         named_groups["conservative"] = []
@@ -75,7 +80,7 @@ cdef class RiemannBase:
         self.flux_fields = fields_to_add
         self.flux_field_groups = named_groups
 
-    cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh, 
+    cpdef compute_fluxes(self, CarrayContainer particles, Mesh mesh,
                          ReconstructionBase reconstruction, EquationStateBase eos):
         """Compute fluxes for each face in the mesh.
 
@@ -231,7 +236,7 @@ cdef class HLL(RiemannBase):
         if not self.registered_fields:
             raise RuntimeError("Riemann did not set fields for flux!")
 
-        self.fluxes = CarrayContainer(var_dict=self.flux_fields)
+        self.fluxes = CarrayContainer(carrays_to_register=self.flux_fields)
         self.fluxes.named_groups = self.flux_field_groups
 
     cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
