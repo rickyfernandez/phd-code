@@ -35,8 +35,8 @@ class Simulation(object):
     log_level : str
         Level which logger is outputted.
 
-    output_type : str
-        Format which data is written to disk.
+    output_directory : str
+        Directory to store all output of the simulation.
 
     simulation_name : str
        Name of problem solving, this name prefixs output data.
@@ -117,6 +117,11 @@ class Simulation(object):
 
         # initialize all classes, riemann, reconstruction, ...
         integrator.initialize()
+
+        # initialize all outputters
+        for output in self.simulation_time_manager.outputs:
+            output.set_output_directory(self.output_directory)
+            output.initialize()
 
     @check_class(IntegrateBase)
     def set_integrator(self, integrator):
@@ -209,6 +214,7 @@ class Simulation(object):
         Calculate the time step is calculated from the integrator,
         then constrain by outputters and simulation.
         """
+        # cfl constrained time-step
         dt = self.integrator.compute_time_step()
 
         # ensure the simulation outputs and finishes at selected time
