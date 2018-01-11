@@ -159,9 +159,9 @@ class IntegrateBase(object):
         """Set riemann solver."""
         self.riemann = riemann
 
-    @check_class(SourceTermBase)
-    def add_source_term(self, source_term):
-        self.sources[source_term.__class__.__name__] = source_term
+#    @check_class(SourceTermBase)
+#    def add_source_term(self, source_term):
+#        self.sources[source_term.__class__.__name__] = source_term
 
     def initialize(self):
         """Setup all connections for computation classes."""
@@ -196,7 +196,7 @@ class IntegrateBase(object):
         self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # relax mesh if needed 
-        if mesh.relax_iterations > 0 and not self.restart:
+        if self.mesh.relax_iterations > 0 and not self.restart:
             phdLogger.info("Relaxing mesh:")
 
             for i in range(mesh.relax_iterations):
@@ -232,13 +232,13 @@ class IntegrateBase(object):
                 self.particles, self.equation_state)
 
         # modify time step
-        if self.iteration == 0 and not self.restart:
-            # shrink if first iteration
-            dt = self.initial_timestep_factor*dt
-        else:
-            # constrain rate of change
-            dt = min(self.max_dt_change*self.old_dt, dt)
-            self.old_dt = self.dt
+#        if self.iteration == 0 and not self.restart:
+#            # shrink if first iteration
+#            dt = self.initial_timestep_factor*dt
+#        else:
+#            # constrain rate of change
+#            dt = min(self.max_dt_change*self.old_dt, dt)
+#            self.old_dt = self.dt
         self.dt = dt
 
         # if in parallel find smallest dt across TODO
@@ -283,11 +283,11 @@ class StaticMeshMUSCLHancock(IntegrateBase):
         self.mesh.initialize()
 
         # intialize reconstruction
-        self.reconstruction.set_fields_for_reconstruction(self.particles)
+        self.reconstruction.add_fields(self.particles)
         self.reconstruction.initialize()
 
         # intialize riemann
-        self.riemann.fields_to_add(self.particles)
+        self.riemann.add_fields(self.particles)
         self.riemann.initialize()
 
     def evolve_timestep(self):
@@ -347,7 +347,7 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         self.domain_manager.migrate_particles(self.particles)
 
         # ignored if serial run
-        if self.domain_manager.check_for_partion(self.particles):
+        if self.domain_manager.check_for_partition(self.particles):
             phdLogger.info("Moving Mesh Integrator: Starting domain decomposition...")
             self.domain_manager.partion(self.particles)
             phdLogger.success("Moving Mesh Integrator: Finished domain decomposition")
