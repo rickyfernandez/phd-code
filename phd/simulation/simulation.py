@@ -7,15 +7,7 @@ from ..integrate.integrate import IntegrateBase
 from ..utils.tools import check_class, class_dict
 from ..io.simulation_time_manager import SimulationTimeManager
 from ..utils.logger import phdLogger, ufstring, original_emitter
-
-class SimulationTAGS:
-    """Tags to signal what state the simulation is in."""
-    PRE_EVOLVE = 0
-    BEFORE_LOOP = 1
-    MAIN_LOOP = 2
-    AFTER_LOOP = 3
-    POST_EVOLVE = 4
-
+from ..utils.particle_tags import SimulationTAGS
 
 class Simulation(object):
     """Marshalls the simulation.
