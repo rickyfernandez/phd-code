@@ -119,7 +119,7 @@ class Simulation(object):
         self.integrator.initialize()
 
         # initialize all outputters
-        for output in self.simulation_time_manager.outputs:
+        for output in self.simulation_time_manager._outputs:
             output.set_output_directory(self._output_directory)
             output.initialize()
 
