@@ -82,7 +82,7 @@ class Simulation(object):
 
     def initialize(self):
 
-        if not self.integrator or self.simulation_time_manager:
+        if not self.integrator or not self.simulation_time_manager:
             raise RuntimeError("Not all setters defined in Simulation!")
 
         file_handler = logging.FileHandler(self.log_filename)
@@ -116,7 +116,7 @@ class Simulation(object):
                 os.mkdir(self.output_directory)
 
         # initialize all classes, riemann, reconstruction, ...
-        integrator.initialize()
+        self.integrator.initialize()
 
         # initialize all outputters
         for output in self.simulation_time_manager.outputs:
@@ -128,7 +128,7 @@ class Simulation(object):
         """Set integrator to evolve the simulation."""
         self.integrator = integrator
 
-    @check_class(SimulationTime)
+    @check_class(SimulationTimeManager)
     def set_simulation_time_manager(self, simulation_time_manager):
         """Set time outputter for data outputs and ending the simulation"""
         self.simulation_time_manager = simulation_time_manager
@@ -165,7 +165,7 @@ class Simulation(object):
             self.integrator.evolve_timestep()
 
             # output if needed
-            self.simulation_time_manger.output(
+            self.simulation_time_manager.output(
                     self.output_directory,
                     self)
 
@@ -219,4 +219,4 @@ class Simulation(object):
 
         # ensure the simulation outputs and finishes at selected time
         dt = min(self.simulation_time_manager.modify_timestep(self), dt)
-        self.integrator.set_dt(dt)
+        self.integrator.dt = dt
