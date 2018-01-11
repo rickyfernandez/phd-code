@@ -35,7 +35,7 @@ class Simulation(object):
     log_level : str
         Level which logger is outputted.
 
-    output_directory : str
+    _output_directory : str
         Directory to store all output of the simulation.
 
     simulation_name : str
@@ -44,7 +44,7 @@ class Simulation(object):
     simulation_time_manager : SimulationTimeManager
         Signals when to output data and finish the simulation.
 
-    state : int
+    _state : int
         Integer describing if simulation is before, in, or after
         main loop.
 
@@ -69,13 +69,13 @@ class Simulation(object):
         self.integrator = None
         self.simulation_time_manager = None
 
-        self.state = None
+        self._state = None
 
         self.log_level = log_level
         self.colored_logs = colored_logs
 
         self.simulation_name = simulation_name
-        self.output_directory = self.simulation_name + "_output"
+        self._output_directory = self.simulation_name + "_output"
 
         # all log output stored in this file
         self.log_filename = self.simulation_name + ".log"
@@ -109,18 +109,18 @@ class Simulation(object):
 
         # create directory to store outputs
         if phd._rank == 0:
-            if os.path.isdir(self.output_directory):
+            if os.path.isdir(self._output_directory):
                 phdLogger.warning("Directory %s already exists, "
-                        "files maybe over written!" % self.output_directory)
+                        "files maybe over written!" % self._output_directory)
             else:
-                os.mkdir(self.output_directory)
+                os.mkdir(self._output_directory)
 
         # initialize all classes, riemann, reconstruction, ...
         self.integrator.initialize()
 
         # initialize all outputters
         for output in self.simulation_time_manager.outputs:
-            output.set_output_directory(self.output_directory)
+            output.set_output_directory(self._output_directory)
             output.initialize()
 
     @check_class(IntegrateBase)
@@ -144,17 +144,15 @@ class Simulation(object):
         self.start_up_message()
 
         # perform any initial computation 
-        self.state = SimulationTAGS.PRE_EVOLVE
+        self._state = SimulationTAGS.PRE_EVOLVE
         self.integrator.before_loop(self)
 
         # output initial data
-        self.state = SimulationTAGS.BEFORE_LOOP
-        self.simulation_time_manager.output(
-                self.output_directory,
-                self)
+        self._state = SimulationTAGS.BEFORE_LOOP
+        self.simulation_time_manager.output(self)
 
         # evolve the simulation
-        self.state = SimulationTAGS.MAIN_LOOP
+        self._state = SimulationTAGS.MAIN_LOOP
         phdLogger.info("Beginning integration loop")
         while not self.simulation_time_manager.finished(self):
 
@@ -165,18 +163,14 @@ class Simulation(object):
             self.integrator.evolve_timestep()
 
             # output if needed
-            self.simulation_time_manager.output(
-                    self.output_directory,
-                    self)
+            self.simulation_time_manager.output(self)
 
         # output final data
-        self.state = SimulationTAGS.AFTER_LOOP
-        self.simulation_time_manager.output(
-                self.output_directory,
-                self)
+        self._state = SimulationTAGS.AFTER_LOOP
+        self.simulation_time_manager.output(self)
 
         # clean up or last calculations
-        self.state = SimulationTAGS.POST_EVOLVE
+        self._state = SimulationTAGS.POST_EVOLVE
         self.integrator.after_loop(self)
 
         phdLogger.success("Simulation successfully finished!")
@@ -197,7 +191,7 @@ class Simulation(object):
         message += "\nLog file saved at: %s" % self.log_filename
         message += "\nProblem solving: %s" % self.simulation_name
         message += "\nOutput data will be saved at: %s\n" %\
-                self.output_directory
+                self._output_directory
 
         # print which classes are used in simulation
         cldict = class_dict(self.integrator)
