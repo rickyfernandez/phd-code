@@ -64,7 +64,7 @@ cdef class IdealGas(EquationStateBase):
         particles.pointer_groups(mv, particles.carray_named_groups['momentum'])
 
         # loop through all particles (real + ghost)
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
 
             # total mass in cell
             m.data[i] = d.data[i]*vol.data[i]
@@ -102,7 +102,7 @@ cdef class IdealGas(EquationStateBase):
         particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
 
         # loop through all particles (real + ghost)
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
 
             # density in cell
             d.data[i] = m.data[i]/vol.data[i]
