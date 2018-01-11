@@ -79,7 +79,7 @@ class Time(SimulationFinisherBase):
         else:
             return False
 
-    def modify_timestep(self, integrator):
+    def modify_timestep(self, simulation):
         """Check if the simulation has reached final time."""
         integrator = simulation.integrator
         if integrator.time + integrator.dt >= self.time_max:
