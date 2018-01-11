@@ -9,7 +9,7 @@ class ReaderWriterBase(object):
 
         This base class is the api for writing and reading
         of data. Note the user is free to write any type of
-        output. For example, this can be used to create 
+        output. For example, this can be used to create
         runtime plots or diagnostics.
 
         Parameters
@@ -74,12 +74,12 @@ class Hdf5(ReaderWriterBase):
             # common information 
             particle_grp.attrs["Real"] = ParticleTAGS.Real
             particle_grp.attrs["Ghost"] = ParticleTAGS.Ghost
-            particle_grp.attrs["number_particles"] = integrator.particles.get_number_of_items()
+            particle_grp.attrs["number_particles"] = integrator.particles.get_carray_size()
 
             # store particle data for each field
-            for prop_name in integrator.particles.properties.keys():
+            for prop_name in integrator.particles.carrays.keys():
                 data_grp = particle_grp.create_group(prop_name)
-                data_grp.attrs["dtype"] = integrator.particles.carray_info[prop_name]
+                data_grp.attrs["dtype"] = integrator.particles.carray_dtypes[prop_name]
                 data_grp.create_dataset("data", data=integrator.particles[prop_name])
 
             f.close()
@@ -108,14 +108,3 @@ class Hdf5(ReaderWriterBase):
                 file_name)
 
         return particles
-
-
-
-# --- scratch
-#            # store named groups
-#            named_grp = f.create_group('named_group')
-#            for grp, grp_list in pc.carray_named_groups.iteritems():
-#                named_grp.attrs[grp] = ','.join(grp_list)
-#            particle_grp = f['named_group']
-#            for grp in named_grp.keys():
-#                .named_gropus[grp] = named_grp[grp].split(',')
