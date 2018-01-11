@@ -1,4 +1,3 @@
-import numpy as np
 from ..utils.tools import check_class
 from .simulation_finish import SimulationFinisherBase
 from .simulation_output import SimulationOutputterBase
