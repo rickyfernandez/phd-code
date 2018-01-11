@@ -1,6 +1,6 @@
 import os
-
 from ..utils.logger import phdLogger
+from ..utils.particle_tags import SimulationTAGS
 
 class SimulationOutputterBase(object):
     """Class that signals the simulation to write out
@@ -30,7 +30,7 @@ class SimulationOutputterBase(object):
         data files.
 
     """
-    def __init__(self, base_name, counter=0, pad=4):
+    def __init__(self, base_name, counter=0, pad=4, **kwargs):
         self.pad = pad
         self.counter = counter
         self.base_name = base_name
@@ -46,13 +46,13 @@ class SimulationOutputterBase(object):
                     self.__class__.__name__)
 
         # directory to store data
-        self.data_directory = self.output_directory + "/" + self.base_name
+        self._data_directory = self.output_directory + "/" + self.base_name
 
-        if os.path.isdir(self.data_directory):
+        if os.path.isdir(self._data_directory):
             phdLogger.warning("Directory %s already exists, "
-                    "files maybe over written!" % self.data_directory)
+                    "files maybe over written!" % self._data_directory)
         else:
-            os.mkdir(self.data_directory)
+            os.mkdir(self._data_directory)
 
     def set_output_directory(self, output_directory):
         """Set directory where to output files."""
@@ -87,16 +87,16 @@ class SimulationOutputterBase(object):
         raise NotImplementedError(msg)
 
     def create_directory(self):
-
+        """For each data output create a directory to store that output."""
         # new directory
-        output_directory = self.data_directory + "/" +\
-                self.base_name + str(self.counter).zfill(self.pad)
+        self._file_name = self.base_name + str(self.counter).zfill(self.pad)
+        self._snapshot_directory = self._data_directory + "/" + self._file_name
 
-        if os.path.isdir(output_directory):
+        if os.path.isdir(self._snapshot_directory):
             phdLogger.warning("Directory %s already exists, "
-                    "files maybe over written!" % output_directory)
+                    "files maybe over written!" % self._snapshot_directory)
         else:
-            os.mkdir(output_directory)
+            os.mkdir(self._snapshot_directory)
 
     def output(self, simulation):
         """Write out data to given directory.
@@ -109,16 +109,11 @@ class SimulationOutputterBase(object):
         """
         if self.check_for_output(simulation):
             self.create_directory()
-
-            output_directory = self.data_directory + "/" +\
-                self.base_name + str(self.counter).zfill(self.pad)
-            file_name = self.base_name + str(self.counter).zfill(self.pad)
-
             self.read_write.write(
-                    file_name, output_directory, simulation.integrator)
+                    self._file_name, self._snapshot_directory, simulation.integrator)
 
             # create json file
-            self.write_parameters(file_name, self.output_directory, simulation)
+            self.write_parameters(self._file_name, self._snapshot_directory, simulation)
             self.counter += 1
 
     def modify_timestep(self, simulation):
@@ -172,8 +167,8 @@ class IterationInterval(SimulationOutputterBase):
 
     """
     def __init__(self, iteration_interval, base_name="iteration_interval",
-                 counter=0, pad=4):
-        super(IterationInterval, self).__init__(base_name, counter, pad)
+                 counter=0, pad=4, **kwargs):
+        super(IterationInterval, self).__init__(base_name, counter, pad, **kwargs)
         self.iteration_interval = iteration_interval
 
     def check_for_output(self, simulation):
@@ -210,22 +205,12 @@ class InitialOutput(SimulationOutputterBase):
 
     """
     def __init__(self, base_name="initial_output",
-                 counter=0, pad=4):
-        super(InitialOutput, self).__init__(base_name, counter, pad)
+                 counter=0, pad=4, **kwargs):
+        super(InitialOutput, self).__init__(base_name, counter, pad, **kwargs)
 
     def check_for_output(self, simulation):
         """Return True to signal first output before main loop."""
-        return simulation.state == SimulationTAGS.BEFORE_LOOP
-
-    def output(self, simulation):
-        """Write out data to given directory."""
-        if self.check_for_output(simulation):
-            file_name = self.base_name
-            self.read_write.write(
-                    file_name, self.output_directory, simulation.integrator)
-
-            # create json file
-            self.write_parameters(file_name, self.output_directory, simulation)
+        return simulation._state == SimulationTAGS.BEFORE_LOOP
 
     def modify_timestep(self, simulation):
         """Return consistent time step."""
@@ -255,22 +240,12 @@ class FinalOutput(SimulationOutputterBase):
 
     """
     def __init__(self, base_name="final_output",
-                 counter=0, pad=4):
-        super(InitialOutput, self).__init__(base_name, counter, pad)
+                 counter=0, pad=4, **kwargs):
+        super(FinalOutput, self).__init__(base_name, counter, pad, **kwargs)
 
     def check_for_output(self, simulation):
         """Return True to signal final output after main loop."""
-        return simulation.state == SimulationTAGS.AFTER_LOOP
-
-    def output(self, simulation):
-        """Write out data to given directory."""
-        if self.check_for_output(simulation):
-            file_name = self.base_name
-            self.read_write.write(
-                    file_name, self.output_directory, simulation.integrator)
-
-            # create json file
-            self.write_parameters(file_name, self.output_directory, simulation)
+        return simulation._state == SimulationTAGS.AFTER_LOOP
 
     def modify_timestep(self, simulation):
         """Return consistent time step."""
@@ -295,7 +270,7 @@ class TimeInterval(SimulationOutputterBase):
         Number of padding spaces for output numbering of
         data files.
 
-    next_time_output : float
+    _next_time_output : float
         Time of next output.
 
     read_write : ReaderWriter
@@ -309,12 +284,12 @@ class TimeInterval(SimulationOutputterBase):
 
     """
     def __init__(self, time_interval, initial_time=0,
-                 base_name="time_interval", counter=0, pad=4):
-        super(InitialOutput, self).__init__(base_name, counter, pad)
+                 base_name="time_interval", counter=0, pad=4, **kwargs):
+        super(InitialOutput, self).__init__(base_name, counter, pad, **kwargs)
 
         self.time_interval = time_interval
         self.time_last_output = initail_time
-        self.next_time_output = time_last_output + time_interval
+        self._next_time_output = time_last_output + time_interval
 
     def initialize(self):
         if not self.read_write:
@@ -328,11 +303,11 @@ class TimeInterval(SimulationOutputterBase):
         return (integrator.iteration % self.iteration_interval == 0)
 
         integrator = simulation.integrator
-        if integrator.time >= self.next_time_output:
+        if integrator.time >= self._next_time_output:
             self.time_last_output = integrator.time
-            self.next_time_output = self.time_last_output + self.time_interval
+            self._next_time_output = self.time_last_output + self.time_interval
             return True
 
     def modify_timestep(self, simulation):
         """Return time step for next time interval output."""
-        return self.next_time_output - simulation.integrator.time
+        return self._next_time_output - simulation.integrator.time
