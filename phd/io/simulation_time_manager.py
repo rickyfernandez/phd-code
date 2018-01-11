@@ -10,28 +10,28 @@ class SimulationTimeManager(object):
 
     Attributes
     ----------
-    outputs : set
+    _outputs : set
         Set of SimulationOutputter to signal the simualtion
         to output data to disk.
 
-    finishes : set
+    _finishes : set
         Set of SimulationFinisher to signal the termination
         of the simulation.
 
     """
-    def __init__(self):
-        self.outputs  = set()
-        self.finishes = set()
+    def __init__(self, **kwargs):
+        self._outputs  = set()
+        self._finishes = set()
 
     @check_class(SimulationOutputterBase)
     def add_output(self, output):
         """Add output criteria to set."""
-        self.outputs.add(output)
+        self._outputs.add(output)
 
     @check_class(SimulationFinisherBase)
     def add_finish(self, finish):
         """Add finish criteria criteria to set"""
-        self.finishes.add(finish)
+        self._finishes.add(finish)
 
     def finished(self, integrator):
         """Cycle through all finishers and check for flag to end
@@ -49,7 +49,7 @@ class SimulationTimeManager(object):
 
         """
         finish_sim = False
-        for finish in self.finishes:
+        for finish in self._finishes:
             finish_sim = finish.finished(integrator) or finish_sim
         return finish_sim
 
@@ -67,7 +67,7 @@ class SimulationTimeManager(object):
         bool
             True if should output False otherwise.
         """
-        for output in self.outputs:
+        for output in self._outputs:
             output.output(simulation)
 
     def modify_timestep(self, simulation):
@@ -86,8 +86,8 @@ class SimulationTimeManager(object):
             modified time step if needed otherwise integrator dt.
         """
         dt = simulation.integrator.dt
-        for finish in self.finishes:
+        for finish in self._finishes:
             dt = min(dt, finish.modify_timestep(simulation))
-        for output in self.outputs:
+        for output in self._outputs:
             dt = min(dt, output.modify_timestep(simulation))
         return dt
