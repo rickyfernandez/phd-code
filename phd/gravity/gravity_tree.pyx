@@ -410,7 +410,7 @@ cdef class GravityTree:
             self._build_toptree()
 
         # add real particles to tree
-        for i in range(self.pc.get_number_of_items()):
+        for i in range(self.pc.get_carray_size()):
             if tags.data[i] == Real:
 
                 for k in range(self.dim):
@@ -624,7 +624,7 @@ cdef class GravityTree:
                 self.toptree_leafs.carray_named_groups['com'])
 
         # collect toptree leaf moments belonging to our processor
-        for i in range(self.toptree_leafs.get_number_of_items()):
+        for i in range(self.toptree_leafs.get_carray_size()):
             if proc.data[i] == self.rank:
 
                 # copy our moments
@@ -640,7 +640,7 @@ cdef class GravityTree:
                         self.send_disp, MPI.DOUBLE])
 
         # copy imported toptree leaf moments to tree
-        for i in range(self.toptree_leafs.get_number_of_items()):
+        for i in range(self.toptree_leafs.get_carray_size()):
             if proc.data[i] != self.rank:
 
                 # update moments
@@ -975,7 +975,7 @@ cdef class GravityTree:
         cdef LongArray maps = self.toptree_leafs.get_carray('map')
         cdef LongArray proc = self.toptree_leafs.get_carray('proc')
 
-        for i in range(self.toptree_leafs.get_number_of_items()):
+        for i in range(self.toptree_leafs.get_carray_size()):
             j = maps.data[i]
             node = &self.nodes.array[j]
             data_list.append([
