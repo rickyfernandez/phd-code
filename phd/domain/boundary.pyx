@@ -119,7 +119,7 @@ cdef class Reflective(BoundaryConditionBase):
         dim = len(particles.carray_named_groups['position'])
         particles.pointer_groups(x, particles.carray_named_groups['position'])
 
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
             if tags.data[i] == REAL:
                 for k in range(dim):
                     xs[k] = x[k][i]
@@ -128,8 +128,59 @@ cdef class Reflective(BoundaryConditionBase):
                     raise RuntimeError("particle left domain in reflective boundary condition!!")
 
 
+    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradient):
+        """Transfer gradient from image particle to ghost particle with reflective
+        boundary condition.
 
-#    cdef void create_ghost_particle_serial(self, np.float64_t xp[3], DomainManager domain_manager):
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Gradient data
+
+        fields : list
+            List of field strings to update
+        """
+        cdef str field
+        cdef int i, j, ip
+        cdef np.float64_t *x[3], *dv[4]
+
+        cdef LongArray indices = LongArray()
+        cdef IntArray types = pc.get_carray("type")
+        cdef np.ndarray indices_npy, map_indices_npy
+
+        dim = len(particles.carray_named_group["position"])
+
+        # find all ghost that need to be updated
+        for i in range(particles.get_carray_size()):
+            if types.data[i] == Exterior:
+                indices.append(i)
+
+        # each ghost particle knows the id from which
+        # it was created from
+        indices_npy = indices.get_npy_array()
+        map_indices_npy = pc["map"][indices_npy]
+
+        # update ghost with their image data
+        for field in gradient.named_carray_groups["primitive"]:
+            gradient[field][indices_npy] = gradient[field][map_indices_npy]
+
+        particles.pointer_groups(x, particles.named_groups["position"])
+        gradient.pointer_groups(dv, gradient.named_groups["velocity"])
+
+        for i in range(indices_npy.size): # every exterior ghost
+            for j in range(dim): # each dimension
+
+                ip = indices.data[i]
+
+                # reverse the normal of velocity gradient
+                if x[j][ip] < self.domain.bounds[0][j]:
+                    # flip gradient component
+                    dv[(dim+1)*j][ip] *= -1
+
+                if x[j][ip] > self.domain.bounds[1][j]:
+                    # flip gradient component
+                    dv[(dim+1)*j][ip] *= -1
+
 
 cdef class Periodic(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):

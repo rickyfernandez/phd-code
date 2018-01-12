@@ -44,11 +44,11 @@ cdef class DomainManager:
         volume, center of mass)
         """
         cdef str field, dtype
-        cdef int num_particles = particles.get_number_of_items()
+        cdef int num_particles = particles.get_carray_size()
 
         if phd._in_parallel:
             for field, dtype in fields_for_parallel.iteritems():
-                if field not in particles.carray_info.keys():
+                if field not in particles.carrays.keys():
                     particles.register_carray(num_particles, field, dtype)
 
         particles.register_carray(num_particles, 'map', 'long')
@@ -95,7 +95,7 @@ cdef class DomainManager:
         cdef DoubleArray r = particles.get_carray("radius")
         cdef DoubleArray rold = particles.get_carray("old_radius")
 
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
             r.data[i] = self.param_initial_radius
             rold.data[i] = self.param_initial_radius
 
@@ -126,7 +126,7 @@ cdef class DomainManager:
         self.ghost_vec.clear()
 
         # fraction of domain size FIX: search radius should be twice old radius
-        self.flagged_particles.resize(particles.get_number_of_items(), FlagParticle())
+        self.flagged_particles.resize(particles.get_carray_size(), FlagParticle())
 
         # there should be no ghost particles
         i = 0
@@ -325,7 +325,7 @@ cdef class DomainManager:
         cdef IntArray types = particles.get_carray("type")
 
         # find all ghost that need to be updated
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
             if types.data[i] == Exterior:
                 indices.append(i)
 
@@ -351,7 +351,7 @@ cdef class DomainManager:
         particles.pointer_groups(x,  particles.carray_named_groups['position'])
         particles.pointer_groups(wx, particles.carray_named_groups['w'])
 
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
             if tags.data[i] == REAL:
                 for k in range(dim):
                     x[k][i] += dt*wx[k][i]
@@ -365,10 +365,13 @@ cdef class DomainManager:
         """
         self.boundary_condition.migrate_particles(particles, self)
 
+    cpdef update_gradients(CarrayContainer particles, CarrayContainer gradient):
+        self.boundary_condition.update_gradients(particles, gradient)
+
 # ---------------------- add after serial working again -------------------------------
 #cdef class DomainManager:
 #    cdef filter_radius(self, CarrayContainer particles):
-#        for i in range(particles.get_number_of_items()):
+#        for i in range(particles.get_carray_size()):
 #            if phd._in_parallel:
 #                raise NotImplemented("filter_radius called")
 #                if r.data[i] < 0.:
@@ -412,7 +415,7 @@ cdef class DomainManager:
 #            ghosts.pointer_groups(mv, particles.carray_named_groups['momentum'])
 #
 #        # transfer new data to ghost 
-#        for i in range(ghosts.get_number_of_items()):
+#        for i in range(ghosts.get_carray_size()):
 #            p = &ghost_vec[i]
 #
 #            # for ghost to retrieve info later 
