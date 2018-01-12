@@ -20,5 +20,6 @@ main.cpp
 integrator.cpp
 boundary.cpp
 mesh.cpp
+phd/gravity/*.cpp
 build/
 .DS_Store
