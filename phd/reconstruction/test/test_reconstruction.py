@@ -5,12 +5,12 @@ from phd.mesh.mesh import Mesh
 from phd.domain.domain_manager import DomainManager
 from phd.containers.containers import CarrayContainer
 from phd.utils.particle_creator import HydroParticleCreator
-from phd.reconstruction.reconstruction import PieceWiseConstant
+from phd.reconstruction.reconstruction import PieceWiseConstant, PieceWiseLinear
 
 from phd.riemann.riemann import RiemannBase
 
 class TestPieceWiseConstant(unittest.TestCase):
-    """Tests for the Reconstruction class."""
+    """Tests for the constant reconstruction class."""
 
     def setUp(self):
 
@@ -81,6 +81,18 @@ class TestPieceWiseConstant(unittest.TestCase):
 
             self.assertAlmostEqual(self.recon.right_states[field][0],
                     self.particles[field][1])
+
+class TestPieceWiseLinear(TestPieceWiseConstant):
+    """Tests for the lineaer reconstruction class."""
+
+    def setUp(self):
+
+        # setup particles and reconstruction class
+        self.particles = HydroParticleCreator(num=2, dim=2)
+        self.recon = PieceWiseLinear()
+
+    def test_compute_states(self):
+        self.assertTrue(True)
 
 if __name__ == "__main__":
     unittest.main()
