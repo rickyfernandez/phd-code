@@ -12,175 +12,212 @@ cdef int Ghost = ParticleTAGS.Ghost
 
 cdef class CarrayContainer:
 
-    def __init__(self, int num_items=0, dict carrays_to_register=None, **kwargs):
-        """
-        Create container of carrays of size num_items
+    def __init__(self, int carray_size=0, dict carrays_to_register=None, **kwargs):
+        """Create container of carrays of each of length array_size.
 
         Parameters
         ----------
-        num_items : int
-            number of items that the carray's will hold
-        """
-        cdef str name, dtype
+        carray_size : int
+            Size of each carray in the container.
 
-        self.properties = {}
-        self.carray_info = {}
+        carrays_to_register : dict
+           Dictionary where the keys are the names and values are the data type of
+           carrays to create in the container.
+
+        """
+        cdef str carray_name, dtype
+
+        self.carrays = {}
+        self.carray_dtypes = {}
         self.carray_named_groups = {}
 
-        if carrays_to_register != None:
-            for name in carrays_to_register:
-                dtype = carrays_to_register[name]
-                self.register_carray(num_items, name, dtype)
+        if carrays_to_register is not None:
+            for carray_name in carrays_to_register:
+                dtype = carrays_to_register[carray_name]
+                self.register_carray(carray_size, carray_name, dtype)
 
-    cpdef register_carray(self, int size, str name, str dtype="double"):
-        """
-        Register new carray
+    cpdef register_carray(self, int carray_size, str carray_name, str dtype="double"):
+        """Register new carray in the container.
 
         Parameters
         ----------
-        size : int
-            size of the carray
-        name : str
-            name of carray to be added
-        dtype : str
-            data type of carray
-        """
-        if name in self.properties.keys():
-            raise RuntimeError("Carray already registered")
+        carray_size : int
+            Size of the carray.
 
-        if len(self.properties) != 0:
-            if size != self.get_number_of_items():
-                raise RuntimeError("size inconsistent with carray size")
+        carray_name : str
+            Name of carray to be added.
+
+        dtype : str
+            Data type of carray.
+        """
+        if carray_name in self.carrays.keys():
+            raise RuntimeError("ERROR: Carray already registered")
+
+        if len(self.carrays) != 0:
+            if carray_size != self.get_carray_size():
+                raise RuntimeError("ERROR: Size inconsistent with carray size")
 
         # store data type of field
-        self.carray_info[name] = dtype
+        self.carray_dtypes[carray_name] = dtype
 
         if dtype == "double":
-            self.properties[name] = DoubleArray(size)
+            self.carrays[carray_name] = DoubleArray(carray_size)
         elif dtype == "int":
-            self.properties[name] = IntArray(size)
+            self.carrays[carray_name] = IntArray(carray_size)
         elif dtype == "long":
-            self.properties[name] = LongArray(size)
+            self.carrays[carray_name] = LongArray(carray_size)
         elif dtype == "longlong":
-            self.properties[name] = LongLongArray(size)
+            self.carrays[carray_name] = LongLongArray(carray_size)
         else:
-            raise ValueError("Unrecognized dtype: %s" % dtype)
+            raise ValueError("ERROR: Unrecognized dtype: %s" % dtype)
 
-    def __getitem__(self, str name):
-        """
-        Access carrays as numpy array
+    def __getitem__(self, str carray_name):
+        """Access carrays as numpy array.
 
         Parameters
         ----------
-        name : str
-            name of carray retreive
-        """
-        keys = self.properties.keys()
-        if name in keys:
-            return self.properties[name].get_npy_array()
-        else:
-            raise AttributeError("Unrecognized field: %s" % name)
+        carray_name : str
+            Name of carray to retreive.
 
-    cpdef int get_number_of_items(self):
-        """Return the number of items in carray"""
-        if len(self.properties) > 0:
-            return self.properties.values()[0].length
+        Returns
+        -------
+        numpy array
+            Numpy array reference to carray.
+
+        """
+        if carray_name in self.carrays.keys():
+            return self.carrays[carray_name].get_npy_array()
+        else:
+            raise AttributeError("Unrecognized field: %s" % carray_name)
+
+    cpdef int get_carray_size(self):
+        """Return the number of items in the carray."""
+        if len(self.carrays) > 0:
+            return self.carrays.values()[0].length
         else:
             return 0
 
-    cpdef extend(self, int num_items):
+    cpdef extend(self, int increase_carray_size):
+        """Increase the total number of items by requested amount.
+
+        Parameters
+        ----------
+        increase_carray_size : int
+            Size to increase container by.
+
         """
-        Increase the total number of items by requested amount.
+        if increase_carray_size < 0:
+            raise RuntimeError("ERROR: Negative number in extend")
+
+        cdef int old_size = self.get_carray_size()
+        cdef int new_size = old_size + increase_carray_size
+        cdef BaseArray carr
+
+        for carr in self.carrays.values():
+            carr.resize(new_size)
+
+    cpdef BaseArray get_carray(self, str carray_name):
+        """Return the carray from the container.
+
+        Parameters
+        ----------
+        carray_name : str
+            Name of carray to be returned.
+
         """
-        if num_items <= 0:
-            return
-
-        cdef int old_size = self.get_number_of_items()
-        cdef int new_size = old_size + num_items
-        cdef BaseArray arr
-
-        for arr in self.properties.values():
-            arr.resize(new_size)
-
-    cpdef BaseArray get_carray(self, str prop):
-        """Return the c-array for the property."""
-        if PyDict_Contains(self.properties, prop) == 1:
-            return <BaseArray> PyDict_GetItem(self.properties, prop)
+        if PyDict_Contains(self.carrays, carray_name) == 1:
+            return <BaseArray> PyDict_GetItem(self.carrays, carray_name)
         else:
-            raise KeyError, 'c-array %s not present' % (prop)
+            raise KeyError("ERROR: carray %s not present" % carray_name)
 
-    cdef _check_property(self, str prop):
-        """Check if a property is present or not."""
-        if PyDict_Contains(self.properties, prop):
-                return
-        else:
-            raise AttributeError, 'property %s not present' % (prop)
+    cpdef resize(self, int carray_size):
+        """Resize all arrays to the new size.
 
-    cpdef resize(self, int size):
-        """Resize all arrays to the new size."""
-        cdef BaseArray array
-        for array in self.properties.values():
-            array.resize(size)
+        Parameters
+        ----------
+        carray_size : int
+            Size of the carray.
+        """
+        if carray_size < 0:
+            raise RuntimeError("ERROR: Negative number in resize")
+
+        cdef BaseArray carr
+        for carr in self.carrays.values():
+            carr.resize(carray_size)
 
     def get_sendbufs(self, np.ndarray indices):
-        cdef str prop
+        """Slice out values from indices and store it a dictionary of numpy
+        arrays.
+
+        Parameters
+        ----------
+        indices : np.ndarray
+            Indices to copy values from.
+
+        Returns
+        -------
+        dict
+            Dictionary of numpy arrays of selected data by indices.
+        """
+        cdef str carray_name
         cdef dict sendbufs = {}
 
-        for prop in self.properties:
-            sendbufs[prop] = self[prop][indices]
-
+        for carray_name in self.carrays:
+            sendbufs[carray_name] = self[carray_name][indices]
         return sendbufs
 
     cpdef int append_container(self, CarrayContainer container):
-        """
-        Add items from a carray container.
-
-        Properties that are not there in self will be added.
-        """
-        if container.get_number_of_items() == 0:
-            return 0
-
-        cdef int num_extra_items = container.get_number_of_items()
-        cdef int old_num_items = self.get_number_of_items()
-        cdef str prop_name
-        cdef BaseArray dest, source
-        cdef np.ndarray nparr_dest, nparr_source
-
-        # extend current arrays by the required number of items
-        self.extend(num_extra_items)
-
-        # should check that fields are equal or not error
-        for prop_name in container.properties.keys():
-            if PyDict_Contains(self.properties, prop_name):
-                dest = <BaseArray> PyDict_GetItem(self.properties, prop_name)
-                source = <BaseArray> PyDict_GetItem(container.properties, prop_name)
-                nparr_source = source.get_npy_array()
-                nparr_dest = dest.get_npy_array()
-                nparr_dest[old_num_items:] = nparr_source
-
-    cpdef CarrayContainer extract_items(self, LongArray index_array, list fields=None):
-        """
-        Create new carray container for item indices in index_array
+        """Append a container to current container. Carrays that are
+        not there in self will not be added.
 
         Parameters
         ----------
+        container : Container
+            Container that will be append to self.
 
+        """
+        if container.get_carray_size() == 0:
+            return 0
+
+        cdef str carray_name
+        cdef np.ndarray dst_nparr, src_nparr
+        cdef BaseArray dst_carray, src_carray
+        cdef int old_num_items = self.get_carray_size()
+        cdef int num_extra_items = container.get_carray_size()
+
+        # extend current arrays by the required size 
+        self.extend(num_extra_items)
+
+        # should check that fields are equal or not error
+        for carray_name in container.carrays.keys():
+            if PyDict_Contains(self.carrays, carray_name):
+                dst_carray = <BaseArray> PyDict_GetItem(self.carrays, carray_name)
+                src_carray = <BaseArray> PyDict_GetItem(container.carrays, carray_name)
+
+                src_nparr = src_carray.get_npy_array()
+                dst_nparr = dst_carray.get_npy_array()
+                dst_nparr[old_num_items:] = src_nparr
+
+    cpdef CarrayContainer extract_items(self, LongArray index_array, list carray_list_names=None):
+        """Create new carray container for item indices in index_array.
+
+        Parameters
+        ----------
         index_array : np.ndarray
             Indices of items to be extracted.
-        props : list
-            The list of properties to extract, if None all properties
-            are extracted.
-        """
-        cdef CarrayContainer result_array = CarrayContainer()
-        cdef BaseArray dst_prop_array, src_prop_array
-        cdef list prop_names
-        cdef str prop_type, prop, dtype
-        cdef long size = index_array.length
 
-        if fields is None:
-            prop_names = self.properties.keys()
-        else:
-            prop_names = fields
+        carray_list_names : list
+            The list of carrays to extract, if None all carrays
+            are extracted.
+
+        """
+        cdef str carray_name, dtype
+        cdef long size = index_array.length
+        cdef BaseArray dst_carray, src_carray
+        cdef CarrayContainer result_array = CarrayContainer()
+
+        if carray_list_names is None:
+            carray_list_names = self.carrays.keys()
 
         # now we have the result array setup
         # resize it
@@ -188,21 +225,20 @@ cdef class CarrayContainer:
             return result_array
 
         # allocate carrays
-        for prop in prop_names:
-            dtype = self.carray_info[prop]
-            result_array.register_carray(size, prop, dtype)
+        for carray_name in carray_list_names:
+            dtype = self.carray_dtypes[carray_name]
+            result_array.register_carray(size, carray_name, dtype)
 
-        # copy the required indices for each property
-        for prop in prop_names:
-            src_prop_array = self.get_carray(prop)
-            dst_prop_array = result_array.get_carray(prop)
-            src_prop_array.copy_values(index_array, dst_prop_array)
+        # copy the required indices for each carray
+        for carray_name in carray_list_names:
+            src_carray = self.get_carray(carray_name)
+            dst_carray = result_array.get_carray(carray_name)
+            src_carray.copy_values(index_array, dst_carray)
 
         return result_array
 
     cpdef remove_items(self, np.ndarray index_list):
-        """
-        Remove items whose indices are given in index_list.
+        """Remove items whose indices are given in index_list.
 
         We repeatedly interchange the values of the last element and values from
         the index_list and reduce the size of the array by one. This is done for
@@ -212,70 +248,101 @@ cdef class CarrayContainer:
         ---------
         index_list : np.ndarray
             array of indices, this array should be a LongArray
-        """
-        cdef str msg
-        cdef np.ndarray sorted_indices
-        cdef BaseArray prop_array
-        cdef int num_arrays, i
-        cdef list temp_arrays
-        cdef list property_arrays
 
-        if index_list.size > self.get_number_of_items():
-            msg = 'Number of items to be removed is greater than'
-            msg += 'number of items in array'
-            raise ValueError, msg
+        """
+        cdef int i
+        cdef str msg
+        cdef BaseArray carr
+        cdef list carray_list
+        cdef np.ndarray sorted_indices
+
+        if index_list.size > self.get_carray_size():
+            msg = "ERROR: Number of items to be removed is greater than"
+            msg += "number of items in array"
+            raise ValueError(msg)
 
         sorted_indices = np.sort(index_list)
-        num_arrays = len(self.properties.keys())
+        carray_list = self.carrays.values()
 
-        property_arrays = self.properties.values()
+        for i in range(len(carray_list)):
+            carr = carray_list[i]
+            carr.remove(sorted_indices, 1)
 
-        for i in range(num_arrays):
-            prop_array = property_arrays[i]
-            prop_array.remove(sorted_indices, 1)
+    cpdef copy(self, CarrayContainer container, LongArray indices, list carray_list_names):
+        """Copy values at indices from container to this container. This is similar to
+        paste except the indices are from the source container. Self will be resized
+        all contents will be overwritten.
 
-    cpdef copy(self, CarrayContainer container, LongArray indices, list properties):
+        Parameters
+        ----------
+        container : CarrayContainer
+            Container with values that will be copied to self.
+
+        indices : LongArray
+            Indices of container to copy to self.
+
         """
-        Copy values at indices from container. Self will be resized all contents
-        will be overwritten.
-        """
-        cdef str prop
-        cdef BaseArray dst_prop_array, src_prop_array
+        cdef str carray_name
+        cdef BaseArray dst_array, src_array
 
         # resize array
         self.resize(indices.length)
 
         # copy the required indices for each property
-        for prop in properties:
-            dst_prop_array = self.get_carray(prop)
-            src_prop_array = container.get_carray(prop)
-            src_prop_array.copy_values(indices, dst_prop_array)
+        for carray_name in carray_list_names:
+            dst_array = self.get_carray(carray_name)
+            src_array = container.get_carray(carray_name)
+            src_array.copy_values(indices, dst_array)
 
-    cpdef paste(self, CarrayContainer container, LongArray indices, list properties):
-        cdef str prop
+    cpdef paste(self, CarrayContainer container, LongArray indices, list carray_list_names):
+        """Copy values from container to this container at given indices. The
+        input agrument should be the same size of indices.
+
+        Parameters
+        ----------
+        container : CarrayContainer
+            Container where values will be taken from.
+
+        indices : LongArray
+            Indices to place copy values.
+
+        """
+        cdef str carray_name
         cdef BaseArray dst_prop_array, src_prop_array
 
-        # resize array
-        #self.resize(indices.length)
+        if indices.length != container.get_carray_size():
+            raise RuntimeError("ERROR: inconsistent carray sizes!")
 
         # copy the required indices for each property
-        for prop in properties:
-            dst_prop_array = self.get_carray(prop)
-            src_prop_array = container.get_carray(prop)
-            src_prop_array.paste_values(indices, dst_prop_array)
+        for carray_name in carray_list_names:
+            dst_array = self.get_carray(carray_name)
+            src_array = container.get_carray(carray_name)
+            src_array.paste_values(indices, dst_array)
 
-    cpdef add(self, CarrayContainer container, LongArray indices, list properties):
-        cdef str prop
-        cdef BaseArray dst_prop_array, src_prop_array
+    cpdef add(self, CarrayContainer container, LongArray indices, list carray_list_names):
+        """Add values from container to this container at given indices. The
+        input agrument should be the same size of indices.
 
-        # resize array
-        #self.resize(indices.length)
+        Parameters
+        ----------
+        container : CarrayContainer
+            Container where values will be taken from.
+
+        indices : LongArray
+            Indices to add values to.
+
+        """
+        cdef str carray_name
+        cdef BaseArray dst_carray, src_carray
+
+        if indices.length != container.get_carray_size():
+            raise RuntimeError("ERROR: inconsistent carray sizes!")
 
         # copy the required indices for each property
-        for prop in properties:
-            dst_prop_array = self.get_carray(prop)
-            src_prop_array = container.get_carray(prop)
-            src_prop_array.add_values(indices, dst_prop_array)
+        for carray_name in carray_list_names:
+            dst_carray = self.get_carray(carray_name)
+            src_carray = container.get_carray(carray_name)
+            src_carray.add_values(indices, dst_carray)
 
     cpdef remove_tagged_particles(self, np.int8_t tag):
         """Remove particles that have the given tag.
@@ -285,12 +352,13 @@ cdef class CarrayContainer:
 
         tag : int8
             The type of particles that need to be removed.
+
         """
+        cdef int i
         cdef LongArray indices = LongArray()
-        cdef IntArray tag_array = self.properties['tag']
+        cdef IntArray tag_array = self.carrays["tag"]
         cdef np.int8_t* tagarrptr = tag_array.get_data_ptr()
         cdef np.ndarray ind
-        cdef int i
 
         # find the indices of the particles to be removed
         for i in range(tag_array.length):
@@ -301,17 +369,27 @@ cdef class CarrayContainer:
         ind = indices.get_npy_array()
         self.remove_items(ind)
 
-    cdef void pointer_groups(self, np.float64_t *vec[], list field_names):
+    cdef void pointer_groups(self, np.float64_t *vec[], list carray_list_names):
+        """Populate a pointer array with references dictated by a list of
+        carray names. Only float64_t type are allowed.
+
+        Parameters
+        ----------
+        vec : *np.float64_t[]
+            Float array pointer.
+
+        carray_list_names : list
+            List of carray names that vec will point to.
+        """
         cdef int i
-        cdef str field, msg
+        cdef str carray_name
         cdef DoubleArray arr
 
         i = 0
-        for field in field_names:
-            if field in self.properties.keys():
-                arr = <DoubleArray> self.get_carray(field)
+        for carray_name in carray_list_names:
+            if carray_name in self.carrays.keys():
+                arr = <DoubleArray> self.get_carray(carray_name)
                 vec[i] = arr.get_data_ptr()
                 i += 1
             else:
-                msg = 'Unknown field in pointer_groups'
-                raise ValueError, msg
+                raise ValueError("ERROR: Unknown field!")
