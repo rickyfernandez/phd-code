@@ -31,11 +31,11 @@ cdef class Interaction:
         cdef str field, group
         cdef long num_particles
 
-        num_particles = pc.get_number_of_items()
+        num_particles = pc.get_carray_size()
 
         # add needed fields for computation
         for field in self.fields.iterkeys():
-            if field not in pc.properties:
+            if field not in pc.carrays:
                 pc.register_carray(num_particles, field,
                         self.fields[field])
 
@@ -177,7 +177,7 @@ cdef class GravityAcceleration(Interaction):
         """
         cdef DoubleArray doub_array
 
-        self.num_particles = pc.get_number_of_items()
+        self.num_particles = pc.get_carray_size()
 
         self.current = -1
         self.particle_done = 1
