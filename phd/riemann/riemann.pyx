@@ -8,7 +8,7 @@ from libc.math cimport sqrt, pow, fmin, fmax, fabs
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.carray cimport DoubleArray, IntArray
 
-cdef int Real = ParticleTAGS.Real
+cdef int REAL = ParticleTAGS.Real
 
 cdef class RiemannBase:
     """Riemann base that all riemann solvers need to inherit.
@@ -17,33 +17,31 @@ cdef class RiemannBase:
     ----------
     cfl : float
         The Courant Friedrichs Lewy condition.
-    boost : bool
-        Solve equations in moving reference frame.
 
     """
-    def __init__(self, double cfl=0.5, bint boost=True):
+    def __init__(self, double cfl=0.5, **kwargs):
         """Constructor for RiemannBase.
 
         Parameters
         ----------
         cfl : float
             The Courant Friedrichs Lewy condition.
-        boost : bool
-            Solve equations in moving reference frame.
 
         """
         self.cfl = cfl
-        self.boost = boost
-        self.registered_fields = False
+        self.fields_registered = False
 
     def initialize(self):
         """Setup all connections for computation classes. Should check
-        always if registered_fields is True.
+        always if fields_registered is True.
         """
-        msg = "Reconstruction::initialize called!"
-        raise NotImplementedError(msg)
+        if not self.fields_registered:
+            raise RuntimeError("Riemann did not set fields for flux!")
 
-    def fields_to_add(self, CarrayContainer particles):
+        self.fluxes = CarrayContainer(carrays_to_register=self.flux_fields)
+        self.fluxes.carray_named_groups = self.flux_field_groups
+
+    def add_fields(self, CarrayContainer particles):
         """Create fields to calculate fluxes.
 
         Parameters
@@ -52,7 +50,7 @@ cdef class RiemannBase:
             Class that holds all information pertaining to the particles.
 
         """
-        cdef str field, dtype
+        cdef str field_name
         cdef dict carray_to_register = {}, carray_named_groups = {}
 
         if "conservative" not in particles.carray_named_groups or\
@@ -60,22 +58,14 @@ cdef class RiemannBase:
                     raise RuntimeError("ERROR: Missing fields in particles!")
 
         # add standard primitive fields
-        carray_named_groups["conservative"] = []
-        for field in particles.carray_named_groups["conservative"]:
+        for field_name in particles.carray_named_groups["conservative"]:
+            carray_to_register[field_name] = "double"
 
-            # add field to group
-            carray_named_groups["conservative"].append(field)
-
-            # check type of field
-            dtype = particles.carray_info[field]
-            if dtype != "double":
-                raise RuntimeError("Riemann: %s field non double type!" % field)
-            carray_to_register[field] = "double"
-
+        carray_named_groups["conservative"] = particles.carray_named_groups["conservative"]
         carray_named_groups["momentum"] = particles.carray_named_groups["momentum"]
 
         # store fields info
-        self.registered_fields = True
+        self.fields_registered = True
         self.flux_fields = carray_to_register
         self.flux_field_groups = carray_named_groups
 
@@ -102,7 +92,7 @@ cdef class RiemannBase:
         cdef int dim = len(particles.carray_named_groups["position"])
 
         # resize to hold fluxes for each face in mesh
-        self.fluxes.resize(mesh.faces.get_number_of_items())
+        self.fluxes.resize(mesh.faces.get_carray_size())
         self.riemann_solver(mesh, reconstruction, eos.get_gamma(), dim)
 
     cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction,
@@ -171,9 +161,9 @@ cdef class RiemannBase:
                 vsq += v[k][0]*v[k][0]
             dt = R/(c + sqrt(vsq))
 
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
             # use only real particles
-            if tags.data[i] == Real:
+            if tags.data[i] == REAL:
 
                 # sound speed
                 c = eos.sound_speed(d.data[i], p.data[i])
@@ -196,6 +186,10 @@ cdef class RiemannBase:
     cdef deboost(self, CarrayContainer fluxes, CarrayContainer faces, int dim):
         """Deboost riemann solution of fluxes from face reference to lab frame.
 
+        This function transforms the fluxes that are solved in the frame of
+        the moving face. The fluxes are transformed back to the lab frame.
+        The equations used are from Pakmor and Springel (2011).
+
         Parameters
         ----------
         fluxes : CarrayContainer
@@ -217,30 +211,33 @@ cdef class RiemannBase:
         fluxes.pointer_groups(fmv, fluxes.carray_named_groups["momentum"])
         faces.pointer_groups(wx, faces.carray_named_groups["velocity"])
 
-        # return flux to lab frame (Pakmor 2011)
-        for m in range(faces.get_number_of_items()):
+        # return flux to lab frame Eq. 17
+        for m in range(faces.get_carray_size()):
             for k in range(dim):
                 fe.data[m] += wx[k][m]*(0.5*wx[k][m]*fm.data[m] + fmv[k][m])
                 fmv[k][m]  += wx[k][m]*fm.data[m]
 
 
 cdef class HLL(RiemannBase):
-    def __init__(self, double cfl=0.5, bint boost=True):
-        """HLL riemann solver"""
-        super(HLL, self).__init__(cfl, boost)
+    """HLL implementation of solving the riemann problem. This is taken
+    from Toro Riemann Solvers and Numerical Methods for Fluid Dynamics
+    chapter 10.
 
-    def initialize(self):
-        """Setup all connections for computation classes. Should check
-        always if registered_fields is True.
-        """
-        if not self.registered_fields:
-            raise RuntimeError("Riemann did not set fields for flux!")
+    Attributes
+    ----------
+    cfl : float
+        The Courant Friedrichs Lewy condition.
 
-        self.fluxes = CarrayContainer(carrays_to_register=self.flux_fields)
-        self.fluxes.carray_named_groups = self.flux_field_groups
+    boost : boolean
+        Flag indicating to boost to face frame if true
+
+    """
+    def __init__(self, double cfl=0.5, bint boost=True, **kwargs):
+        self.boost = boost
+        super(HLL, self).__init__(cfl, **kwargs)
 
     cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
-        """Solve the riemann problem.
+        """Solve the riemann problem by HLL solver.
 
         Parameters
         ----------
@@ -253,6 +250,9 @@ cdef class HLL(RiemannBase):
 
         gamma : float
             Ratio of specific heats.
+
+        dim : int
+            Dimension of the problem.
 
         """
         # left state primitive variables
@@ -276,7 +276,7 @@ cdef class HLL(RiemannBase):
         cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3], *wx[3]
 
         cdef bint boost = self.boost
-        cdef int num_faces = mesh.faces.get_number_of_items()
+        cdef int num_faces = mesh.faces.get_carray_size()
 
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
@@ -327,7 +327,7 @@ cdef class HLL(RiemannBase):
             self.get_waves(_dl, Vnl, _pl, _dr, Vnr, _pr, gamma,
                     &sl, &s_contact, &sr)
 
-            # calculate interface flux - eq. 10.21
+            # calculate interface flux Eq. 10.21
             if(wn <= sl):
 
                 # left state
@@ -343,7 +343,7 @@ cdef class HLL(RiemannBase):
                 fac2 = sl - wn
                 fac3 = sr - sl
 
-                # eqs. 10.20 and 10.13
+                # Eq. 10.20 and Eq. 10.13
                 fm.data[i] = (_dl*Vnl*fac1 - _dr*Vnr*fac2 - sl*_dl*fac1 + sr*_dr*fac2)/fac3
 
                 for k in range(dim):
@@ -369,7 +369,7 @@ cdef class HLL(RiemannBase):
     cdef inline void get_waves(self, double dl, double ul, double pl,
             double dr, double ur, double pr,
             double gamma, double *sl, double *sc, double *sr):
-        """Solve wave estimates for hll type solvers.
+        """Solve wave estimates for HLL type solvers.
 
         Parameters
         ----------
@@ -378,7 +378,7 @@ cdef class HLL(RiemannBase):
 
         ul : double
             Left state velocity.
-            
+
         pl : double
             Left state pressure.
 
@@ -387,7 +387,7 @@ cdef class HLL(RiemannBase):
 
         ur : double
             Right state velocity.
-            
+
         pr : double
             Right state pressure.
 
@@ -428,7 +428,7 @@ cdef class HLL(RiemannBase):
         d_avg = .5*(dl + dr)
         c_avg = .5*(cl + cr)
 
-        # estimate p* - eq. 9.20
+        # estimate p* Eq. 9.20
         p_star = fmax(0., .5*(pl + pr) + .5*(ul - ur)*d_avg*c_avg)
 
         p_min = fmin(pl, pr)
@@ -441,38 +441,38 @@ cdef class HLL(RiemannBase):
         elif(p_star <= p_min):
 
             # two rarefaction riemann solver (TRRS)
-            # eq. 9.31
+            # Eq. 9.31
             z = (gamma - 1.)/(2.*gamma);
 
-            # eq. 9.35
+            # Eq. 9.35
             plr = pow(pl/pr, z);
 
             u_star = (plr*ul/cl + ur/cr + 2.*(plr - 1.)/(gamma - 1.))/\
                     (plr/cl + 1./cr)
 
-            # estimate p* from two rarefaction aprroximation - eq. 9.36
+            # estimate p* from two rarefaction aprroximation Eq. 9.36
             p_star  = .5*pl*pow(1. + (gamma - 1.)*(ul - u_star)/(2.*cl), 1./z)
             p_star += .5*pr*pow(1. + (gamma - 1.)*(u_star - ur)/(2.*cr), 1./z)
 
         else:
 
             # two shock riemann solver (TSRS)
-            # eq. 9.31
+            # Eq. 9.31
             Al = 2./((gamma + 1.)*dl)
             Ar = 2./((gamma + 1.)*dr)
 
             Bl = pl*((gamma - 1.)/(gamma + 1.))
             Br = pr*((gamma - 1.)/(gamma + 1.))
 
-            # 9.41
+            # Eq. 9.41
             gl = sqrt(Al/(p_star + Bl))
             gr = sqrt(Ar/(p_star + Br))
 
-            # estimate p* from two shock aprroximation - eq. 9.43
+            # estimate p* from two shock aprroximation Eq. 9.43
             p_star = (gl*pl + gr*pr - (ur - ul))/(gl + gr)
             u_star = .5*(ul + ur) + .5*(gr*(p_star - pr) - gl*(p_star - pl))
 
-        # calculate fastest left wave speed estimates - eq. 10.68-10.69
+        # calculate fastest left wave speed estimates Eq. 10.68-10.69
         if(p_star <= pl):
             # rarefaction wave
             _sl = ul - cl
@@ -481,7 +481,7 @@ cdef class HLL(RiemannBase):
             # shock wave
             _sl = ul - cl*sqrt(1.+((gamma+1.)/(2.*gamma))*(p_star/pl - 1.))
 
-        # calculate fastest right wave speed estimates - eq. 10.68-10.69
+        # calculate fastest right wave speed estimates Eq. 10.68-10.69
         if(p_star <= pr):
             # Rarefaction wave
             _sr = ur + cr
@@ -490,7 +490,7 @@ cdef class HLL(RiemannBase):
             # shock wave
             _sr = ur + cr*sqrt(1. + ((gamma+1.)/(2.*gamma))*(p_star/pr - 1.))
 
-        # contact wave speed - eq. 10.70
+        # contact wave speed Eq. 10.70
         _sc = (pr - pl + dl*ul*(_sl - ul) - dr*ur*(_sr - ur))/(dl*(_sl - ul) - dr*(_sr - ur))
 
         sl[0] = _sl
@@ -499,10 +499,38 @@ cdef class HLL(RiemannBase):
 
 
 cdef class HLLC(HLL):
-    """HLLC riemann solver."""
+    """HLLC implementation of solving the riemann problem. This is taken
+    from Toro Riemann Solvers and Numerical Methods for Fluid Dynamics
+    chapter 10.
 
+    Attributes
+    ----------
+    cfl : float
+        The Courant Friedrichs Lewy condition.
+
+    boost : boolean
+        Flag indicating to boost to face frame if true
+
+    """
     cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
+        """Solve the riemann problem by HLLC solver.
 
+        Parameters
+        ----------
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        reconstruction : ReconstructionBase
+            Class that performs field reconstruction inputs for the
+            riemann problem.
+
+        gamma : float
+            Ratio of specific heats.
+
+        dim : int
+            Dimension of the problem.
+
+        """
         # left state primitive variables
         cdef DoubleArray dl = reconstruction.left_states.get_carray("density")
         cdef DoubleArray pl = reconstruction.left_states.get_carray("pressure")
@@ -529,7 +557,7 @@ cdef class HLLC(HLL):
         cdef double fac1, fac2, fac3
 
         cdef int boost = self.boost
-        cdef int num_faces = mesh.faces.get_number_of_items()
+        cdef int num_faces = mesh.faces.get_carray_size()
 
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
@@ -584,7 +612,7 @@ cdef class HLLC(HLL):
             self.get_waves(_dl, Vnl, _pl, _dr, Vnr, _pr, gamma,
                     &sl, &s_contact, &sr)
 
-            # calculate interface flux - eq. 10.71
+            # calculate interface flux Eq. 10.71
             if(wn <= sl):
 
                 # left state
@@ -599,7 +627,7 @@ cdef class HLLC(HLL):
                 # intermediate state
                 if(wn <= s_contact):
 
-                    # left star state - eq. 10.38 and 10.39
+                    # left star state Eq. 10.38 and 10.39
                     factor_1 = _dl*(sl - Vnl)/(sl - s_contact)
                     factor_2 = factor_1*(sl - wn)*(s_contact - Vnl) + _pl
                     frho = _dl*(Vnl - sl) + factor_1*(sl - wn)
@@ -646,23 +674,52 @@ cdef class HLLC(HLL):
             self.deboost(self.fluxes, mesh.faces, dim)
 
 cdef class Exact(RiemannBase):
-    """Exact riemann solver."""
-    def __init__(self, double cfl=0.5):
+    """Exact implementation of solving the riemann problem. This is taken
+    from Toro Riemann Solvers and Numerical Methods for Fluid Dynamics
+    chapter 9.
+
+    Attributes
+    ----------
+    cfl : float
+        The Courant Friedrichs Lewy condition.
+
+    boost : boolean
+        Flag indicating to boost to face frame if true
+
+    """
+    def __init__(self, double cfl=0.5, **kwargs):
         self.cfl = 0.5
+        self.fields_registered = False
 
-    cdef riemann_solver(self, CarrayContainer fluxes, CarrayContainer left_faces, CarrayContainer right_faces,
-            CarrayContainer faces, double gamma, int dim):
+    cdef riemann_solver(self, Mesh mesh, ReconstructionBase reconstruction, double gamma, int dim):
+        """Solve the riemann problem by Exact solver.
+
+        Parameters
+        ----------
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        reconstruction : ReconstructionBase
+            Class that performs field reconstruction inputs for the
+            riemann problem.
+
+        gamma : float
+            Ratio of specific heats.
+
+        dim : int
+            Dimension of the problem.
+
+        """
+        # left state primitive variables
+        cdef DoubleArray dl = reconstruction.left_states.get_carray("density")
+        cdef DoubleArray pl = reconstruction.left_states.get_carray("pressure")
 
         # left state primitive variables
-        cdef DoubleArray dl = left_faces.get_carray("density")
-        cdef DoubleArray pl = left_faces.get_carray("pressure")
+        cdef DoubleArray dr = reconstruction.right_states.get_carray("density")
+        cdef DoubleArray pr = reconstruction.right_states.get_carray("pressure")
 
-        # left state primitive variables
-        cdef DoubleArray dr = right_faces.get_carray("density")
-        cdef DoubleArray pr = right_faces.get_carray("pressure")
-
-        cdef DoubleArray fm  = fluxes.get_carray("mass")
-        cdef DoubleArray fe  = fluxes.get_carray("energy")
+        cdef DoubleArray fm  = self.fluxes.get_carray("mass")
+        cdef DoubleArray fe  = self.fluxes.get_carray("energy")
 
         cdef int i, k
         cdef np.float64_t *vl[3], *vr[3], *fmv[3], *nx[3]
@@ -681,12 +738,20 @@ cdef class Exact(RiemannBase):
         cdef double s_hl, s_tl, sl, sr
         cdef double c, cl, cr, c_star_l, c_star_r
 
-        cdef int num_faces = faces.get_number_of_items()
+        cdef int num_faces = mesh.faces.get_carray_size()
 
-        left_faces.pointer_groups(vl,  left_faces.carray_named_groups['velocity'])
-        right_faces.pointer_groups(vr, right_faces.carray_named_groups['velocity'])
-        fluxes.pointer_groups(fmv, fluxes.carray_named_groups['momentum'])
-        faces.pointer_groups(nx, faces.carray_named_groups['normal'])
+        # particle velocities left/right face
+        reconstruction.left_states.pointer_groups(vl,
+                reconstruction.left_states.carray_named_groups["velocity"])
+        reconstruction.right_states.pointer_groups(vr,
+                reconstruction.right_states.carray_named_groups["velocity"])
+
+
+        # face momentum fluxes
+        self.fluxes.pointer_groups(fmv, self.fluxes.carray_named_groups["momentum"])
+
+        # face normal
+        mesh.faces.pointer_groups(nx, mesh.faces.carray_named_groups["normal"])
 
         for i in range(num_faces):
 
@@ -718,39 +783,39 @@ cdef class Exact(RiemannBase):
                 vl_sq += _vl[k]*_vl[k]
                 vr_sq += _vr[k]*_vr[k]
 
-            # hack - delete later >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-            if _dl < 0. or _dr < 0.:
-
-                print 'vacuum left/right'
-
-                self.vacuum(_dl, _vl, _pl, vnl, cl,\
-                       _dr, _vr, _pr, vnr, cr,\
-                       &_d,  v, &_p, &vn, &v_sq,\
-                       gamma, n, dim)
-
-                fm.data[i] = _d*vn
-                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-                for k in range(dim):
-                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-
-                continue
-
-            if (2.*cl/(gamma-1.) + 2.*cr/(gamma-1.)) <= (vnr - vnl):
-
-                print 'vacuum generation'
-
-                self.vacuum(_dl, _vl, _pl, vnl, cl,\
-                       _dr, _vr, _pr, vnr, cr,\
-                       &_d,  v, &_p, &vn, &v_sq,\
-                       gamma, n, dim)
-
-                fm.data[i] = _d*vn
-                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-                for k in range(dim):
-                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-
-                continue
-            # hack - delete later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
+#            # hack - delete later >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+#            if _dl < 0. or _dr < 0.:
+#
+#                print 'vacuum left/right'
+#
+#                self.vacuum(_dl, _vl, _pl, vnl, cl,\
+#                       _dr, _vr, _pr, vnr, cr,\
+#                       &_d,  v, &_p, &vn, &v_sq,\
+#                       gamma, n, dim)
+#
+#                fm.data[i] = _d*vn
+#                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+#                for k in range(dim):
+#                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+#
+#                continue
+#
+#            if (2.*cl/(gamma-1.) + 2.*cr/(gamma-1.)) <= (vnr - vnl):
+#
+#                print 'vacuum generation'
+#
+#                self.vacuum(_dl, _vl, _pl, vnl, cl,\
+#                       _dr, _vr, _pr, vnr, cr,\
+#                       &_d,  v, &_p, &vn, &v_sq,\
+#                       gamma, n, dim)
+#
+#                fm.data[i] = _d*vn
+#                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
+#                for k in range(dim):
+#                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
+#
+#                continue
+#            # hack - delete later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
 
             # newton rhapson 
             p_star = self.get_pstar(_dl, vnl, _pl, cl,
@@ -931,21 +996,22 @@ cdef class Exact(RiemannBase):
                             for k in range(dim):
                                 fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
 
-        self._deboost(fluxes, faces, dim)
+        self.deboost(self.fluxes, mesh.faces, dim)
 
     @cython.cdivision(True)
     cdef inline double p_guess(self, double dl, double ul, double pl, double cl,
             double dr, double ur, double pr, double cr, double gamma) nogil:
-        """
-        Calculate  starting pressure for iterative exact scheme
-        Reference: Toro (2009): Chapter 4
+        """Calculate starting pressure for iterative exact scheme. This is taken
+        from Toro Riemann Solvers and Numerical Methods for Fluid Dynamics chapter 4.
+
+
         """
         cdef double ppv
         cdef double p_lr, p_tl
         cdef double gl, gr, p0
         cdef double p_star, p_max, p_min, q_max
 
-        # initial guess for pressure eq: 4.47
+        # initial guess for pressure Eq. 4.47
         ppv = .5*(pl + pr) - .125*(ur - ul)*(dl + dr)*(cl + cr)
 
         p_star = max(0., ppv)
@@ -980,11 +1046,11 @@ cdef class Exact(RiemannBase):
         """
         cdef double f, Ak, Bk
 
-        # rarefaction wave eq: 4.6b and 4.7b
+        # rarefaction wave Eq: 4.6b and Eq. 4.7b
         if (p_old <= p):
             f = 2.*c/(gamma - 1.)*(pow(p_old/p, (gamma - 1.)/(2.*gamma)) - 1.)
 
-        # shock wave eq: 4.6a and 4.7a
+        # shock wave Eq. 4.6a and Eq. 4.7a
         else:
             Ak = 2./(d*(gamma + 1.))
             Bk = p*(gamma - 1.)/(gamma + 1.)
@@ -995,19 +1061,19 @@ cdef class Exact(RiemannBase):
     @cython.cdivision(True)
     cdef inline double p_func_deriv(self, double d, double u, double p,
             double c, double gamma, double p_old) nogil:
-        """
-        Calculate the derivative of the jump across the wave.
-        Reference: Toro (2009): Chapter 4
+        """Calculate the derivative of the jump across the wave. This was
+        taken from Toro Riemann Solvers and Numerical Methods for Fluid
+        Dynamics chapter 4.
         """
         cdef double df, Ak, Bk
 
-        # derivative for rarefaction wave eq. 4.37
+        # derivative for rarefaction wave Eq. 4.37
         if (p_old <= p):
             df = pow(p_old/p, -(gamma + 1.)/(2.*gamma))/(c*d)
 
         # derivative for shock wave
         else:
-            # eq: 4.8 and 4.37
+            # Eq: 4.8 and Eq. 4.37
             Ak = 2./(d*(gamma + 1.))
             Bk = p*(gamma - 1.)/(gamma + 1.)
             df = sqrt(Ak/(p_old + Bk))*(1. - .5*(p_old - p)/(Bk + p_old))
@@ -1017,9 +1083,8 @@ cdef class Exact(RiemannBase):
     @cython.cdivision(True)
     cdef inline double get_pstar(self, double dl, double ul, double pl, double cl,
             double dr, double ur, double pr, double cr, double gamma) nogil:
-        """
-        Calculate star pressure by iteration.
-        Reference: Toro (2009): Chapter 4
+        """Calculate star pressure by iteration. This was taken from Toro
+        Riemann Solvers and Numerical Methods for Fluid Dynamics chapter 4.
         """
         cdef double TOL = 1.0e-6
         cdef int MAX_ITER = 1000
@@ -1056,9 +1121,8 @@ cdef class Exact(RiemannBase):
             double dr, double vr[3], double pr, double vnr, double cr,
             double *d, double  v[3], double *p, double *vn, double *vsq,
             double gamma, double n[3], int dim) nogil:
-        """
-        Calculate vacuum solution.
-        Reference: Toro (2009): Chapter 4
+        """Calculate vacuum solution. This was taken from Toro Riemann
+        Solvers and Numerical Methods for Fluid Dynamics chapter 4.
         """
         cdef int i
         cdef double c, u_tmp
@@ -1066,7 +1130,7 @@ cdef class Exact(RiemannBase):
         cdef double sl = vnl + 2.*cl/(gamma-1.)
         cdef double sr = vnr - 2.*cr/(gamma-1.)
 
-        if(dr < 0): # right vacuum eq 4.77
+        if(dr < 0): # right vacuum Eq 4.77
             if(0. <= vnl - cl): # left state 
                 d[0] = dl
                 p[0] = pl
@@ -1185,4 +1249,3 @@ cdef class Exact(RiemannBase):
                         v[i]    = vr[i]
                         vn[0]  += v[i]*n[i]
                         vsq[0] += v[i]*v[i]
-
