@@ -23,10 +23,12 @@ cdef class ReconstructionBase:
     cdef np.float64_t** passive_r
     cdef np.float64_t** dpassive
 
-    cpdef compute_gradients(self, CarrayContainer particles, Mesh mesh)
+    cpdef compute_gradients(self, CarrayContainer particles, Mesh mesh,
+                            DomainManager domain_manager)
+
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
-                         bint boost, DomainManager domain_manager,
-                         double dt, bint add_temporal=*)
+                         double gamma, DomainManager domain_manager,
+                         double dt, bint boost, bint add_temporal=*)
 
 cdef class PieceWiseConstant(ReconstructionBase):
     pass
