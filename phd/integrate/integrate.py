@@ -288,28 +288,27 @@ class StaticMeshMUSCLHancock(IntegrateBase):
 
     def evolve_timestep(self):
         """Solve the compressible gas equations."""
+
         phdLogger.info("Static Mesh Integrator: Starting iteration %d time: %f dt: %f" %\
                 (self.iteration,
                  self.time,
                  self.dt))
 
-        # solve the riemann problem at each face
-        phdLogger.info("Static Mesh Integrator: Starting reconstruction...")
+        # build left/right states at each face in the mesh
+        self.reconstruction.compute_gradients(self.particles, self.mesh,
+                self.domain_manager)
         self.reconstruction.compute_states(self.particles, self.mesh,
-                False, self.domain_manager, self.dt)
-        phdLogger.success("Static Mesh Integrator: Finished reconstruction")
+                self.equation_state.get_gamma(), self.domain_manager, 0.5*self.dt,
+                False)
 
-        phdLogger.info("Static Mesh Integrator: Starting riemann...")
+        # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
-        phdLogger.success("Static Mesh Integrator: Finished riemann")
 
+        # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
 
-        phdLogger.info("Static Mesh Integrator: Finished iteration %d" %\
-                self.iteration)
-
-        # setup the mesh for the next setup 
+        # convert updated conservative to primitive
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
 
@@ -317,6 +316,7 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
     """Moving mesh integrator."""
     def evolve_timestep(self):
         """Evolve the simulation for one time step."""
+
         phdLogger.info("Moving Mesh Integrator: Starting iteration %d time: %f dt: %f" %\
                 (self.iteration,
                  self.time,
@@ -326,16 +326,18 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         self.mesh.assign_generator_velocities(self.particles, self.equation_state)
         self.mesh.assign_face_velocities(self.particles)
 
-        phdLogger.info("Moving Mesh Integrator: Starting reconstruction...")
+        # build left/right states at each face in the mesh
+        self.reconstruction.compute_gradients(self.particles, self.mesh,
+                self.domain_manager)
         self.reconstruction.compute_states(self.particles, self.mesh,
-                self.riemann.boost, self.domain_manager, self.dt)
-        phdLogger.success("Moving Mesh Integrator: Finished reconstruction")
+                self.equation_state.get_gamma(), self.domain_manager, 0.5*self.dt,
+                self.riemann.boost)
 
-        phdLogger.info("Moving Mesh Integrator: Starting riemann...")
+        # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
-        phdLogger.success("Moving Mesh Integrator: Finished riemann")
 
+        # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
 
         # update mesh generator positions
@@ -344,17 +346,11 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
 
         # ignored if serial run
         if self.domain_manager.check_for_partition(self.particles):
-            phdLogger.info("Moving Mesh Integrator: Starting domain decomposition...")
             self.domain_manager.partion(self.particles)
-            phdLogger.success("Moving Mesh Integrator: Finished domain decomposition")
 
         # setup the mesh for the next setup 
-        phdLogger.info("Moving Mesh Integrator: Rebuilding mesh...")
         self.mesh.build_geometry(self.particles, self.domain_manager)
-        phdLogger.success("Moving Mesh Integrator: Finished mesh")
 
+        # convert updated conservative to primitive
         self.equation_state.primitive_from_conservative(self.particles)
-        phdLogger.info("Moving Mesh Integrator: Finished iteration %d" %\
-                self.iteration)
-
         self.iteration += 1; self.time += self.dt
