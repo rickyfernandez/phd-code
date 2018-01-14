@@ -461,7 +461,7 @@ cdef class Tree:
         size = comm.Get_size()
 
         # collect number of particles from all process
-        sendbuf = np.array([pc.get_number_of_items()], dtype=np.int32)
+        sendbuf = np.array([pc.get_carray_size()], dtype=np.int32)
         recvbuf = np.empty(size, dtype=np.int32)
 
         comm.Allgather(sendbuf=sendbuf, recvbuf=recvbuf)
@@ -577,9 +577,9 @@ cdef class Tree:
         nbrs : LongArray
             Container to hold all the processors ids.
         """
-        cdef int i
         cdef double smin[3]
         cdef double smax[3]
+        cdef int i, j
 
         # scale to hilbert coordinates
         for i in range(self.dim):
@@ -587,6 +587,17 @@ cdef class Tree:
             smax[i] = ((center[i] + h) - self.domain_corner[i])*self.domain_fac
 
         self._neighbors(self.root, smin, smax, leaf_pid.data, rank, nbrs)
+
+        # remove duplicates
+#        qsort(<void*> &self.nbrs.data[0], <size_t> self.nbrs.length,
+#                sizeof(int), int_compare)
+#        if nbrs.length != 0:
+#            j = 0
+#            for i in range(1, nbrs.length):
+#                if nbrs.data[i] != nbrs.data[j]:
+#                    j += 1
+#                    nbrs.data[j] = nbrs.data[i]
+#            nbrs.resize(j + 1)
 
         # return number of processors found
         return nbrs.length
