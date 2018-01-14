@@ -19,16 +19,16 @@ class TestMeshSetup2d(unittest.TestCase):
     def test_register_fields(self):
         # create 2d particles
         particles = HydroParticleCreator(num=1, dim=2)
-        fields = list(particles.properties)
+        fields = list(particles.carrays)
 
         # check if correct fields where registered
         self.mesh.register_fields(particles)
         reg_fields_2d = ["volume", "dcom-x", "dcom-y", "w-x", "w-y"]
         for field in reg_fields_2d:
-            self.assertTrue(field in particles.properties.keys())
+            self.assertTrue(field in particles.carrays.keys())
 
         # check right number of fields
-        self.assertEqual(particles.properties.keys().sort(),
+        self.assertEqual(particles.carrays.keys().sort(),
                 (fields + reg_fields_2d).sort())
 
         # check named groups added correctly
@@ -58,10 +58,10 @@ class TestMeshSetup2d(unittest.TestCase):
 
         # check if correct fields registered
         for field in face_vars_2d:
-            self.assertTrue(field in self.mesh.faces.properties.keys())
+            self.assertTrue(field in self.mesh.faces.carrays.keys())
 
         # check right number of fields
-        self.assertEqual(self.mesh.faces.properties.keys().sort(),
+        self.assertEqual(self.mesh.faces.carrays.keys().sort(),
                 face_vars_2d.sort())
 
 class TestMesh2dUniformBox(unittest.TestCase):
@@ -163,7 +163,7 @@ class TestMesh2dLatticeBox(unittest.TestCase):
         self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # check if particle position is the same as center of mass
-        for i in range(self.particles.get_number_of_items()):
+        for i in range(self.particles.get_carray_size()):
             if self.particles["tag"][i] == ParticleTAGS.Real:
                 self.assertAlmostEqual(0., self.particles["dcom-x"][i])
                 self.assertAlmostEqual(0., self.particles["dcom-y"][i])
@@ -179,7 +179,7 @@ class TestMesh2dLatticeBox(unittest.TestCase):
         self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # check if particle position is the same as center of mass
-        for i in range(self.particles.get_number_of_items()):
+        for i in range(self.particles.get_carray_size()):
             if self.particles["tag"][i] == ParticleTAGS.Real:
                 self.assertAlmostEqual(self.dx*self.dy, self.particles["volume"][i])
 
