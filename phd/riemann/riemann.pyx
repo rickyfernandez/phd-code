@@ -1,5 +1,5 @@
+import logging
 import numpy as np
-from collections import defaultdict
 
 cimport cython
 cimport numpy as np
@@ -7,6 +7,8 @@ from libc.math cimport sqrt, pow, fmin, fmax, fabs
 
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.carray cimport DoubleArray, IntArray
+
+phdLogger = logging.getLogger("phd")
 
 cdef int REAL = ParticleTAGS.Real
 
@@ -119,6 +121,8 @@ cdef class RiemannBase:
                                    EquationStateBase eos):
         """Compute time step for next integration step.
 
+        Parameters
+        ----------
         particles : CarrayContainer
             Container of particles.
 
@@ -128,7 +132,7 @@ cdef class RiemannBase:
         Returns
         -------
         double
-            Time step
+            Time step.
 
         """
         cdef IntArray tags   = particles.get_carray("tag")
@@ -277,6 +281,8 @@ cdef class HLL(RiemannBase):
 
         cdef bint boost = self.boost
         cdef int num_faces = mesh.faces.get_carray_size()
+
+        phdLogger.info("HLL: Starting riemann")
 
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
@@ -559,6 +565,8 @@ cdef class HLLC(HLL):
         cdef int boost = self.boost
         cdef int num_faces = mesh.faces.get_carray_size()
 
+        phdLogger.info("HLLC: Starting riemann")
+
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
                 reconstruction.left_states.carray_named_groups["velocity"])
@@ -683,9 +691,6 @@ cdef class Exact(RiemannBase):
     cfl : float
         The Courant Friedrichs Lewy condition.
 
-    boost : boolean
-        Flag indicating to boost to face frame if true
-
     """
     def __init__(self, double cfl=0.5, **kwargs):
         self.cfl = 0.5
@@ -740,12 +745,13 @@ cdef class Exact(RiemannBase):
 
         cdef int num_faces = mesh.faces.get_carray_size()
 
+        phdLogger.info("Exact: Starting riemann")
+
         # particle velocities left/right face
         reconstruction.left_states.pointer_groups(vl,
                 reconstruction.left_states.carray_named_groups["velocity"])
         reconstruction.right_states.pointer_groups(vr,
                 reconstruction.right_states.carray_named_groups["velocity"])
-
 
         # face momentum fluxes
         self.fluxes.pointer_groups(fmv, self.fluxes.carray_named_groups["momentum"])
