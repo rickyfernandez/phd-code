@@ -49,6 +49,9 @@ cdef class ReconstructionBase:
         mesh : Mesh
             Class that builds the domain mesh.
 
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
         """
         msg = "Reconstruction::_compute_gradients called!"
         raise NotImplementedError(msg)
@@ -66,8 +69,8 @@ cdef class ReconstructionBase:
         mesh : Mesh
             Class that builds the domain mesh.
 
-        boost : bool
-            Solve equations in moving reference frame.
+        gamma : double
+            Ratio of specific heats.
 
         domain_manager : DomainManager
             Class that handels all things related with the domain.
@@ -75,21 +78,67 @@ cdef class ReconstructionBase:
         dt : float
             Time step of the simulation.
 
+        boost : bool
+            Solve equations in moving reference frame.
+
+        add_temporal : bool
+            If true add time derivatives in the reconstruction.
+
         """
         msg = "Reconstruction::compute called!"
         raise NotImplementedError(msg)
 
 cdef class PieceWiseConstant(ReconstructionBase):
+    """Reconstruction of primitive variables onto each face using
+    constant implementation.
+
+    Attributes
+    ----------
+    fields_registered : bool
+        Flag stating if reconstruction fields have been registered.
+
+    left_states : CarrayContainer
+        Left states primitive values for riemann problem.
+
+    right_states : CarrayContainer
+        Left states primitive values for riemann problem.
+
+    has_passive_scalars : bool
+        Flag indicating if passive scalars are present for
+        reconstruction.
+
+    num_passive : int
+        Number of passive scalars in particle containers.
+
+    reconstruct_fields : dict
+       Dictionary of primitive fields where the keys are the names
+       and values are the data type of carrays to create in the
+       container.
+
+    reconstruct_field_groups : dict
+        Dictionary of collection of field names allowing for ease
+        of subsetting of fields.
+
+    """
     def __init__(self, **kwargs):
         super(PieceWiseConstant, self).__init__(**kwargs)
+
+    def __dealloc__(self):
+        """Release pointers"""
+
+        if self.has_passive_scalars:
+            stdlib.free(self.passive)
+            stdlib.free(self.passive_l)
+            stdlib.free(self.passive_r)
 
     def initialize(self):
         """Setup all connections for computation classes. Should always
         check if fields_registered is True.
         """
+        cdef int dim
+
         if not self.fields_registered:
-            raise RuntimeError(
-                    "Reconstruction did not set fields to reconstruct!")
+            raise RuntimeError("Reconstruction did not set fields to reconstruct!")
 
         # left/right face states for riemann solver
         self.left_states  = CarrayContainer(carrays_to_register=self.reconstruct_fields)
@@ -98,6 +147,15 @@ cdef class PieceWiseConstant(ReconstructionBase):
         # named groups for easier selection
         self.left_states.carray_named_groups  = self.reconstruct_field_groups
         self.right_states.carray_named_groups = self.reconstruct_field_groups
+
+        # allocate helper pointers
+        if self.has_passive_scalars:
+            dim = len(self.left_states.carray_named_groups["velocity"])
+            self.num_passive = len(self.fields_to_reconstruct_groups["passive_scalars"])
+
+            self.passive   = <np.float64_t**> stdlib.malloc(self.num_passive*sizeof(void*))
+            self.passive_l = <np.float64_t**> stdlib.malloc(self.num_passive*sizeof(void*))
+            self.passive_r = <np.float64_t**> stdlib.malloc(self.num_passive*sizeof(void*))
 
     def add_fields(self, CarrayContainer particles):
         """Create lists of variables to reconstruct and setup containers
@@ -120,7 +178,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
         for field_name in particles.carray_named_groups["primitive"]:
             carray_to_register[field_name] = "double"
 
-        # add velocity in named groups
+        # add primitive and velocity in named groups
         carray_named_groups["primitive"] = particles.carray_named_groups["primitive"]
         carray_named_groups["velocity"] = particles.carray_named_groups["velocity"]
 
@@ -147,6 +205,9 @@ cdef class PieceWiseConstant(ReconstructionBase):
         mesh : Mesh
             Class that builds the domain mesh.
 
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
         """
         pass # no gradients for constant reconstruction
 
@@ -170,7 +231,10 @@ cdef class PieceWiseConstant(ReconstructionBase):
             Class that handels all things related with the domain.
 
         dt : float
-            Time step of the simulation.
+            Time to extrapolate reconstructed fields to.
+
+        add_temporal : bool
+            If true add time derivatives in the reconstruction.
 
         """
         # particle primitive variables
@@ -208,8 +272,10 @@ cdef class PieceWiseConstant(ReconstructionBase):
         self.left_states.pointer_groups(vl,  self.left_states.carray_named_groups["velocity"])
         self.right_states.pointer_groups(vr, self.right_states.carray_named_groups["velocity"])
 
+        # include passive scalars if any
         if self.has_passive_scalars:
 
+            # pointers to passive and left/right states
             particles.pointer_groups(self.passive, particles.carray_named_groups["passive-scalars"])
             self.left_states.pointer_groups(self.passive_l, self.carray_named_groups["passive-scalars"])
             self.right_states.pointer_groups(self.passive_r, self.carray_named_groups["passive-scalars"])
@@ -225,6 +291,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
             dl.data[n] = d.data[i]
             dr.data[n] = d.data[j]
 
+            # add passive scalars if any
             if self.has_passive_scalars:
                 for k in range(self.num_passive):
                     self.passive_l[k][n] = self.passive[k][i]
@@ -237,6 +304,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
             # velocities
             for k in range(dim):
                 if boost:
+                    # velocity in face frame
                     vl[k][n] = v[k][i] - wx[k][n]
                     vr[k][n] = v[k][j] - wx[k][n]
                 else:
@@ -245,6 +313,53 @@ cdef class PieceWiseConstant(ReconstructionBase):
 
 
 cdef class PieceWiseLinear(ReconstructionBase):
+    """Reconstruction of primitive variables onto each face using
+    AREPO implementation (2009).
+
+    Attributes
+    ----------
+    fields_registered : bool
+        Flag stating if reconstruction fields have been registered.
+
+    grad : CarrayContainer
+       Gradient of each primitive field.
+
+    left_states : CarrayContainer
+        Left states primitive values for riemann problem.
+
+    right_states : CarrayContainer
+        Left states primitive values for riemann problem.
+
+    limiter : int
+        Value of 0 is AREPOs and 1 is TESS implementation of
+        limiting the gradients.
+
+    has_passive_scalars : bool
+        Flag indicating if passive scalars are present for
+        reconstruction.
+
+    num_passive : int
+        Number of passive scalars in particle containers.
+
+    reconstruct_fields : dict
+       Dictionary of primitive fields where the keys are the names
+       and values are the data type of carrays to create in the
+       container.
+
+    reconstruct_field_groups : dict
+        Dictionary of collection of field names allowing for ease
+        of subsetting of fields.
+
+    reconstruct_grads : dict
+       Dictionary of primitive gradients where the keys are the names
+       and values are the data type of carrays to create in the
+       container.
+
+    reconstruct_grad_groups : dict
+        Dictionary of collection of gradient names allowing for ease
+        of subsetting of gradients.
+
+    """
     def __init__(self, int limiter = 0, **kwargs):
         super(PieceWiseLinear, self).__init__(**kwargs)
         self.limiter = limiter
@@ -268,9 +383,14 @@ cdef class PieceWiseLinear(ReconstructionBase):
         stdlib.free(self.df)
 
     def add_fields(self, CarrayContainer particles):
-        """
-        Create lists of variables to reconstruct and setup containers for
-        gradients and reconstructions
+        """Create lists of variables to reconstruct and setup containers
+        for gradients and reconstructions.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         cdef int i, dim
         cdef str field_name, grad_name
@@ -335,6 +455,8 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
     def initialize(self):
         """Setup initial arrays and routines for computation."""
+        cdef int dim, num_fields
+
         if not self.fields_registered:
             raise RuntimeError(
                     "Reconstruction did not set fields to reconstruct!")
@@ -347,6 +469,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         self.left_states.carray_named_groups  = self.reconstruct_field_groups
         self.right_states.carray_named_groups = self.reconstruct_field_groups
 
+        # initialize gradients
         self.grad = CarrayContainer(carrays_to_register=self.reconstruct_grads)
         self.grad.carray_named_groups = self.reconstruct_grad_groups
 
@@ -354,10 +477,14 @@ cdef class PieceWiseLinear(ReconstructionBase):
         dim = len(self.left_states.carray_named_groups["velocity"])
         num_fields = len(self.left_states.carray_named_groups["primitive"])
 
+        # allocate helper pointers
         if self.has_passive_scalars:
             self.num_passive = len(self.fields_to_reconstruct_groups["passive_scalars"])
+
+            self.passive   = <np.float64_t**> stdlib.malloc(self.num_passive*sizeof(void*))
             self.passive_l = <np.float64_t**> stdlib.malloc(self.num_passive*sizeof(void*))
             self.passive_r = <np.float64_t**> stdlib.malloc(self.num_passive*sizeof(void*))
+
             self.dpassive  = <np.float64_t**> stdlib.malloc((self.num_passive*dim)*sizeof(void*))
 
         # primitive values and gradient
@@ -388,6 +515,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         cdef IntArray tags = particles.get_carray("tag")
         cdef DoubleArray vol = particles.get_carray("volume")
 
+        # face information
         cdef DoubleArray face_area = mesh.faces.get_carray("area")
         cdef LongArray pair_i = mesh.faces.get_carray("pair-i")
         cdef LongArray pair_j = mesh.faces.get_carray("pair-j")
@@ -420,8 +548,6 @@ cdef class PieceWiseLinear(ReconstructionBase):
         particles.pointer_groups(x, particles.carray_named_groups["position"])
         particles.pointer_groups(dcx, particles.carray_named_groups["dcom"])
         particles.pointer_groups(prim, particles.carray_named_groups["primitive"])
-        #raise RuntimeError("Hello World")
-
 
         # pointer to face center of mass
         mesh.faces.pointer_groups(fij, mesh.faces.carray_named_groups["com"])
@@ -489,11 +615,11 @@ cdef class PieceWiseLinear(ReconstructionBase):
                         d_dif = prim[n][j] - prim[n][i]
                         d_sum = prim[n][j] + prim[n][i]
 
-                        # gradient estimate eq. 21
+                        # gradient estimate Eq. 21
                         for k in range(dim):
                             df[dim*n+k] += area*(d_dif*cfx[k] - 0.5*d_sum*dr[k])/(r*_vol)
 
-                # limit gradients eq. 30
+                # limit gradients Eq. 30
                 for m in range(mesh.neighbors[i].size()):
 
                     # index of face neighbor
@@ -571,11 +697,13 @@ cdef class PieceWiseLinear(ReconstructionBase):
             Class that handels all things related with the domain.
 
         dt : float
-            Time step of the simulation.
+            Time to extrapolate reconstructed fields to.
+
+        add_temporal : bool
+            If true add time derivatives in the reconstruction.
 
         """
         cdef double sepi, sepj
-        cdef double fac = 0.5*dt #TO FIX: take in the rigth dt
         cdef int i, j, k, m, n, dim, num_passive
 
         cdef np.float64_t vi[3], vj[3]
@@ -611,12 +739,15 @@ cdef class PieceWiseLinear(ReconstructionBase):
         particles.pointer_groups(dcx, particles.carray_named_groups["dcom"])
         particles.pointer_groups(v, particles.carray_named_groups["velocity"])
 
+        # pointers to velocity states
         self.left_states.pointer_groups(vl,  self.left_states.carray_named_groups["velocity"])
         self.right_states.pointer_groups(vr, self.right_states.carray_named_groups["velocity"])
 
+        # pointers to face velocity and center of mass 
         mesh.faces.pointer_groups(fij, mesh.faces.carray_named_groups["com"])
         mesh.faces.pointer_groups(wx,  mesh.faces.carray_named_groups["velocity"])
 
+        # pointers to gradients
         self.grad.pointer_groups(dd, self.grad.carray_named_groups["density"])
         self.grad.pointer_groups(dv, self.grad.carray_named_groups["velocity"])
         self.grad.pointer_groups(dp, self.grad.carray_named_groups["pressure"])
@@ -626,9 +757,11 @@ cdef class PieceWiseLinear(ReconstructionBase):
             num_passive = self.num_passive
             particles.pointer_groups(self.passive, particles.carray_named_groups["passive-scalars"])
 
+            # pointer to passive left/right states
             self.left_states.pointer_groups(self.passive_l, self.carray_named_groups["passive-scalars"])
             self.right_states.pointer_groups(self.passive_r, self.carray_named_groups["passive-scalars"])
 
+            # pointer to gradients of passive scalars
             self.grad.pointer_groups(self.dpassive, self.reconstruct_grad_groups["passive-scalars"])
 
         # create left/right states for each face
@@ -666,8 +799,8 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
                 if add_temporal:
                     # velocity, add time derivative
-                    vl[k][m] = vi[k] - fac*dp[k][i]/d.data[i]
-                    vr[k][m] = vj[k] - fac*dp[k][j]/d.data[j]
+                    vl[k][m] = vi[k] - dt*dp[k][i]/d.data[i]
+                    vr[k][m] = vj[k] - dt*dp[k][j]/d.data[j]
                 else:
                     vl[k][m] = vi[k]
                     vr[k][m] = vj[k]
@@ -679,43 +812,43 @@ cdef class PieceWiseLinear(ReconstructionBase):
                 sepi = fij[k][m] - (x[k][i] + dcx[k][i])
                 sepj = fij[k][m] - (x[k][j] + dcx[k][j])
 
-                # add gradient (eq. 21) and time extrapolation (eq. 37)
+                # add gradient (Eq. 21) and time Extrapolation (eq. 37)
                 # the trace of dv is div of velocity
 
                 # density, add spatial derivative
-                dl.data[m] += dd[k][i]*(sepi - fac*vi[k])
-                dr.data[m] += dd[k][j]*(sepj - fac*vj[k])
+                dl.data[m] += dd[k][i]*(sepi - dt*vi[k])
+                dr.data[m] += dd[k][j]*(sepj - dt*vj[k])
 
                 if add_temporal:
                     # density, add time derivative
-                    dl.data[m] -= fac*d.data[i]*dv[(dim+1)*k][i]
-                    dr.data[m] -= fac*d.data[j]*dv[(dim+1)*k][j]
+                    dl.data[m] -= dt*d.data[i]*dv[(dim+1)*k][i]
+                    dr.data[m] -= dt*d.data[j]*dv[(dim+1)*k][j]
 
                 if self.has_passive_scalars:
                     for n in range(num_passive):
 
                         # passive scalars, add spatial derivative
-                        self.passive_l[n][m] += self.dpassive[n*num_passive + k][m]*(sepi - fac*vi[k])
-                        self.passive_r[n][m] += self.dpassive[n*num_passive + k][m]*(sepj - fac*vj[k])
+                        self.passive_l[n][m] += self.dpassive[n*num_passive + k][m]*(sepi - dt*vi[k])
+                        self.passive_r[n][m] += self.dpassive[n*num_passive + k][m]*(sepj - dt*vj[k])
 
                         if add_temporal:
                             # passive scalars, add time derivative
-                            self.passive_l[n][m] -= fac*self.passive[n][i]*dv[(dim+1)*k][i]
-                            self.passive_r[n][m] -= fac*self.passive[n][j]*dv[(dim+1)*k][j]
+                            self.passive_l[n][m] -= dt*self.passive[n][i]*dv[(dim+1)*k][i]
+                            self.passive_r[n][m] -= dt*self.passive[n][j]*dv[(dim+1)*k][j]
 
                 # pressure, add spatial derivative
-                pl.data[m] += dp[k][i]*(sepi - fac*vi[k])
-                pr.data[m] += dp[k][j]*(sepj - fac*vj[k])
+                pl.data[m] += dp[k][i]*(sepi - dt*vi[k])
+                pr.data[m] += dp[k][j]*(sepj - dt*vj[k])
 
                 if add_temporal:
                     # pressure, add time derivative
-                    pl.data[m] -= fac*gamma*p.data[i]*dv[(dim+1)*k][i]
-                    pr.data[m] -= fac*gamma*p.data[j]*dv[(dim+1)*k][j]
+                    pl.data[m] -= dt*gamma*p.data[i]*dv[(dim+1)*k][i]
+                    pr.data[m] -= dt*gamma*p.data[j]*dv[(dim+1)*k][j]
 
                 # velocity, add spatial derivative
                 for n in range(dim): # over velocity components
-                    vl[n][m] += dv[n*dim+k][i]*(sepi - fac*vi[k])
-                    vr[n][m] += dv[n*dim+k][j]*(sepj - fac*vj[k])
+                    vl[n][m] += dv[n*dim+k][i]*(sepi - dt*vi[k])
+                    vr[n][m] += dv[n*dim+k][j]*(sepj - dt*vj[k])
 
             if dl.data[m] <= 0.0:
                 raise RuntimeError('left density less than zero...... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
