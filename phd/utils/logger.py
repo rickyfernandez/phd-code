@@ -34,7 +34,6 @@ cfstring = "%(name)-3s: [%(levelname)-18s] %(asctime)s: %(message)s"
 
 # setup logger
 phdLogger = logging.getLogger('phd')
-phdLogger.setLevel(logging.DEBUG)
 
 ## create log stream
 sh_handler = logging.StreamHandler()
