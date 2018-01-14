@@ -10,7 +10,7 @@ def exchange_particles(particles, send_data, send_particles, recv_particles, dis
     particles : object
         particle container
     send_data : ParticleArray
-        particle properties to send
+        particle carrays to send
     send_particles : ndarray
         number particles to send to each process
     recv_particles : ndarray
@@ -28,7 +28,7 @@ def exchange_particles(particles, send_data, send_particles, recv_particles, dis
     if fields != None:
         export_fields = fields
     else:
-        export_fields = particles.properties.keys()
+        export_fields = particles.carrays.keys()
 
     if offset_se is None or offset_re is None:
         # displacements for the send and reveive buffers
