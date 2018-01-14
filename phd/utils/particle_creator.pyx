@@ -56,6 +56,7 @@ def HydroParticleCreator(num=0, dim=2, parallel=False):
 
     # set initial particle tags to be real
     pc['tag'][:] = ParticleTAGS.Real
+    pc['type'][:] = ParticleTAGS.Undefined
     pc.carray_named_groups = carray_named_groups
 
     return pc
