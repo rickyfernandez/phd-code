@@ -1,23 +1,29 @@
-from phd.boundary.boundary import \
-        BoundaryType, Boundary, \
-        BoundaryParallel
-
+# containers
 from phd.containers.containers import \
         CarrayContainer
+
+# geometry
+from phd.mesh.mesh import \
+        Mesh
 
 from phd.domain.domain import \
         DomainLimits
 
-# -------- hack delete later --------------
-from phd.integrate.new_integrator import \
-        NewIntegrateBase
+from phd.domain.boundary import \
+        BoundaryConditionBase, \
+        Reflective, \
+        Periodic
 
-from phd.integrate.integrator import \
-        IntegrateBase, \
-        MovingMesh
+from phd.domain.domain_manager import \
+        DomainManager
 
 from phd.load_balance.load_balance import \
         LoadBalance
+
+# physics
+from phd.equation_state.equation_state import \
+        EquationStateBase, \
+        IdealGas
 
 from phd.gravity.gravity_tree import \
         GravityTree
@@ -28,8 +34,14 @@ from phd.gravity.interaction import \
 from phd.gravity.splitter import \
         BarnesHut
 
-from phd.mesh.mesh import \
-        Mesh
+# computation
+from phd.simulation.simulation import \
+        Simulation
+
+from phd.integrate.integrate import \
+        IntegrateBase, \
+        StaticMeshMUSCLHancock, \
+        MovingMeshMUSCLHancock
 
 from phd.reconstruction.reconstruction import \
         ReconstructionBase, \
@@ -39,12 +51,31 @@ from phd.reconstruction.reconstruction import \
 from phd.riemann.riemann import \
         RiemannBase, \
         HLL, \
-        HLLC, \
-        Exact
+        HLLC
+        #Exact
 
-from phd.simulation.simulation import \
-        Simulation
+# input and output
+from phd.io.simulation_time_manager import \
+        SimulationTimeManager
+        #Iteration, \
+        #IterationInterval, \
+        #Time, \
+        #TimeInterval, \
+        #SelectedTimes
 
+from phd.io.simulation_finish import \
+        Iteration, \
+        Time
+
+from phd.io.simulation_output import \
+        IterationInterval, \
+        InitialOutput, \
+        FinalOutput
+
+from phd.io.read_write import \
+        Hdf5
+
+# helpers
 from phd.utils.particle_tags import \
         ParticleTAGS
 
@@ -60,13 +91,6 @@ from phd.utils.particle_creator import \
 from phd.utils.logger import \
         phdLogger
 
-from phd.io.simulation_time import \
-        SimulationTime, \
-        Iteration, \
-        IterationInterval, \
-        Time, \
-        TimeInterval, \
-        SelectedTimes
 
 try:
     import mpi4py.MPI as mpi
