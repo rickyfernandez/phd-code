@@ -70,4 +70,6 @@ cdef class DomainManager:
     cpdef migrate_particles(self, CarrayContainer particles)
 
     cpdef bint ghost_complete(self)
-    cdef values_to_ghost(self, CarrayContainer particles, list fields)
+
+    cdef update_ghost_fields(self, CarrayContainer particles, list fields)
+    cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients)

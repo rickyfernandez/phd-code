@@ -284,9 +284,9 @@ cdef class DomainManager:
         for i in range(self.ghost_vec.size()):
             p = &self.ghost_vec[i]
 
-            maps.data[i]  = p.index # reference to image
-            tags.data[i]  = GHOST   # ghost label
-            types.data[i] = Exterior
+            maps.data[i]  = p.index  # reference to image
+            tags.data[i]  = GHOST    # ghost label
+            types.data[i] = Exterior # ghost outside the domain
 
             for k in range(dim):
 
@@ -306,37 +306,6 @@ cdef class DomainManager:
             raise RuntimeError("not implemented yet")
         else:
             return self.flagged_particles.empty()
-
-    cdef values_to_ghost(self, CarrayContainer particles, list fields):
-        """
-        Transfer data from image particle to ghost particle.
-
-        Parameters
-        ----------
-        pc : CarrayContainer
-            Particle data
-        fields : list
-            List of field strings to update
-        """
-        cdef int i
-        cdef str field
-        cdef LongArray indices = LongArray()
-        cdef np.ndarray indices_npy, map_indices_npy
-        cdef IntArray types = particles.get_carray("type")
-
-        # find all ghost that need to be updated
-        for i in range(particles.get_carray_size()):
-            if types.data[i] == Exterior:
-                indices.append(i)
-
-        if indices.length:
-
-            indices_npy = indices.get_npy_array()
-            map_indices_npy = particles["map"][indices_npy]
-
-            # update ghost with their image data
-            for field in fields:
-                particles[field][indices_npy] = particles[field][map_indices_npy]
 
     cpdef move_generators(self, CarrayContainer particles, double dt):
         """
@@ -365,8 +334,91 @@ cdef class DomainManager:
         """
         self.boundary_condition.migrate_particles(particles, self)
 
-    cpdef update_gradients(CarrayContainer particles, CarrayContainer gradient):
-        self.boundary_condition.update_gradients(particles, gradient)
+
+    cdef update_ghost_fields(self, CarrayContainer particles, list fields):
+        """Transfer ghost fields from their image particle.
+
+        After ghost particles are created their are certain fields that
+        cannot be calculated (i.e. volumen, center-of-mass ...) and need
+        to be upated from their resepective image particle.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Container of particles.
+
+        fields : list
+            List of field strings to update
+
+        """
+        cdef int i
+        cdef str field
+        cdef LongArray indices = LongArray()
+        cdef np.ndarray indices_npy, map_indices_npy
+        cdef IntArray types = particles.get_carray("type")
+
+        if phd._in_parallel:
+            raise NotImplementedError("parallel update_ghost_fields not implemented yet")
+
+        else:
+
+            # find all ghost that need to be updated
+            for i in range(particles.get_carray_size()):
+                if types.data[i] == Exterior:
+                    indices.append(i)
+
+            if indices.length:
+
+                indices_npy = indices.get_npy_array()
+                map_indices_npy = particles["map"][indices_npy]
+
+                # update ghost with their image data
+                for field in fields:
+                    particles[field][indices_npy] = particles[field][map_indices_npy]
+
+    cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients):
+        """Update ghost gradients from their mirror particle.
+
+        After reconstruction only real particles have gradients calculated.
+        This call will transfer those calcluated gradients to the respective
+        ghost particles with appropriate updates from the boundary condition.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Container of particles.
+
+        gradients : CarrayContainer
+            Container of gradients for each primitive field.
+        """
+
+        cdef str field
+        cdef LongArray indices = LongArray()
+        cdef IntArray types = particles.get_carray("type")
+        cdef np.ndarray indices_npy, map_indices_npy
+
+        if phd._in_parallel:
+            raise NotImplemented("parallel function called!")
+
+        else:
+
+            # find all ghost that are outside the domain that
+            #need to be updated
+            for i in range(particles.get_carray_size()):
+                if types.data[i] == Exterior:
+                    indices.append(i)
+
+            # each ghost particle knows the id from which
+            # it was created from the map array
+            indices_npy = indices.get_npy_array()
+            map_indices_npy = particles["map"][indices_npy]
+
+            # update ghost gradient from image particle 
+            for field in gradients.carray_named_groups["primitive"]:
+                gradients[field][indices_npy] = gradients[field][map_indices_npy]
+
+            # modify gradient by boundary condition
+            self.boundary_condition.update_gradients(particles, gradients, self)
 
 # ---------------------- add after serial working again -------------------------------
 #cdef class DomainManager:
