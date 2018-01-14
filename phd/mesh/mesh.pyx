@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from libc.math cimport sqrt
 cimport libc.stdlib as stdlib
@@ -6,6 +7,8 @@ from ..mesh.pytess cimport PyTess2d#, PyTess3d
 from ..utils.particle_tags import ParticleTAGS
 from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, LongArray, IntArray
+
+phdLogger = logging.getLogger("phd")
 
 cdef int REAL = ParticleTAGS.Real
 
@@ -87,7 +90,7 @@ cdef class Mesh:
         cdef int dim
         cdef str field, dtype
         cdef str axis, dimension = 'xyz'[:self.param_dim]
-        cdef int num_particles = particles.get_number_of_items()
+        cdef int num_particles = particles.get_carray_size()
 
         # dimension of the problem
         dim = len(particles.carray_named_groups['position'])
@@ -96,7 +99,7 @@ cdef class Mesh:
 
         if self.param_dim == 2:
             for field, dtype in fields_to_register_2d.iteritems():
-                if field not in particles.carray_info.keys():
+                if field not in particles.carrays.keys():
                     particles.register_carray(num_particles, field, dtype)
 
             particles.carray_named_groups["w"] = []
@@ -107,7 +110,7 @@ cdef class Mesh:
 
 #        elif dim == 3:
 #            for field, dtype in fields_to_register_3d.iteritems():
-#                if field not in particles.carray_info.keys():
+#                if field not in particles.carrays.keys():
 #                    particles.register(num_particles, field, dtype)
 
         self.update_ghost_fields = list(particles.carray_named_groups['dcom'])
@@ -149,7 +152,7 @@ cdef class Mesh:
 
         # remove current ghost particles
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
-        start_new_ghost = stop_new_ghost = particles.get_number_of_items()
+        start_new_ghost = stop_new_ghost = particles.get_carray_size()
 
         # reference position and radius 
         rp = r.get_data_ptr()
@@ -166,9 +169,9 @@ cdef class Mesh:
         while True:
 
             # add ghost particles untill mesh is complete
-            #start_new_ghost = particles.get_number_of_items()
+            #start_new_ghost = particles.get_carray_size()
             domain_manager.create_ghost_particles(particles)
-            stop_new_ghost = particles.get_number_of_items()
+            stop_new_ghost = particles.get_carray_size()
 
             # because of malloc
             rp = r.get_data_ptr()
@@ -215,6 +218,8 @@ cdef class Mesh:
 
         cdef int num_faces, i, j, fail
 
+        phdLogger.info("Mesh: Starting mesh creation")
+
         # release memory used in the tessellation
         self.reset_mesh()
         self.tessellate(particles, domain_manager)
@@ -236,8 +241,8 @@ cdef class Mesh:
         pair_j = f_pair_j.get_data_ptr()
         area   = f_area.get_data_ptr()
 
-        self.neighbors.resize(particles.get_number_of_items())
-        for i in range(particles.get_number_of_items()):
+        self.neighbors.resize(particles.get_carray_size())
+        for i in range(particles.get_carray_size()):
             self.neighbors[i].resize(0)
 
         # store particle and face information for the tessellation
@@ -251,7 +256,8 @@ cdef class Mesh:
         self.faces.resize(fail)
 
         # transfer particle information to ghost particles
-        domain_manager.values_to_ghost(particles, self.update_ghost_fields)
+        #domain_manager.values_to_ghost(particles, self.update_ghost_fields)
+        domain_manager.update_ghost_fields(particles, self.update_ghost_fields)
 
     cpdef reset_mesh(self):
         self.tess.reset_tess()
@@ -272,7 +278,7 @@ cdef class Mesh:
         dim = len(particles.carray_named_groups['position'])
 
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
-        num_real_particles = particles.get_number_of_items()
+        num_real_particles = particles.get_carray_size()
 
         # create ghost, extract geometric values
         self.build_geometry(particles, domain_manager)
@@ -311,7 +317,7 @@ cdef class Mesh:
         particles.pointer_groups(wx,  particles.carray_named_groups['w'])
         particles.pointer_groups(dcx, particles.carray_named_groups['dcom'])
 
-        for i in range(particles.get_number_of_items()):
+        for i in range(particles.get_carray_size()):
 
             for k in range(dim):
                 wx[k][i] = v[k][i]
@@ -368,7 +374,7 @@ cdef class Mesh:
         self.faces.pointer_groups(fv,  self.faces.carray_named_groups['velocity'])
 
         # loop over each face in mesh
-        for n in range(self.faces.get_number_of_items()):
+        for n in range(self.faces.get_carray_size()):
 
             # particles that define face
             i = pair_i.data[n]
@@ -412,7 +418,7 @@ cdef class Mesh:
         riemann.fluxes.pointer_groups(fmv, riemann.fluxes.carray_named_groups['momentum'])
 
         # update conserved quantities
-        for n in range(self.faces.get_number_of_items()):
+        for n in range(self.faces.get_carray_size()):
 
             i = pair_i.data[n]
             j = pair_j.data[n]
@@ -445,7 +451,7 @@ cdef class Mesh:
 #        self.tess.reindex_ghost(particles, ...)
 #
 #        # remove ghost particles
-#        num_ghost_particles = particle.get_number_of_items() - num_real_particles
+#        num_ghost_particles = particle.get_carray_size() - num_real_particles
 #        for i in range(num_ghost_particles):
 #            self.indices[i] = num_real_particles + i
 #
