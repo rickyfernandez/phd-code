@@ -1,9 +1,10 @@
 import phd
 
-from ..utils.carray cimport IntArray
+from ..utils.carray cimport IntArray, LongArray
 from ..utils.particle_tags import ParticleTAGS
 
 cdef int REAL = ParticleTAGS.Real
+cdef int EXTERIOR = ParticleTAGS.Exterior
 
 cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
     """
@@ -40,11 +41,16 @@ cdef class BoundaryConditionBase:
         raise NotImplementedError(msg)
 
     cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager):
-        msg = "BoundaryBase::create_ghost_particle_serial!"
+        msg = "BoundaryBase::create_ghost_particle_serial called!"
         raise NotImplementedError(msg)
 
     cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
-        msg = "BoundaryBase::create_ghost_particle_serial!"
+        msg = "BoundaryBase::create_ghost_particle_serial called!"
+        raise NotImplementedError(msg)
+
+    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
+                               DomainManager domain_manager):
+        msg = "BoundaryBase::update_gradients called!"
         raise NotImplementedError(msg)
 
 cdef class Reflective(BoundaryConditionBase):
@@ -128,58 +134,68 @@ cdef class Reflective(BoundaryConditionBase):
                     raise RuntimeError("particle left domain in reflective boundary condition!!")
 
 
-    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradient):
+    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
+                               DomainManager domain_manager):
         """Transfer gradient from image particle to ghost particle with reflective
         boundary condition.
+
+        For reflective boundary condition the velocity gradient normal to the
+        boundary interface has to be flipped. This function finds all ghost
+        particles outside the domain and flips the corresponding component.
 
         Parameters
         ----------
         particles : CarrayContainer
             Gradient data
 
-        fields : list
-            List of field strings to update
+        gradients : CarrayContainer
+            Container of gradients for each primitive field.
+
         """
         cdef str field
-        cdef int i, j, ip
+        cdef int i, j, k, ip
         cdef np.float64_t *x[3], *dv[4]
 
         cdef LongArray indices = LongArray()
-        cdef IntArray types = pc.get_carray("type")
+        cdef IntArray types = particles.get_carray("type")
         cdef np.ndarray indices_npy, map_indices_npy
 
         dim = len(particles.carray_named_group["position"])
 
         # find all ghost that need to be updated
         for i in range(particles.get_carray_size()):
-            if types.data[i] == Exterior:
+            if types.data[i] == EXTERIOR:
                 indices.append(i)
 
         # each ghost particle knows the id from which
         # it was created from
         indices_npy = indices.get_npy_array()
-        map_indices_npy = pc["map"][indices_npy]
+        map_indices_npy = particles["map"][indices_npy]
 
         # update ghost with their image data
-        for field in gradient.named_carray_groups["primitive"]:
-            gradient[field][indices_npy] = gradient[field][map_indices_npy]
+        for field in gradients.named_carray_groups["primitive"]:
+            gradients[field][indices_npy] = gradients[field][map_indices_npy]
 
-        particles.pointer_groups(x, particles.named_groups["position"])
-        gradient.pointer_groups(dv, gradient.named_groups["velocity"])
+        particles.pointer_groups(x, particles.carray_named_group["position"])
+        gradients.pointer_groups(dv, gradients.carray_named_group["velocity"])
 
         for i in range(indices_npy.size): # every exterior ghost
-            for j in range(dim): # each dimension
 
-                ip = indices.data[i]
+            # extract particle
+            ip = indices.data[i]
 
-                # reverse the normal of velocity gradient
-                if x[j][ip] < self.domain.bounds[0][j]:
-                    # flip gradient component
-                    dv[(dim+1)*j][ip] *= -1
+            # check each dimension
+            for j in range(dim):
 
-                if x[j][ip] > self.domain.bounds[1][j]:
-                    # flip gradient component
-                    dv[(dim+1)*j][ip] *= -1
+                if x[j][ip] < self.domain_manager.domain.bounds[0][j]:
+                    for k in range(dim):
+                        # flip gradient component
+                        dv[dim*k + j][ip] *= -1
+
+                if x[j][ip] > self.domain_manager.domain.bounds[1][j]:
+                    for k in range(dim):
+                        # flip gradient component
+                        dv[dim*k + j][ip] *= -1
 
 
 cdef class Periodic(BoundaryConditionBase):
@@ -220,6 +236,24 @@ cdef class Periodic(BoundaryConditionBase):
                         domain_manager.ghost_vec.push_back(
                                 BoundaryParticle(xs, p.v,
                                     p.index, 0, PERIODIC, dim))
+
+    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
+                               DomainManager domain_manager):
+        """Transfer gradient from image particle to ghost particle with reflective
+        boundary condition.
+
+        For periodic boundary condition the there is no need to update gradients.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Gradient data
+
+        gradients : CarrayContainer
+            Container of gradients for each primitive field.
+
+        """
+        pass
 
 #    cdef void create_ghost_particle_serial(self, np.float64_t x[3], np.float64_t *xp[3], DomainManager domain_manager):
 #        cdef int k
