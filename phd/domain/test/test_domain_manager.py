@@ -68,7 +68,7 @@ class TestDomainManagerSetup(unittest.TestCase):
         self.domain_manager.create_ghost_particles(particles)
 
         # two ghost particles created
-        self.assertTrue(particles.get_number_of_items() == 3)
+        self.assertTrue(particles.get_carray_size() == 3)
 
         # two ghost particles should of been created
         # first particle reflected across x-min
@@ -110,14 +110,14 @@ class TestDomainManagerSetup(unittest.TestCase):
         self.domain_manager.create_ghost_particles(particles)
 
         # two ghost particles created
-        self.assertTrue(particles.get_number_of_items() == 3)
+        self.assertTrue(particles.get_carray_size() == 3)
 
         particles['radius'][0] = 0.6
         self.domain_manager.update_search_radius(particles)
         self.domain_manager.create_ghost_particles(particles)
 
         # no new ghost should be created
-        self.assertTrue(particles.get_number_of_items() == 3)
+        self.assertTrue(particles.get_carray_size() == 3)
 
 
 #    def test_setup_for_ghost_creation_periodic(self):
@@ -143,7 +143,7 @@ class TestDomainManagerSetup(unittest.TestCase):
 #        self.domain_manager.create_ghost_particles(particles)
 #
 #        # three ghost particles shoulb be created
-#        self.assertTrue(particles.get_number_of_items() == 4)
+#        self.assertTrue(particles.get_carray_size() == 4)
 #
 #        # first ghost particle, see boundary documentation
 #        # for shift pattern
