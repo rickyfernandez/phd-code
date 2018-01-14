@@ -116,7 +116,7 @@ cdef class LoadBalance:
         # extract particles to send 
         send_data = pc.get_sendbufs(export_ids_npy)
         pc.remove_items(export_ids_npy)
-        temp = pc.get_number_of_items()
+        temp = pc.get_carray_size()
 
         # exchange load balance particles
         pc.extend(np.sum(recvbuf))
@@ -135,7 +135,7 @@ cdef class LoadBalance:
         cdef LongLongArray keys = pc.get_carray("key")
 
         # work is the number of local particles in leaf
-        for i in range(pc.get_number_of_items()):
+        for i in range(pc.get_carray_size()):
             node = self.tree.find_leaf(keys.data[i])
             work[node.array_index] += 1
 
@@ -185,7 +185,7 @@ cdef class LoadBalance:
         cdef int i, pid
         cdef LongLongArray keys = pc.get_carray("key")
 
-        for i in range(pc.get_number_of_items()):
+        for i in range(pc.get_carray_size()):
 
             node = self.tree.find_leaf(keys.data[i])
             pid  = leaf_pid.data[node.array_index]
@@ -211,7 +211,7 @@ cdef class LoadBalance:
 
         pc.pointer_groups(x, pc.carray_named_groups['position'])
 
-        for i in range(pc.get_number_of_items()):
+        for i in range(pc.get_carray_size()):
             for j in range(self.tree.dim):
                 xh[j] = <np.int32_t> ( (x[j][i] - self.corner[j])*self.fac )
 
