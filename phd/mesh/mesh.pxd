@@ -21,6 +21,9 @@ cdef class Mesh:
     cdef public bint regularize
     cdef public int num_neighbors
 
+    cdef dict mesh_fields
+    cdef dict mesh_field_groups
+
     cdef public list update_ghost_fields
     cdef bint particle_fields_registered
 
