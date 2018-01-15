@@ -14,7 +14,7 @@ class TestMeshSetup2d(unittest.TestCase):
     """Tests for the Reconstruction class."""
 
     def setUp(self):
-        self.mesh = Mesh(param_dim=2)
+        self.mesh = Mesh(dim=2)
 
     def test_register_fields(self):
         # create 2d particles
