@@ -160,7 +160,7 @@ cdef class Reflective(BoundaryConditionBase):
         cdef IntArray types = particles.get_carray("type")
         cdef np.ndarray indices_npy, map_indices_npy
 
-        dim = len(particles.carray_named_group["position"])
+        dim = len(particles.carray_named_groups["position"])
 
         # find all ghost that need to be updated
         for i in range(particles.get_carray_size()):
@@ -173,11 +173,11 @@ cdef class Reflective(BoundaryConditionBase):
         map_indices_npy = particles["map"][indices_npy]
 
         # update ghost with their image data
-        for field in gradients.named_carray_groups["primitive"]:
+        for field in gradients.carray_named_groups["primitive"]:
             gradients[field][indices_npy] = gradients[field][map_indices_npy]
 
-        particles.pointer_groups(x, particles.carray_named_group["position"])
-        gradients.pointer_groups(dv, gradients.carray_named_group["velocity"])
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
+        gradients.pointer_groups(dv, gradients.carray_named_groups["velocity"])
 
         for i in range(indices_npy.size): # every exterior ghost
 
@@ -187,12 +187,12 @@ cdef class Reflective(BoundaryConditionBase):
             # check each dimension
             for j in range(dim):
 
-                if x[j][ip] < self.domain_manager.domain.bounds[0][j]:
+                if x[j][ip] < domain_manager.domain.bounds[0][j]:
                     for k in range(dim):
                         # flip gradient component
                         dv[dim*k + j][ip] *= -1
 
-                if x[j][ip] > self.domain_manager.domain.bounds[1][j]:
+                if x[j][ip] > domain_manager.domain.bounds[1][j]:
                     for k in range(dim):
                         # flip gradient component
                         dv[dim*k + j][ip] *= -1
