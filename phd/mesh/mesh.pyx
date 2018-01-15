@@ -60,17 +60,27 @@ cdef dict fields_to_register_3d = dict(fields_to_register_2d, **{
     })
 
 cdef class Mesh:
+    """Voronoi mesh responsible to build mesh, neighbor information,
+    and all geometric quantities.
+
+    Attributes
+    ----------
+    dim : int
+        Dimension of the problem.
+
+    regularize : bool
+        Add regularization to velocity mesh generators.
+
+    eta : double
+        Regularize parameter.
+
+    num_neighbors : int
+        Initial number of neighbors for each particle. Used
+        to allocate storage space.
+    """
     def __init__(self, int dim=2, bint regularize=True,
                  int relax_iterations = 0, double eta=0.25,
                  int num_neighbors=128, **kwargs):
-        """
-        Constructor for Mesh base class.
-
-        relax_iterations : int
-            If non zero it signals the integrator to perform that
-            many numbers of mesh relaxtion in before_loop.
-
-        """
         # domain manager needs to be set
         self.particle_fields_registered = False
 
@@ -94,11 +104,11 @@ cdef class Mesh:
         """
         cdef int dim
         cdef str field, dtype
-        cdef str axis, dimension = 'xyz'[:self.dim]
+        cdef str axis, dimension = "xyz"[:self.dim]
         cdef int num_particles = particles.get_carray_size()
 
         # dimension of the problem
-        dim = len(particles.carray_named_groups['position'])
+        dim = len(particles.carray_named_groups["position"])
         if self.dim != dim:
             raise RuntimeError("Inconsistent dimension with particles")
 
@@ -118,20 +128,22 @@ cdef class Mesh:
 #                if field not in particles.carrays.keys():
 #                    particles.register(num_particles, field, dtype)
 
-        self.update_ghost_fields = list(particles.carray_named_groups['dcom'])
-        self.update_ghost_fields.append('volume')
+        self.update_ghost_fields = list(particles.carray_named_groups["dcom"])
+        self.update_ghost_fields.append("volume")
 
         # record fields have been registered
         self.particle_fields_registered = True
 
     def initialize(self):
-        """
+        """Setup all connections for computation classes. Should check
+        always if particle_fields_registered is True.
         """
         cdef nn nearest_neigh = nn()
-        self.neighbors = nn_vec(self.num_neighbors, nearest_neigh)
 
         if not self.particle_fields_registered:
-            raise RuntimeError("Fields not registered in particles by Mesh")
+            raise RuntimeError("ERROR: Fields not registered in particles by Mesh!")
+
+        self.neighbors = nn_vec(self.num_neighbors, nearest_neigh)
 
         if self.dim == 2:
             self.tess = PyTess2d()
@@ -143,11 +155,28 @@ cdef class Mesh:
         #    self.faces = CarrayContainer(carrays_to_register=face_vars_3d)
 
     cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
-        """
-        Create voronoi mesh by first adding local particles. Then
-        using the domain mangager flag particles that are incomplete
-        and export them. Continue the process unitil the mesh is
-        complete.
+        """Create voronoi tessellation.
+
+        The method of creating the voronoi tessellation follows the idea of
+        Efficient Delaunay Tessellation Through K-D Tree Decomposition
+        by Dmitriy Morozov and Tom Peterka. The general idea is create
+        a local tessellation. Those particles will have either finite
+        or infinite radius. Use this radius (for infinite assign a radius)
+        and create boundary particles if it intersects the boundary or export
+        if intersects another processors boundary. Add new particles to the
+        mesh. If the new radius is smaller then previous radius then the
+        particle can not influence anymore otherwise increase the radius
+        untill all particles are done. In this first implementation we don't
+        have a kd tree but use octtree for searches.
+
+        Parameters
+        ---------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
         """
         cdef int i
         cdef int fail
@@ -180,7 +209,7 @@ cdef class Mesh:
 
             # because of malloc
             rp = r.get_data_ptr()
-            particles.pointer_groups(xp, particles.carray_named_groups['position'])
+            particles.pointer_groups(xp, particles.carray_named_groups["position"])
 
             # add ghost particle to mesh
             if start_new_ghost != stop_new_ghost:
@@ -202,9 +231,17 @@ cdef class Mesh:
                 break
 
     cpdef build_geometry(self, CarrayContainer particles, DomainManager domain_manager):
-        """
-        Build the voronoi mesh and then extract mesh information, i.e
+        """Build the voronoi mesh and then extract mesh information, i.e
         volumes, face information, and neighbors.
+
+        Parameters
+        ---------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
         """
         # particle information
         cdef DoubleArray p_vol = particles.get_carray("volume")
@@ -261,26 +298,31 @@ cdef class Mesh:
         self.faces.resize(fail)
 
         # transfer particle information to ghost particles
-        #domain_manager.values_to_ghost(particles, self.update_ghost_fields)
         domain_manager.update_ghost_fields(particles, self.update_ghost_fields)
 
     cpdef reset_mesh(self):
+        """Clear out mesh data.
+        """
         self.tess.reset_tess()
 
     cpdef relax(self, CarrayContainer particles, DomainManager domain_manager):
-        """
-        Perform mesh relaxation by moving particles to their center of mass.
-        Particles that move outside the domain and ghost particles are removed
-        from the container. This allows to call this method multiple times, without
-        building the mesh twice per call. You will have build the mesh after this
-        call to get ghost particles.
+        """Perform mesh relaxation by moving particles to their center of mass.
+
+        Parameters
+        ---------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
         """
         cdef double xp[3]
         cdef np.float64_t *x[3], *dcx[3]
         cdef int i, k, dim, num_real_particles
         cdef IntArray tags = particles.get_carray("tag")
 
-        dim = len(particles.carray_named_groups['position'])
+        dim = len(particles.carray_named_groups["position"])
 
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
         num_real_particles = particles.get_carray_size()
@@ -289,8 +331,8 @@ cdef class Mesh:
         self.build_geometry(particles, domain_manager)
 
         # update real particle positions
-        particles.pointer_groups(x,   particles.carray_named_groups['position'])
-        particles.pointer_groups(dcx, particles.carray_named_groups['dcom'])
+        particles.pointer_groups(x,   particles.carray_named_groups["position"])
+        particles.pointer_groups(dcx, particles.carray_named_groups["dcom"])
         for i in range(num_real_particles):
             for k in range(dim):
                 x[k][i] += dcx[k][i]
@@ -298,11 +340,21 @@ cdef class Mesh:
 
         domain_manager.migrate_particles(particles)
 
-    cpdef assign_generator_velocities(self, CarrayContainer particles, EquationStateBase equation_state):
-        """
-        Assigns particle velocities. Particle velocities are
-        equal to local fluid velocity plus a regularization
-        term. The algorithm is taken from Springel (2009).
+    cpdef assign_generator_velocities(self, CarrayContainer particles,
+                                      EquationStateBase equation_state):
+        """Assigns particle velocities.
+
+        Particle velocities are equal to local fluid velocity plus a
+        regularization term. The algorithm is taken from Springel (2009).
+
+        Parameters
+        ---------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        eos : EquationStateBase
+            Thermodynamic equation of state.
+
         """
         # particle values
         cdef DoubleArray r = particles.get_carray("density")
@@ -315,12 +367,12 @@ cdef class Mesh:
         cdef double eta = self.eta
         cdef np.float64_t *x[3], *v[3], *wx[3], *dcx[3]
 
-        dim = len(particles.carray_named_groups['position'])
+        dim = len(particles.carray_named_groups["position"])
 
-        particles.pointer_groups(x,   particles.carray_named_groups['position'])
-        particles.pointer_groups(v,   particles.carray_named_groups['velocity'])
-        particles.pointer_groups(wx,  particles.carray_named_groups['w'])
-        particles.pointer_groups(dcx, particles.carray_named_groups['dcom'])
+        particles.pointer_groups(x,   particles.carray_named_groups["position"])
+        particles.pointer_groups(v,   particles.carray_named_groups["velocity"])
+        particles.pointer_groups(wx,  particles.carray_named_groups["w"])
+        particles.pointer_groups(dcx, particles.carray_named_groups["dcom"])
 
         for i in range(particles.get_carray_size()):
 
@@ -344,7 +396,7 @@ cdef class Mesh:
                 if dim == 3:
                     R = pow(3.0*vol.data[i]/(4.0*np.pi), 1.0/3.0)
 
-                # regularize - eq. 63
+                # regularize Eq. 63
                 if ((0.9 <= d/(eta*R)) and (d/(eta*R) < 1.1)):
                     for k in range(dim):
                         wx[k][i] += c*dcx[k][i]*(d - 0.9*eta*R)/(d*0.2*eta*R)
@@ -354,12 +406,18 @@ cdef class Mesh:
                         wx[k][i] += c*dcx[k][i]/d
 
     cpdef assign_face_velocities(self, CarrayContainer particles):
-        """
-        Assigns velocities to the center of mass of the face
-        defined by neighboring particles. The face velocity
-        is the average of particle velocities that define
-        the face plus a residual motion. The algorithm is
-        taken from Springel (2009).
+        """Assigns velocities to face center of face defined by
+        neighboring particles.
+
+        The face velocity is the average of particle velocities
+        that define the face plus a residual motion. The algorithm
+        is taken from Springel (2009).
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         # face information
         cdef LongArray pair_i = self.faces.get_carray("pair-i")
@@ -370,13 +428,13 @@ cdef class Mesh:
         cdef double factor, denom
         cdef np.float64_t *x[3], *wx[3], *fv[3], *fij[3]
 
-        dim = len(particles.carray_named_groups['position'])
+        dim = len(particles.carray_named_groups["position"])
 
-        particles.pointer_groups(wx, particles.carray_named_groups['w'])
-        particles.pointer_groups(x,  particles.carray_named_groups['position'])
+        particles.pointer_groups(wx, particles.carray_named_groups["w"])
+        particles.pointer_groups(x,  particles.carray_named_groups["position"])
 
-        self.faces.pointer_groups(fij, self.faces.carray_named_groups['com'])
-        self.faces.pointer_groups(fv,  self.faces.carray_named_groups['velocity'])
+        self.faces.pointer_groups(fij, self.faces.carray_named_groups["com"])
+        self.faces.pointer_groups(fv,  self.faces.carray_named_groups["velocity"])
 
         # loop over each face in mesh
         for n in range(self.faces.get_carray_size()):
@@ -385,20 +443,32 @@ cdef class Mesh:
             i = pair_i.data[n]
             j = pair_j.data[n]
 
-            # correct face velocity due to residual motion - eq. 32
+            # correct face velocity due to residual motion Eq. 32
             factor = denom = 0.0
             for k in range(dim):
                 factor += (wx[k][i] - wx[k][j])*(fij[k][n] - 0.5*(x[k][i] + x[k][j]))
                 denom  += pow(x[k][j] - x[k][i], 2.0)
             factor /= denom
 
-            # the face velocity mean of particle velocities and residual term - eq. 33
+            # face velocity mean of particle velocities and residual term Eq. 33
             for k in range(dim):
                 fv[k][n] = 0.5*(wx[k][i] + wx[k][j]) + factor*(x[k][j] - x[k][i])
 
     cpdef update_from_fluxes(self, CarrayContainer particles, RiemannBase riemann, double dt):
-        """Update conservative variables from fluxes"""
+        """Update conservative variables from fluxes.
 
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        riemann : RiemannBase
+            Class that solves the riemann problem.
+
+        dt : double
+            Simulation time step.
+
+        """
         # face information
         cdef DoubleArray area = self.faces.get_carray("area")
         cdef LongArray pair_i = self.faces.get_carray("pair-i")
@@ -417,16 +487,19 @@ cdef class Mesh:
         cdef int i, j, k, n, dim
         cdef np.float64_t *x[3], *wx[3], *mv[3], *fmv[3]
 
-        dim = len(particles.carray_named_groups['position'])
+        dim = len(particles.carray_named_groups["position"])
 
-        particles.pointer_groups(mv, particles.carray_named_groups['momentum'])
-        riemann.fluxes.pointer_groups(fmv, riemann.fluxes.carray_named_groups['momentum'])
+        particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
+        riemann.fluxes.pointer_groups(fmv, riemann.fluxes.carray_named_groups["momentum"])
 
         # update conserved quantities
         for n in range(self.faces.get_carray_size()):
 
+            # particles that make up the face
             i = pair_i.data[n]
             j = pair_j.data[n]
+
+            # area of the face
             a = area.data[n]
 
             # flux entering cell defined by particle i
