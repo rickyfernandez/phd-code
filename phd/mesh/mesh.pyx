@@ -60,9 +60,9 @@ cdef dict fields_to_register_3d = dict(fields_to_register_2d, **{
     })
 
 cdef class Mesh:
-    def __init__(self, int param_dim=2, bint param_regularize=True,
-                 int relax_iterations = 0, double param_eta=0.25,
-                 int param_num_neighbors=128):
+    def __init__(self, int dim=2, bint regularize=True,
+                 int relax_iterations = 0, double eta=0.25,
+                 int num_neighbors=128, **kwargs):
         """
         Constructor for Mesh base class.
 
@@ -77,27 +77,32 @@ cdef class Mesh:
         # perform lloyd relaxtion scheme if non-zero
         self.relax_iterations = relax_iterations
 
-        self.param_dim = param_dim
-        self.param_eta = param_eta
-        self.param_regularize = param_regularize
-        self.param_num_neighbors = param_num_neighbors
+        self.dim = dim
+        self.eta = eta
+        self.regularize = regularize
+        self.num_neighbors = num_neighbors
 
     def register_fields(self, CarrayContainer particles):
-        """
-        Register mesh fields into the particle container (i.e.
-        volume, center of mass)
+        """Register mesh fields into the particle container (i.e.
+        volume, center of mass).
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         cdef int dim
         cdef str field, dtype
-        cdef str axis, dimension = 'xyz'[:self.param_dim]
+        cdef str axis, dimension = 'xyz'[:self.dim]
         cdef int num_particles = particles.get_carray_size()
 
         # dimension of the problem
         dim = len(particles.carray_named_groups['position'])
-        if self.param_dim != dim:
+        if self.dim != dim:
             raise RuntimeError("Inconsistent dimension with particles")
 
-        if self.param_dim == 2:
+        if self.dim == 2:
             for field, dtype in fields_to_register_2d.iteritems():
                 if field not in particles.carrays.keys():
                     particles.register_carray(num_particles, field, dtype)
@@ -123,12 +128,12 @@ cdef class Mesh:
         """
         """
         cdef nn nearest_neigh = nn()
-        self.neighbors = nn_vec(self.param_num_neighbors, nearest_neigh)
+        self.neighbors = nn_vec(self.num_neighbors, nearest_neigh)
 
         if not self.particle_fields_registered:
             raise RuntimeError("Fields not registered in particles by Mesh")
 
-        if self.param_dim == 2:
+        if self.dim == 2:
             self.tess = PyTess2d()
             self.faces = CarrayContainer(carrays_to_register=face_vars_2d)
             self.faces.carray_named_groups = named_group_2d
@@ -307,7 +312,7 @@ cdef class Mesh:
         # local variables
         cdef int i, k, dim
         cdef double c, d, R
-        cdef double eta = self.param_eta
+        cdef double eta = self.eta
         cdef np.float64_t *x[3], *v[3], *wx[3], *dcx[3]
 
         dim = len(particles.carray_named_groups['position'])
@@ -322,7 +327,7 @@ cdef class Mesh:
             for k in range(dim):
                 wx[k][i] = v[k][i]
 
-            if self.param_regularize:
+            if self.regularize:
 
                 # sound speed 
                 c = equation_state.sound_speed(r.data[i], p.data[i])

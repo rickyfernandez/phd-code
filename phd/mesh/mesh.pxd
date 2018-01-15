@@ -16,10 +16,10 @@ cdef class Mesh:
 
     # initialization parameters
     cdef public int relax_iterations
-    cdef public int param_dim
-    cdef public double param_eta
-    cdef public bint param_regularize
-    cdef public int param_num_neighbors
+    cdef public int dim
+    cdef public double eta
+    cdef public bint regularize
+    cdef public int num_neighbors
 
     cdef public list update_ghost_fields
     cdef bint particle_fields_registered
