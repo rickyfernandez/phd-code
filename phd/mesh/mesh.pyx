@@ -65,9 +65,6 @@ cdef class Mesh:
 
     Attributes
     ----------
-    dim : int
-        Dimension of the problem.
-
     regularize : bool
         Add regularization to velocity mesh generators.
 
@@ -77,17 +74,16 @@ cdef class Mesh:
     num_neighbors : int
         Initial number of neighbors for each particle. Used
         to allocate storage space.
+
     """
-    def __init__(self, int dim=2, bint regularize=True,
-                 int relax_iterations = 0, double eta=0.25,
-                 int num_neighbors=128, **kwargs):
+    def __init__(self, bint regularize=True, int relax_iterations = 0,
+                 double eta=0.25, int num_neighbors=128, **kwargs):
         # domain manager needs to be set
         self.particle_fields_registered = False
 
         # perform lloyd relaxtion scheme if non-zero
         self.relax_iterations = relax_iterations
 
-        self.dim = dim
         self.eta = eta
         self.regularize = regularize
         self.num_neighbors = num_neighbors
@@ -104,26 +100,31 @@ cdef class Mesh:
         """
         cdef int dim
         cdef str field, dtype
-        cdef str axis, dimension = "xyz"[:self.dim]
+        cdef str axis, dimension
         cdef int num_particles = particles.get_carray_size()
 
-        # dimension of the problem
         dim = len(particles.carray_named_groups["position"])
-        if self.dim != dim:
-            raise RuntimeError("Inconsistent dimension with particles")
+        dimension = "xyz"[:dim]
 
-        if self.dim == 2:
+        particles.carray_named_groups["w"] = []
+        particles.carray_named_groups["dcom"] = []
+
+        for axis in dimension:
+            particles.carray_named_groups["w"].append("w-" + axis)
+            particles.carray_named_groups["dcom"].append("dcom-" + axis)
+
+        if dim == 2:
+            self.face_fields = face_vars_2d
+            self.face_field_groups = named_group_2d
+
             for field, dtype in fields_to_register_2d.iteritems():
                 if field not in particles.carrays.keys():
                     particles.register_carray(num_particles, field, dtype)
 
-            particles.carray_named_groups["w"] = []
-            particles.carray_named_groups["dcom"] = []
-            for axis in dimension:
-                particles.carray_named_groups["w"].append("w-" + axis)
-                particles.carray_named_groups["dcom"].append("dcom-" + axis)
-
 #        elif dim == 3:
+#            self.face_fields = face_vars_3d
+#            self.face_field_groups = named_group_3d
+#
 #            for field, dtype in fields_to_register_3d.iteritems():
 #                if field not in particles.carrays.keys():
 #                    particles.register(num_particles, field, dtype)
@@ -138,21 +139,22 @@ cdef class Mesh:
         """Setup all connections for computation classes. Should check
         always if particle_fields_registered is True.
         """
+        cdef int dim
         cdef nn nearest_neigh = nn()
 
         if not self.particle_fields_registered:
             raise RuntimeError("ERROR: Fields not registered in particles by Mesh!")
 
+        dim = len(self.face_field_groups["velocity"])
         self.neighbors = nn_vec(self.num_neighbors, nearest_neigh)
 
-        if self.dim == 2:
+        if dim == 2:
             self.tess = PyTess2d()
-            self.faces = CarrayContainer(carrays_to_register=face_vars_2d)
-            self.faces.carray_named_groups = named_group_2d
-
-        #elif self.dim == 3:
+        #elif dim == 3:
         #    self.tess = PyTess3d()
-        #    self.faces = CarrayContainer(carrays_to_register=face_vars_3d)
+
+        self.faces = CarrayContainer(carrays_to_register=self.face_fields)
+        self.faces.carray_named_groups = self.face_field_groups
 
     cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
         """Create voronoi tessellation.
