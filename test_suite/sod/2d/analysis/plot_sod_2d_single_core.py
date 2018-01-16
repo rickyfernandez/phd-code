@@ -3,7 +3,8 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 
-f = h5py.File('../single_core/cartesian/sod_2d_cartesian_output/sod_2d_cartesian_0072.hdf5', 'r')
+#f = h5py.File('../single_core/cartesian/sod_2d_cartesian_output/sod_2d_cartesian_0072.hdf5', 'r')
+f = h5py.File('../single_core/cartesian/sod_2d_cartesian_output/sod_2d_cartesian_0096.hdf5', 'r')
 fe = h5py.File("riemann_sol.hdf5", "r")
 
 indices = f['/tag'][:] == phd.ParticleTAGS.Real
@@ -36,5 +37,5 @@ plt.xlabel("Position")
 plt.ylabel("Pressure")
 
 plt.tight_layout()
-plt.savefig("sod_2d_single_core.pdf")
+#plt.savefig("sod_2d_single_core.pdf")
 plt.show()
