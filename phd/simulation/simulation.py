@@ -150,12 +150,18 @@ class Simulation(object):
 
             # compute new time step
             self.compute_time_step()
+            phdLogger.info("Starting iteration: %d time: %f dt: %f" %\
+                    (self.integrator.iteration,
+                     self.integrator.time,
+                     self.integrator.dt))
 
             # advance one time step
             self.integrator.evolve_timestep()
 
             # output if needed
             self.simulation_time_manager.output(self)
+            phdLogger.info("Finished iteration: %d\n" %\
+                    self.integrator.iteration)
 
         # output final data
         self._state = SimulationTAGS.AFTER_LOOP
