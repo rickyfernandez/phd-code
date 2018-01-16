@@ -175,7 +175,12 @@ class IterationInterval(SimulationOutputterBase):
         """Return True to signal the simulation has reached
         iteteration interval to ouput data."""
         integrator = simulation.integrator
-        return (integrator.iteration % self.iteration_interval == 0)
+        state = simulation._state == SimulationTAGS.MAIN_LOOP
+        output_iteration = integrator.iteration % self.iteration_interval == 0
+
+        if state and output_iteration:
+            return True
+        return False
 
     def modify_timestep(self, simulation):
         """Return consistent time step."""
