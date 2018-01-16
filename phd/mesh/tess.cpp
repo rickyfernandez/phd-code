@@ -126,29 +126,29 @@ int Tess2d::build_initial_tess(
     return 0;
 }
 
-int Tess2d::update_initial_tess(
-        double *x[3],
-        int begin_particles,
-        int end_particles) {
-
-    if (begin_particles == end_particles)
-        return 0;
-
-    Tess &tess = *(Tess*) ptess;
-
-    // create points for ghost particles 
-    std::vector<Point> particles;
-    for (int i=begin_particles; i<end_particles; i++)
-        particles.push_back(Point(x[0][i], x[1][i]));
-
-    // add ghost particles to the tessellation
-    Vertex_handle vt;
-    for (int i=0, j=begin_particles; i<end_particles; i++, j++) {
-        vt = tess.insert(particles[i]);
-        vt->info() = j;
-    }
-    return 0;
-}
+//int Tess2d::update_initial_tess(
+//        double *x[3],
+//        int begin_particles,
+//        int end_particles) {
+//
+//    if (begin_particles == end_particles)
+//        return 0;
+//
+//    Tess &tess = *(Tess*) ptess;
+//
+//    // create points for ghost particles 
+//    std::vector<Point> particles;
+//    for (int i=begin_particles; i<end_particles; i++)
+//        particles.push_back(Point(x[0][i], x[1][i]));
+//
+//    // add ghost particles to the tessellation
+//    Vertex_handle vt;
+//    for (int i=0, j=begin_particles; i<end_particles; i++, j++) {
+//        vt = tess.insert(particles[i]);
+//        vt->info() = j;
+//    }
+//    return 0;
+//}
 
 int Tess2d::count_number_of_faces(void) {
 
