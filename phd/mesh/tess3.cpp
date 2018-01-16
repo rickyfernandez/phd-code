@@ -259,56 +259,39 @@ int Tess3d::count_number_of_faces(void) {
         for (int j=0; j<nngb; j++)
             sites_ngb_used[site_ngb_list[j]] = false;
     }
-    //std::cout << "number faces cpp:" << num_faces << std::endl;
     return num_faces;
 }
 
-int Tess3d::update_initial_tess(
-        double *x[3],
-        //double *x,
-        //double *y,
-        //double *z,
-        int up_num_particles) {
-
-    int start_num = local_num_particles;
-    tot_num_particles = local_num_particles + up_num_particles;
-
-    Tess &tess = *(Tess*) ptess;
-
-    // create points for ghost particles 
-    std::vector<Point> particles;
-    for (int i=start_num; i<tot_num_particles; i++)
-        particles.push_back(Point(x[0][i], x[1][i], x[2][i]));
-        //particles.push_back(Point(x[i], y[i], z[i]));
-
-    // add ghost particles to the tess
-    Vertex_handle vt;
-    for (int i=0, j=local_num_particles; i<up_num_particles; i++, j++) {
-        vt = tess.insert(particles[i]);
-        vt->info() = j;
-    }
-    return 0;
-}
+//int Tess3d::update_initial_tess(
+//        double *x[3],
+//        int up_num_particles) {
+//
+//    int start_num = local_num_particles;
+//    tot_num_particles = local_num_particles + up_num_particles;
+//
+//    Tess &tess = *(Tess*) ptess;
+//
+//    // create points for ghost particles 
+//    std::vector<Point> particles;
+//    for (int i=start_num; i<tot_num_particles; i++)
+//        particles.push_back(Point(x[0][i], x[1][i], x[2][i]));
+//
+//    // add ghost particles to the tess
+//    Vertex_handle vt;
+//    for (int i=0, j=local_num_particles; i<up_num_particles; i++, j++) {
+//        vt = tess.insert(particles[i]);
+//        vt->info() = j;
+//    }
+//    return 0;
+//}
 
 int Tess3d::extract_geometry(
         double* x[3],
-        //double* x,
-        //double* y,
-        //double* z,
         double* dcenter_of_mass[3],
-        //double* center_of_mass_x,
-        //double* center_of_mass_y,
-        //double* center_of_mass_z,
         double* volume,
         double* face_area,
         double* face_com[3],
-        //double* face_comx,
-        //double* face_comy,
-        //double* face_comz,
         double* face_n[3],
-        //double* face_nx,
-        //double* face_ny,
-        //double* face_nz,
         int* pair_i,
         int* pair_j,
         std::vector< std::vector<int> > &neighbors) {
@@ -324,13 +307,11 @@ int Tess3d::extract_geometry(
     std::vector<bool> sites_ngb_used(tot_num_particles, false);
     std::vector<int>  site_ngb_list;
 
-  // only process local particle information
+    // only process local particle information
     for (int i=0; i<local_num_particles; i++) {
 
         const Vertex_handle &vi = vt_list[i];
-
         const vector3 ipos(x[0][i], x[1][i], x[2][i]);
-        //const vector3 ipos(x[i], y[i], z[i]);
 
         edges.clear();
         cells.clear();
@@ -405,13 +386,9 @@ int Tess3d::extract_geometry(
                 c += vertex_list[edge][j];
             c *= 1.0/nvtx;
 
-            //vector3 normal(0.0, 0.0, 0.0);
-
             vector3 face_centroid(0.0, 0.0, 0.0);
             vector3 v1 = vertex_list[edge].back() - c;
-            //const vector3 cv = ipos - c;
 
-            //const double fourth = 1.0/4.0;
             const double third  = 1.0/3.0;
             double area1 = 0.0;
 
@@ -428,18 +405,9 @@ int Tess3d::extract_geometry(
                 face_centroid += c3*area3;
                 area1 += area3;
 
-                // particle volume and center of mass
-                //const vector3 c4 = c + (v1 + v2 + cv)*fourth;
-                //const double vol4 = std::abs(v1.cross(v2)*cv);
-                //cell_volume += vol4;
-                //cell_centroid += c4 * vol4;
                 v1 = v2;
             }
 
-            //if (i == 0) {
-                //std::cout << "particle i= " << i << " area= " << 0.5*area1 << std::endl;
-            //}
-            
             const Edge e = edges[edge];
             int id1, id2;
             const int i1 = e.get<0>()->vertex(e.get<1>())->info();
@@ -447,12 +415,6 @@ int Tess3d::extract_geometry(
 
             id1 = (i1 == i) ? i1 : i2;
             id2 = (i1 == i) ? i2 : i1;
-
-            //if (i == 2050) {
-            //std::cout << "particle i= " << i << " j=" << id2
-            //    << " xi=" << x[i] << " yi=" << y[i] << " zi=" << z[i] 
-            //    << " xj=" << x[id2] << " yj=" << y[id2] << " zj=" << z[id2] << std::endl;
-            //}
 
             if (id1 != i){
                 std::cout << id1 << " != " << i << " not equal!" << std::endl;
@@ -476,9 +438,6 @@ int Tess3d::extract_geometry(
             if (id1 < id2) {
 
                 const vector3 jpos(x[0][id2], x[1][id2], x[2][id2]);
-                //const vector3 jpos(x[id2], y[id2], z[id2]);
-                //vector3 face_n = jpos - ipos;
-                //face_n *= 1.0/face_n.abs();
                 vector3 normal = jpos - ipos;
                 normal *= 1.0/normal.abs();
 
@@ -488,24 +447,11 @@ int Tess3d::extract_geometry(
                 face_n[0][fc] = normal.x;
                 face_n[1][fc] = normal.y;
                 face_n[2][fc] = normal.z;
-                //face_nx[fc] = face_n.x;
-                //face_ny[fc] = face_n.y;
-                //face_nz[fc] = face_n.z;
-
-                //std::cout << "particle i= " << i << " j=" << id2 << " area= " << 0.5*area1 
-                //    << " x=" << x[i] << " y=" << y[i] << " z=" << z[i] 
-                //    << " x=" << x[id2] << " y=" << y[id2] << " z=" << z[id2]  
-                //    << " nx=" << face_nx[fc] << " ny=" << face_ny[fc] << " nz=" << face_nz[fc]
-                //    << " nx=" << normal.x/normal.abs() << " ny=" << normal.y/normal.abs() << " nz=" << normal.z/normal.abs() << std::endl;
 
                 // center of mass of face
-                //face_centroid *= 1.0/area;
                 face_com[0][fc] = face_centroid.x;
                 face_com[1][fc] = face_centroid.y;
                 face_com[2][fc] = face_centroid.z;
-                //face_comx[fc] = face_centroid.x;
-                //face_comy[fc] = face_centroid.y;
-                //face_comz[fc] = face_centroid.z;
 
                 pair_i[fc] = id1;
                 pair_j[fc] = id2;
@@ -540,12 +486,7 @@ int Tess3d::extract_geometry(
         dcenter_of_mass[0][i] = cell_centroid.x - ipos.x;
         dcenter_of_mass[1][i] = cell_centroid.y - ipos.y;
         dcenter_of_mass[2][i] = cell_centroid.z - ipos.z;
-        //center_of_mass_x[i] = cell_centroid.x;
-        //center_of_mass_y[i] = cell_centroid.y;
-        //center_of_mass_z[i] = cell_centroid.z;
     }
-
-    //std::cout << " total volume: " << tot_volume << std::endl;
     return fc;
 }
 
