@@ -289,10 +289,7 @@ class StaticMeshMUSCLHancock(IntegrateBase):
     def evolve_timestep(self):
         """Solve the compressible gas equations."""
 
-        phdLogger.info("Static Mesh Integrator: Starting iteration %d time: %f dt: %f" %\
-                (self.iteration,
-                 self.time,
-                 self.dt))
+        phdLogger.info("StaticMeshMUSCLHancock: Starting integration")
 
         # build left/right states at each face in the mesh
         self.reconstruction.compute_gradients(self.particles, self.mesh,
@@ -317,10 +314,7 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
     def evolve_timestep(self):
         """Evolve the simulation for one time step."""
 
-        phdLogger.info("Moving Mesh Integrator: Starting iteration %d time: %f dt: %f" %\
-                (self.iteration,
-                 self.time,
-                 self.dt))
+        phdLogger.info("MovingMeshMUSCLHancock: Starting integration")
 
         # assign velocities to mesh cells and faces 
         self.mesh.assign_generator_velocities(self.particles, self.equation_state)

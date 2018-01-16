@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 from ..utils.logger import phdLogger
 from ..utils.particle_tags import ParticleTAGS
+from ..containers.containers import CarrayContainer
 
 class ReaderWriterBase(object):
     def write(self, base_name, output_directory, integrator):
@@ -51,17 +52,11 @@ class ReaderWriterBase(object):
 class Hdf5(ReaderWriterBase):
     def write(self, base_name, output_directory, integrator):
         """Write simulation data to hdf5 file."""
-        file_name = output_directory + "/" + base_name + ".hdf5"
+        file_name = base_name + ".hdf5"
+        output_path = output_directory + "/" + file_name
+        phdLogger.info("hdf5 format: Writting %s" % file_name)
 
-        phdLogger.info(
-                "hdf5 format: Writting %s at "
-                "iteration %d, time %f, dt %f" %\
-                (file_name,
-                 integrator.iteration,
-                 integrator.time,
-                 integrator.dt))
-
-        with h5py.File(file_name, "w") as f:
+        with h5py.File(output_path, "w") as f:
 
             # store current time
             f.attrs["dt"] = integrator.dt
@@ -84,27 +79,22 @@ class Hdf5(ReaderWriterBase):
 
             f.close()
 
-        phdLogger.success("hdf5 format: %s write success" %\
-                file_name)
-
     def read(self, file_name):
         """Read hdf5 file of particles."""
-        phdLogger.info("hdf5 format: Reading filename %s" %\
-                file_name)
+        phdLogger.info("hdf5 format: Reading filename %s" % file_name)
 
         with h5py.File(file_name, "r") as f:
 
             particle_grp = f["particles"]
-            num_particles = particles_grp.attrs["number_particles"]
+            num_particles = particle_grp.attrs["number_particles"]
             particles = CarrayContainer(num_particles)
 
             # populate arrays with data
-            for field in particle_grp.keys():
-                field_grp = particle_grp[field]
-                particles.register(num_particles, field, field_grp["dtype"])
-                particles[field][:] = field_grp["data"][:]
+            for field_key in particle_grp.keys():
+                field = field_key.encode('utf8')
 
-        phdLogger.sucess("hdf5 format: particles created successfully from %s" %\
-                file_name)
+                field_grp = particle_grp[field]
+                particles.register_carray(num_particles, field, field_grp.attrs["dtype"])
+                particles[field][:] = field_grp["data"][:]
 
         return particles

@@ -4,13 +4,13 @@ import numpy as np
 def create_particles(gamma):
 
     Lx = 1.    # domain size in x
-    nx = 50    # particles per dim
+    nx = 100    # particles per dim
     n = nx*nx  # number of points
 
     dx = Lx/nx # spacing between particles
 
     # create particle container
-    pc = phd.ParticleContainer(n)
+    pc = phd.HydroParticleCreator(n)
     part = 0
     for i in range(nx):
         for j in range(nx):
@@ -35,19 +35,20 @@ def create_particles(gamma):
 
     return pc
 
-# create inital state of the simulation
-pc = create_particles(1.4)
-
-domain = phd.DomainLimits(dim=2, xmin=0., xmax=1.)           # spatial size of problem 
-boundary = phd.Boundary(domain,                              # reflective boundary condition
-        boundary_type=phd.BoundaryType.Reflective)
-mesh = phd.Mesh(boundary)                                    # tesselation algorithm
-reconstruction = phd.PieceWiseConstant()                     # constant reconstruction
-riemann = phd.HLL(reconstruction, gamma=1.4)                 # riemann solver
-integrator = phd.MovingMesh(pc, mesh, riemann, regularize=1) # integrator 
-solver = phd.Solver(integrator,                              # simulation driver
+# simulation driver
+sim = phd.Simulation(
         cfl=0.5, tf=0.15, pfreq=1,
         relax_num_iterations=0,
         output_relax=False,
         fname='sod_2d_cartesian')
-solver.solve()
+
+sim.add_particles(create_particles(1.4))                                  # create inital state of the simulation
+sim.add_domain(phd.DomainLimits(dim=2, xmin=0., xmax=1.))                 # spatial size of problem 
+sim.add_boundary(phd.Boundary(boundary_type=phd.BoundaryType.Reflective)) # reflective boundary condition
+sim.add_mesh(phd.Mesh())                                                  # tesselation algorithm
+sim.add_reconstruction(phd.PieceWiseLinear(limiter=0, boost=1))           # Linear reconstruction
+sim.add_riemann(phd.HLLC(gamma=1.4))                                      # riemann solver
+#sim.add_riemann(phd.Exact(gamma=1.4))                                      # riemann solver
+sim.add_integrator(phd.MovingMesh(regularize=1))                          # Integrator
+
+sim.solve()
