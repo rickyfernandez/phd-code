@@ -34,73 +34,101 @@ void Tess3d::reset_tess(void) {
 
 int Tess3d::build_initial_tess(
         double *x[3],
-        //double *x,
-        //double *y,
-        //double *z,
         double *radius,
-        int num_particles,
-        double huge) {
-    
-    local_num_particles = num_particles;
+        int start_ghost,
+        int total_particles) {
+    /*
 
-    // gernerating vertices for the tesselation 
+    Creates a tessellation for particles and store the radius for
+    each real particle.
+
+    Parameters
+    ----------
+    x : double[3]*
+       Pointer to the position of the particles.
+
+    radius : double*
+        Pointer to store the radius of real particles. The radius is
+        the circle than encompass all circumcircles from the voronoi
+        for the given particle.
+
+    start_ghost : int
+        Starting index of the first ghost particle in the particle
+        data container.
+
+    total_particles : int
+        Total number of particles in the particle data container.
+
+    */
+    local_num_particles = start_ghost;
+
+    // add all particles
     std::vector<Point> particles;
-    for (int i=0; i<local_num_particles; i++)
-        //particles.push_back(Point(x[i], y[i], z[i]));
+    for (int i=0; i<total_particles; i++)
         particles.push_back(Point(x[0][i], x[1][i], x[2][i]));
 
     // create tessellation
     ptess = (void*) new Tess;
-    pvt_list = (void*) (new std::vector<Vertex_handle>(local_num_particles));
+    pvt_list = (void*) (new std::vector<Vertex_handle>(total_particles));
 
+    // pointers to tessellation and vertices
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
 
+    // FIX: remove boost and use finite_vertices_iterator to loop over vertices
+    // and tess.insert(points.begin(), points.end()) for sorting and building
+    // the tessellation.
 
-
+    // sort particles
     std::vector<std::ptrdiff_t> indices;
-    indices.reserve(local_num_particles);
+    indices.reserve(total_particles);
     std::copy(
             boost::counting_iterator<std::ptrdiff_t>(0),
-            boost::counting_iterator<std::ptrdiff_t>(local_num_particles),
+            boost::counting_iterator<std::ptrdiff_t>(total_particles),
             std::back_inserter(indices));
-    CGAL::spatial_sort(indices.begin(), indices.end(), Search_traits_3(&(particles[0])), CGAL::Hilbert_sort_median_policy());
 
+    // sort particles by hilbert keys
+    CGAL::spatial_sort(indices.begin(), indices.end(), Search_traits_3(&(particles[0])),
+            CGAL::Hilbert_sort_median_policy());
 
-
+    // insert sorted particles into the tessellation
     Vertex_handle vt;
-    //for (int i=0; i<local_num_particles; i++) {
     for (std::vector<std::ptrdiff_t>::iterator it=indices.begin(); it!=indices.end(); it++) {
-        //vt = tess.insert(particles[i]);
-        //vt->info() = i;
-        //vt_list[i] = vt;
         vt = tess.insert(particles[*it]);
         vt->info() = *it;
         vt_list[*it] = vt;
     }
 
+    // container for delaunay edges
     std::vector<Edge> edges;
     std::vector<Cell_handle> cells;
-    std::vector<bool> sites_ngb_used(local_num_particles, false);
+
+    // hold neighbors and flag neighbors accounted for
+    std::vector<bool> sites_ngb_used(total_particles, false);
     std::vector<int>  site_ngb_list;
 
-    for (int i=0; i<local_num_particles; i++) {
+    // loop over local particles
+    for (int i=0; i<start_ghost; i++) {
 
+        // exctract particle position and vertex
         const Vertex_handle& vi = vt_list[i];
         const Point& pos = particles[i];
+        bool infinite_radius = false;
 
         edges.clear();
         cells.clear();
         site_ngb_list.clear();
 
-        // collect all tetrahedra that are incident
+        // collect all tetrahedra that are incident on vertex
         tess.incident_cells(vi, std::back_inserter(cells));
 
+        // loop over each tetrahedra
         const int ncells = cells.size();
         for (int icell=0; icell<ncells; icell++) {
             const Cell_handle& ci = cells[icell];
 
-            // find incident vertex
+            // loop over vertices of tetrahedra
+            // find incident vertex to ignore
             int idx = -1;
             for (int iv=0; iv<4; iv++) {
                 if (ci->vertex(iv) == vi)
@@ -136,17 +164,28 @@ int Tess3d::build_initial_tess(
         for (int j=0; j<nngb; j++)
             sites_ngb_used[site_ngb_list[j]] = false;
 
-        double radius_max_sq = (edges.empty()) ? huge : 0.0;
+        double radius_max_sq = -1.0;
+        if (edges.emtpy()) {
+            infinite_radius = true;
+            continue;
+        }
 
-        for (std::vector<Edge>::iterator edge_it = edges.begin(); edge_it != edges.end(); edge_it++) {
+        // should turn to while loop with check on infinite radius
+        for (std::vector<Edge>::iterator edge_it = edges.begin();
+                edge_it != edges.end(); edge_it++) {
 
             // grab vertices of voronoi face associated with edge
             const Cell_circulator cc_end = tess.incident_cells(*edge_it);
             Cell_circulator cc(cc_end);
 
             do {
+
+                // check for infinite voronoi vertices
                 if (tess.is_infinite(cc)) {
-                    radius_max_sq = huge;
+                    infinite_radius = true;
+
+                // calculate distance between particle
+                // and voronoi vertex
                 } else {
                     const Point c = tess.dual(cc);
                     radius_max_sq = std::max(radius_max_sq,
@@ -156,7 +195,12 @@ int Tess3d::build_initial_tess(
                 }
             } while (++cc != cc_end);
         }
-        radius[i] = 2.01*std::sqrt(radius_max_sq);
+
+        if (infinite_radius)
+            // flag bad particle
+            radius[i] = -1;
+        else
+            radius[i] = 2.0*std::sqrt(radius_max_sq);
     }
     return 0;
 }
@@ -503,4 +547,136 @@ int Tess3d::extract_geometry(
 
     //std::cout << " total volume: " << tot_volume << std::endl;
     return fc;
+}
+
+
+int Tess3d::update_radius(
+        double *x[3],
+        double *radius,
+        std::list<FlagParticle> flagged_particles) {
+    /*
+
+    Creates a tessellation for particles and store the radius for
+    each real particle.
+
+    Parameters
+    ----------
+    x : double[3]*
+       Pointer to the position of the particles.
+
+    radius : double*
+        Pointer to store the radius of real particles. The radius is
+        the circle than encompass all circumcircles from the voronoi
+        for the given particle.
+
+    flagged_particles : list<FlagParticle>
+        List of particles that have been flagged by the domain mananger
+        to create ghost particles.
+
+    */
+    Tess &tess = *(Tess*) ptess;
+    std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
+
+    // edges connecting particles
+    std::vector<Edge> edges;
+    std::vector<Cell_handle> cells;
+
+    // store neighbors not allow repeats
+    std::vector<int>  site_ngb_list;
+    std::vector<bool> sites_ngb_used(tot_num_particles, false);
+
+    // loop over all flagged particles
+    for(std::list<FlagParticle>::iterator it = flagged_particles.begin();
+            it != flagged_particles.end(); ++it) {
+
+        // exctract particle position and vertex
+        int i = it->index;
+        const Vertex_handle& vi = vt_list[i];
+        const Point& pos = particles[i];
+        bool infinite_radius = false;
+
+        edges.clear();
+        cells.clear();
+        site_ngb_list.clear();
+
+        // collect all tetrahedra that are incident
+        tess.incident_cells(vi, std::back_inserter(cells));
+
+        const int ncells = cells.size();
+        for (int icell=0; icell<ncells; icell++) {
+            const Cell_handle& ci = cells[icell];
+
+            // find incident vertex
+            int idx = -1;
+            for (int iv=0; iv<4; iv++) {
+                if (ci->vertex(iv) == vi)
+                    idx = iv;
+            }
+
+            int iadd = 0;
+            for (int iv=0; iv<4; iv++) {
+
+                // ignore incident
+                if (iv == idx)
+                    continue;
+
+                // cgal puts infinite vertex in the tessellation
+                const Vertex_handle& v = ci->vertex(iv);
+                if (tess.is_infinite(v))
+                    continue;
+
+                // check if vertex has been processed 
+                const int id = v->info();
+                if (sites_ngb_used[id])
+                    continue;
+
+                iadd++;
+                sites_ngb_used[id] = true;
+                site_ngb_list.push_back(id);
+                edges.push_back(Edge(ci, idx, iv));
+            }
+        }
+
+        // reset neighbors processed
+        const int nngb = site_ngb_list.size();
+        for (int j=0; j<nngb; j++)
+            sites_ngb_used[site_ngb_list[j]] = false;
+
+        double radius_max_sq = -1.0;
+        if (edges.emtpy()) {
+            infinite_radius = true;
+            continue;
+        }
+
+        // should turn to while loop with check on infinite radius
+        for (std::vector<Edge>::iterator edge_it = edges.begin(); edge_it != edges.end(); edge_it++) {
+
+            // grab vertices of voronoi face associated with edge
+            const Cell_circulator cc_end = tess.incident_cells(*edge_it);
+            Cell_circulator cc(cc_end);
+
+            // check for infinite voronoi vertices
+            do {
+                if (tess.is_infinite(cc)) {
+                    infinite = true;
+
+                } else {
+                    // calculate distance between particle
+                    // and voronoi vertex
+                    const Point c = tess.dual(cc);
+                    radius_max_sq = std::max(radius_max_sq,
+                            (c.x()-pos.x())*(c.x()-pos.x()) +
+                            (c.y()-pos.y())*(c.y()-pos.y()) +
+                            (c.z()-pos.z())*(c.z()-pos.z()) );
+                }
+            } while (++cc != cc_end);
+        }
+
+        if (infinite_radius)
+            // flag bad particle
+            radius[i] = -1;
+        else
+            radius[i] = 2.0*std::sqrt(radius_max_sq);
+    }
+    return 0;
 }
