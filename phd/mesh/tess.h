@@ -62,7 +62,7 @@ class Tess2d {
         Tess2d(void);
         void reset_tess(void);
         int build_initial_tess(double *x[3], double *radius_sq, int start_new_ghost, int stop_new_ghost); 
-        int update_initial_tess(double *x[3], int begin_particles, int end_particles);
+        //int update_initial_tess(double *x[3], int begin_particles, int end_particles);
         int count_number_of_faces(void);
         int extract_geometry(double* x[3], double* dcom[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j,
@@ -82,6 +82,7 @@ class Tess3d {
         Tess3d(void);
         void reset_tess(void);
         int build_initial_tess(double *x[3], double *radius, int start_ghost, int total_particles); 
+        //int update_initial_tess(double *x[3], int up_num_particles);
         int count_number_of_faces(void);
         int extract_geometry(double* x[3], double* dcom[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j,
