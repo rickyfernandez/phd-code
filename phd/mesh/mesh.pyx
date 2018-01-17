@@ -3,7 +3,7 @@ import numpy as np
 from libc.math cimport sqrt
 cimport libc.stdlib as stdlib
 
-from ..mesh.pytess cimport PyTess2d#, PyTess3d
+from ..mesh.pytess cimport PyTess2d, PyTess3d
 from ..utils.particle_tags import ParticleTAGS
 from ..containers.containers cimport CarrayContainer
 from ..utils.carray cimport DoubleArray, LongArray, IntArray
@@ -56,7 +56,7 @@ cdef dict fields_to_register_2d = {
 # particle fields to register in 3d
 cdef dict fields_to_register_3d = dict(fields_to_register_2d, **{
     "dcom-z": "double",
-    "w-z"   : "dobule"
+    "w-z"   : "double"
     })
 
 cdef class Mesh:
@@ -121,13 +121,13 @@ cdef class Mesh:
                 if field not in particles.carrays.keys():
                     particles.register_carray(num_particles, field, dtype)
 
-#        elif dim == 3:
-#            self.face_fields = face_vars_3d
-#            self.face_field_groups = named_group_3d
-#
-#            for field, dtype in fields_to_register_3d.iteritems():
-#                if field not in particles.carrays.keys():
-#                    particles.register(num_particles, field, dtype)
+        elif dim == 3:
+            self.face_fields = face_vars_3d
+            self.face_field_groups = named_group_3d
+
+            for field, dtype in fields_to_register_3d.iteritems():
+                if field not in particles.carrays.keys():
+                    particles.register_carray(num_particles, field, dtype)
 
         self.update_ghost_fields = list(particles.carray_named_groups["dcom"])
         self.update_ghost_fields.append("volume")
@@ -150,8 +150,8 @@ cdef class Mesh:
 
         if dim == 2:
             self.tess = PyTess2d()
-        #elif dim == 3:
-        #    self.tess = PyTess3d()
+        elif dim == 3:
+            self.tess = PyTess3d()
 
         self.faces = CarrayContainer(carrays_to_register=self.face_fields)
         self.faces.carray_named_groups = self.face_field_groups
@@ -214,16 +214,16 @@ cdef class Mesh:
             particles.pointer_groups(xp, particles.carray_named_groups["position"])
 
             # add ghost particle to mesh
-            if start_new_ghost != stop_new_ghost:
+            #if start_new_ghost != stop_new_ghost:
 
-                # FIX: having a problem with cgal adding particles
-                self.reset_mesh()
-                assert(self.tess.build_initial_tess(xp, rp,
-                    start_new_ghost, stop_new_ghost) != -1)
-                #assert(self.tess.update_initial_tess(xp,
-                #    start_new_ghost, stop_new_ghost) != -1)
+            # FIX: having a problem with cgal adding particles
+            self.reset_mesh()
+            assert(self.tess.build_initial_tess(xp, rp,
+                start_new_ghost, stop_new_ghost) != -1)
+            #assert(self.tess.update_initial_tess(xp,
+            #    start_new_ghost, stop_new_ghost) != -1)
 
-                self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
+            self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
 
             # update radius of old flagged particles 
             domain_manager.update_search_radius(particles)
