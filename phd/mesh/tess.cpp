@@ -66,16 +66,22 @@ int Tess2d::build_initial_tess(
         const Vertex_handle &vi = vt_list[i];
         const Point& pos = particles[i];
         bool infinite_radius = false;
-        double radius_max_sq = 0.0;
 
         // find all edges that are incident with particle vertex
         Edge_circulator ed = tess.incident_edges(vi), done(ed);
 
+        int cnt0 = 0;
+        double radius_max_sq = -1.0;
+
         // process each edge
         do {
+
+            cnt0++;
             // skip edge that contains infinite vertex
-            if (tess.is_infinite(ed)) 
+            if (tess.is_infinite(ed)) {
+                infinite_radius = true;
                 continue;
+            }
 
             const Edge e = *ed;
             if (e.first->vertex( (e.second+2)%3 )->info() != i)
@@ -90,31 +96,22 @@ int Tess2d::build_initial_tess(
                 // loop over face vertices
                 for (int j=0; j<2; j++) {
                     const Point& pj = sg->point(j);
-                
+
                     // calculate max radius from particle
                     radius_max_sq = std::max( radius_max_sq,
                             (pj.x() - pos.x())*(pj.x() - pos.x()) + 
                             (pj.y() - pos.y())*(pj.y() - pos.y()) );
-                    //radius_max_sq = std::max( radius_max_sq,
-                    //        (CGAL::to_double(pj.x()) - CGAL::to_double(pos.x()))
-                    //       *(CGAL::to_double(pj.x()) - CGAL::to_double(pos.x())) + 
-                    //        (CGAL::to_double(pj.y()) - CGAL::to_double(pos.y()))
-                    //       *(CGAL::to_double(pj.y()) - CGAL::to_double(pos.y())) );
                 }
             } else {
                 // voronoi not complete
                 infinite_radius = true;
-                break;
+                continue;
             }
 
-            // infinite face case is considered because a particle can
-            // have all faces that are rays
-            // else if (CGAL::object_cast<K::Ray_2>(&o)) 
-            //
-            //   radius_max_sq = huge;
-            //
 
         } while (++ed != done);
+        if(cnt0 == 0)
+            infinite_radius = true;
 
         if (infinite_radius)
             radius[i] = -1;
