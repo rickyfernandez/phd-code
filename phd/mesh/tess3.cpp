@@ -61,6 +61,7 @@ int Tess3d::build_initial_tess(
 
     */
     local_num_particles = start_ghost;
+    tot_num_particles = total_particles;
 
     // add all particles
     std::vector<Point> particles;
@@ -164,11 +165,8 @@ int Tess3d::build_initial_tess(
         for (int j=0; j<nngb; j++)
             sites_ngb_used[site_ngb_list[j]] = false;
 
+        int cnt0 = 0;
         double radius_max_sq = -1.0;
-        if (edges.emtpy()) {
-            infinite_radius = true;
-            continue;
-        }
 
         // should turn to while loop with check on infinite radius
         for (std::vector<Edge>::iterator edge_it = edges.begin();
@@ -180,6 +178,7 @@ int Tess3d::build_initial_tess(
 
             do {
 
+                cnt0++;
                 // check for infinite voronoi vertices
                 if (tess.is_infinite(cc)) {
                     infinite_radius = true;
@@ -195,6 +194,8 @@ int Tess3d::build_initial_tess(
                 }
             } while (++cc != cc_end);
         }
+        if(cnt0 == 0)
+            infinite_radius = true;
 
         if (infinite_radius)
             // flag bad particle
@@ -533,8 +534,9 @@ int Tess3d::update_radius(
         // exctract particle position and vertex
         int i = it->index;
         const Vertex_handle& vi = vt_list[i];
-        const Point& pos = particles[i];
+        double xp = x[0][i], yp = x[1][i], zp = x[2][i];
         bool infinite_radius = false;
+        double radius_max_sq = 1.0;
 
         edges.clear();
         cells.clear();
@@ -583,8 +585,7 @@ int Tess3d::update_radius(
         for (int j=0; j<nngb; j++)
             sites_ngb_used[site_ngb_list[j]] = false;
 
-        double radius_max_sq = -1.0;
-        if (edges.emtpy()) {
+        if (edges.empty()) {
             infinite_radius = true;
             continue;
         }
@@ -599,16 +600,16 @@ int Tess3d::update_radius(
             // check for infinite voronoi vertices
             do {
                 if (tess.is_infinite(cc)) {
-                    infinite = true;
+                    infinite_radius = true;
 
                 } else {
                     // calculate distance between particle
                     // and voronoi vertex
                     const Point c = tess.dual(cc);
                     radius_max_sq = std::max(radius_max_sq,
-                            (c.x()-pos.x())*(c.x()-pos.x()) +
-                            (c.y()-pos.y())*(c.y()-pos.y()) +
-                            (c.z()-pos.z())*(c.z()-pos.z()) );
+                            (c.x() - xp)*(c.x() - xp) +
+                            (c.y() - yp)*(c.y() - yp) +
+                            (c.z() - zp)*(c.z() - zp));
                 }
             } while (++cc != cc_end);
         }
