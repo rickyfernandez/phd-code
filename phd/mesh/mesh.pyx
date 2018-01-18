@@ -274,13 +274,13 @@ cdef class Mesh:
         self.faces.resize(num_faces)
 
         # pointers to particle data 
-        particles.pointer_groups(x, particles.carray_named_groups['position'])
-        particles.pointer_groups(dcom, particles.carray_named_groups['dcom'])
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
+        particles.pointer_groups(dcom, particles.carray_named_groups["dcom"])
         vol = p_vol.get_data_ptr()
 
         # pointers to face data
-        self.faces.pointer_groups(nx,  self.faces.carray_named_groups['normal'])
-        self.faces.pointer_groups(com, self.faces.carray_named_groups['com'])
+        self.faces.pointer_groups(nx,  self.faces.carray_named_groups["normal"])
+        self.faces.pointer_groups(com, self.faces.carray_named_groups["com"])
         pair_i = f_pair_i.get_data_ptr()
         pair_j = f_pair_j.get_data_ptr()
         area   = f_area.get_data_ptr()
@@ -319,15 +319,12 @@ cdef class Mesh:
             Class that handels all things related with the domain.
 
         """
-        cdef double xp[3]
         cdef np.float64_t *x[3], *dcx[3]
         cdef int i, k, dim, num_real_particles
         cdef IntArray tags = particles.get_carray("tag")
 
         dim = len(particles.carray_named_groups["position"])
-
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
-        num_real_particles = particles.get_carray_size()
 
         # create ghost, extract geometric values
         self.build_geometry(particles, domain_manager)
@@ -335,11 +332,13 @@ cdef class Mesh:
         # update real particle positions
         particles.pointer_groups(x,   particles.carray_named_groups["position"])
         particles.pointer_groups(dcx, particles.carray_named_groups["dcom"])
-        for i in range(num_real_particles):
-            for k in range(dim):
-                x[k][i] += dcx[k][i]
-                xp[k] = x[k][i]
+        for i in range(particles.get_carray_size()):
+            if tags.data[i] == REAL:
+                for k in range(dim):
+                    x[k][i] += dcx[k][i]
 
+        # use boundary conditions for particles
+        # that leave the domain
         domain_manager.migrate_particles(particles)
 
     cpdef assign_generator_velocities(self, CarrayContainer particles,
@@ -432,9 +431,11 @@ cdef class Mesh:
 
         dim = len(particles.carray_named_groups["position"])
 
+        # particle information
         particles.pointer_groups(wx, particles.carray_named_groups["w"])
         particles.pointer_groups(x,  particles.carray_named_groups["position"])
 
+        # face information
         self.faces.pointer_groups(fij, self.faces.carray_named_groups["com"])
         self.faces.pointer_groups(fv,  self.faces.carray_named_groups["velocity"])
 
