@@ -160,8 +160,6 @@ class Simulation(object):
 
             # output if needed
             self.simulation_time_manager.output(self)
-            phdLogger.info("Finished iteration: %d\n" %\
-                    self.integrator.iteration)
 
         # output final data
         self._state = SimulationTAGS.AFTER_LOOP
