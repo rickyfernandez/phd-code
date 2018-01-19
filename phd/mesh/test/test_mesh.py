@@ -129,7 +129,7 @@ class TestMesh2dUniformBox(unittest.TestCase):
         self.mesh.register_fields(self.particles)
         self.mesh.initialize()
 
-    def test_volume_2d(self):
+    def test_volume(self):
         """
         Test if particle volumes in a square are created correctly.
         Create grid of particles in a unit box, total volume is 1.0.
@@ -144,101 +144,17 @@ class TestMesh2dUniformBox(unittest.TestCase):
         # total mass should be equal to the volume of the box
         self.assertAlmostEqual(tot_vol, 1.0)
 
-#class TestMesh3dUniformBox(TestMesh2dUniformBox):
-#
-#    def setUp(self):
-#        n = 100
-#        self.particles = HydroParticleCreator(num=n, dim=3)
-#
-#        # create uniform random particles in a unit box
-#        np.random.seed(0)
-#        self.particles["position-x"][:] = np.random.uniform(size=n)
-#        self.particles["position-y"][:] = np.random.uniform(size=n)
-#        self.particles["position-z"][:] = np.random.uniform(size=n)
-#
-#        # create unit square domain, reflective boundary condition
-#        minx = np.array([0., 0., 0.])
-#        maxx = np.array([1., 1., 1.])
-#        self.domain_manager = DomainManager(param_initial_radius=0.1,
-#                param_search_radius_factor=1.25)
-#        self.domain_manager.set_domain_limits(DomainLimits(minx, maxx, dim=3))
-#        self.domain_manager.register_fields(self.particles)
-#        self.domain_manager.set_boundary_condition(Reflective())
-#        self.domain_manager.initialize()
-#
-#        self.mesh = Mesh()
-#        self.mesh.register_fields(self.particles)
-#        self.mesh.initialize()
+class TestMesh3dUniformBox(TestMesh2dUniformBox):
 
-class TestMesh2dLatticeBox(unittest.TestCase):
     def setUp(self):
-        nx = ny = 10
-        n = nx*nx
-
-        self.particles = HydroParticleCreator(num=n, dim=2)
-
-        # create lattice particles in a unit box
-        L = 1.
-        dx = L/nx; dy = L/ny
-
-        part = 0
-        for i in range(nx):
-            for j in range(ny):
-                self.particles['position-x'][part] = (i+0.5)*dx
-                self.particles['position-y'][part] = (j+0.5)*dy
-                part += 1
-        self.dx = dx; self.dy = dy
-
-        # create unit square domain, reflective boundary condition
-        minx = np.array([0., 0.])
-        maxx = np.array([1., 1.])
-        self.domain_manager = DomainManager(param_initial_radius=0.1,
-                param_search_radius_factor=1.25)
-        self.domain_manager.set_domain_limits(DomainLimits(minx, maxx))
-        self.domain_manager.register_fields(self.particles)
-        self.domain_manager.set_boundary_condition(Reflective())
-        self.domain_manager.initialize()
-
-        self.mesh = Mesh()
-        self.mesh.register_fields(self.particles)
-        self.mesh.initialize()
-
-    def test_volume_2d(self):
-        """
-        Test if particle volumes in a square are created correctly.
-        Create grid of particles in a unit box, total volume is 1.0.
-        """
-        # generate voronoi mesh 
-        self.mesh.build_geometry(self.particles, self.domain_manager)
-
-        # sum voronoi volumes of all real particles 
-        real_indices = self.particles["tag"] == ParticleTAGS.Real
-        tot_vol = np.sum(self.particles["volume"][real_indices])
-
-        # total mass should be equal to the volume of the box
-        self.assertAlmostEqual(tot_vol, 1.0)
-
-class TestMesh3dLattice(TestMesh2dLatticeBox):
-    def setUp(self):
-        nx = ny = nz = 10
-        n = nx*nx*nz
-
+        n = 500
         self.particles = HydroParticleCreator(num=n, dim=3)
 
-        # create lattice particles in a unit box
-        L = 1.
-        dx = L/nx; dy = L/ny; dz = L/nz
-
-        part = 0
-        for i in range(nx):
-            for j in range(ny):
-                for k in range(nz):
-                    self.particles['position-x'][part] = (i+0.5)*dx
-                    self.particles['position-y'][part] = (j+0.5)*dy
-                    self.particles['position-z'][part] = (k+0.5)*dz
-                    part += 1
-
-        self.dx = dx; self.dy = dy; self.dz = dz
+        # create uniform random particles in a unit box
+        np.random.seed(0)
+        self.particles["position-x"][:] = np.random.uniform(size=n)
+        self.particles["position-y"][:] = np.random.uniform(size=n)
+        self.particles["position-z"][:] = np.random.uniform(size=n)
 
         # create unit square domain, reflective boundary condition
         minx = np.array([0., 0., 0.])
@@ -254,37 +170,121 @@ class TestMesh3dLattice(TestMesh2dLatticeBox):
         self.mesh.register_fields(self.particles)
         self.mesh.initialize()
 
-#    def test_center_of_mass_2d(self):
-#        """
-#        Test if particle center of mass positions are created correctly.
-#        Particles are placed in a uniform lattice. Therefore the center
-#        of mass is the same as particle positions.
-#        """
-#
-#        # generate voronoi mesh 
-#        self.mesh.build_geometry(self.particles, self.domain_manager)
-#
-#        # check if particle position is the same as center of mass
-#        for i in range(self.particles.get_carray_size()):
-#            if self.particles["tag"][i] == ParticleTAGS.Real:
-#                self.assertAlmostEqual(0., self.particles["dcom-x"][i])
-#                self.assertAlmostEqual(0., self.particles["dcom-y"][i])
-#
-#    def test_particle_volume(self):
-#        """
-#        Test if particle center of mass positions are created correctly.
-#        Particles are placed in a uniform lattice. Therefore the center
-#        of mass is the same as particle positions.
-#        """
-#
-#        # generate voronoi mesh 
-#        self.mesh.build_geometry(self.particles, self.domain_manager)
-#
-#        # check if particle position is the same as center of mass
-#        for i in range(self.particles.get_carray_size()):
-#            if self.particles["tag"][i] == ParticleTAGS.Real:
-#                self.assertAlmostEqual(self.dx*self.dy, self.particles["volume"][i])
-#
+class TestMesh2dLatticeBox(unittest.TestCase):
+    def setUp(self):
+        nx = ny = 10
+        n = nx*nx
+
+        self.particles = HydroParticleCreator(num=n, dim=2)
+
+        # create lattice particles in a unit box
+        L = 1.
+        dx = L/nx; dy = L/ny
+        self.volume = dx*dy
+
+        part = 0
+        for i in range(nx):
+            for j in range(ny):
+                self.particles['position-x'][part] = (i+0.5)*dx
+                self.particles['position-y'][part] = (j+0.5)*dy
+                part += 1
+
+        # create unit square domain, reflective boundary condition
+        minx = np.array([0., 0.])
+        maxx = np.array([1., 1.])
+        self.domain_manager = DomainManager(param_initial_radius=0.1,
+                param_search_radius_factor=1.25)
+        self.domain_manager.set_domain_limits(DomainLimits(minx, maxx))
+        self.domain_manager.register_fields(self.particles)
+        self.domain_manager.set_boundary_condition(Reflective())
+        self.domain_manager.initialize()
+
+        self.mesh = Mesh()
+        self.mesh.register_fields(self.particles)
+        self.mesh.initialize()
+
+    def test_volume(self):
+        """
+        Test if particle volumes in a square are created correctly.
+        Create grid of particles in a unit box, total volume is 1.0.
+        """
+        # generate voronoi mesh 
+        self.mesh.build_geometry(self.particles, self.domain_manager)
+
+        # sum voronoi volumes of all real particles 
+        real_indices = self.particles["tag"] == ParticleTAGS.Real
+        tot_vol = np.sum(self.particles["volume"][real_indices])
+
+        # total mass should be equal to the volume of the box
+        self.assertAlmostEqual(tot_vol, 1.0)
+
+    def test_center_of_mass(self):
+        """
+        Test if particle center of mass positions are created correctly.
+        Particles are placed in a uniform lattice. Therefore the center
+        of mass is the same as particle positions.
+        """
+        # generate voronoi mesh 
+        self.mesh.build_geometry(self.particles, self.domain_manager)
+        dim = len(self.particles.carray_named_groups["position"])
+        axis = "xyz"[:dim]
+
+        # check if particle position is the same as center of mass
+        for i in range(self.particles.get_carray_size()):
+            if self.particles["tag"][i] == ParticleTAGS.Real:
+                for ax in axis:
+                    self.assertAlmostEqual(0., self.particles["dcom-"+ax][i])
+
+    def test_particle_volume(self):
+        """
+        Test if particle center of mass positions are created correctly.
+        Particles are placed in a uniform lattice. Therefore the center
+        of mass is the same as particle positions.
+        """
+        # generate voronoi mesh 
+        self.mesh.build_geometry(self.particles, self.domain_manager)
+
+        # check if particle position is the same as center of mass
+        for i in range(self.particles.get_carray_size()):
+            if self.particles["tag"][i] == ParticleTAGS.Real:
+                self.assertAlmostEqual(self.volume, self.particles["volume"][i])
+
+
+class TestMesh3dLattice(TestMesh2dLatticeBox):
+    def setUp(self):
+        nx = ny = nz = 10
+        n = nx*nx*nz
+
+        self.particles = HydroParticleCreator(num=n, dim=3)
+
+        # create lattice particles in a unit box
+        L = 1.
+        dx = L/nx; dy = L/ny; dz = L/nz
+        self.volume = dx*dy*dz
+
+        part = 0
+        for i in range(nx):
+            for j in range(ny):
+                for k in range(nz):
+                    self.particles['position-x'][part] = (i+0.5)*dx
+                    self.particles['position-y'][part] = (j+0.5)*dy
+                    self.particles['position-z'][part] = (k+0.5)*dz
+                    part += 1
+
+        # create unit square domain, reflective boundary condition
+        minx = np.array([0., 0., 0.])
+        maxx = np.array([1., 1., 1.])
+        self.domain_manager = DomainManager(param_initial_radius=0.1,
+                param_search_radius_factor=1.25)
+        self.domain_manager.set_domain_limits(DomainLimits(minx, maxx, dim=3))
+        self.domain_manager.register_fields(self.particles)
+        self.domain_manager.set_boundary_condition(Reflective())
+        self.domain_manager.initialize()
+
+        self.mesh = Mesh()
+        self.mesh.register_fields(self.particles)
+        self.mesh.initialize()
+
 if __name__ == "__main__":
     unittest.main()
 
