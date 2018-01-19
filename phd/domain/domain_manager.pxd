@@ -35,8 +35,10 @@ cdef class DomainManager:
     cdef public LoadBalance load_balance
     cdef public BoundaryConditionBase boundary_condition
 
-    cdef public double param_initial_radius
-    cdef public double param_search_radius_factor
+    cdef public double initial_radius
+    cdef public double search_radius_factor
+
+    cdef bint particle_fields_registered
 
     # hold/flag particle for ghost creation 
     cdef vector[BoundaryParticle] ghost_vec
