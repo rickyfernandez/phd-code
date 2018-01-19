@@ -16,21 +16,26 @@ subdirs = [
         "phd/containers/",
         "phd/domain/",
         "phd/hilbert/",
-        "phd/boundary/",
+        "phd/equation_state/",
+        #"phd/boundary/",
         "phd/load_balance/",
+        "phd/gravity",
         "phd/riemann/",
         "phd/mesh/",
         "phd/reconstruction/",
-        "phd/integrate/",
+        #"phd/integrate/",
 ]
 
-cpp = ("mesh", "boundary", "reconstruction", "riemann", "integrate")
+#cpp = ("mesh", "boundary", "reconstruction", "riemann", "integrate", "gravity")
+cpp = ("mesh", "boundary", "domain", "reconstruction", "riemann", "gravity")
 
 extensions = []
 for subdir in subdirs:
     sources = [os.path.join(subdir, "*.pyx")]
     if "mesh" in subdir:
         sources += ["phd/mesh/tess.cpp", "phd/mesh/tess3.cpp"]
+    if "domain" in subdir:
+        sources += ["phd/domain/particle.cpp"]
     extensions.append(
             Extension(subdir.replace("/", ".") + ".*",
                 sources, include_dirs = [np.get_include()] + subdirs,
