@@ -199,9 +199,9 @@ class IntegrateBase(object):
         if self.mesh.relax_iterations > 0 and not self.restart:
             phdLogger.info("Relaxing mesh:")
 
-            for i in range(mesh.relax_iterations):
+            for i in range(self.mesh.relax_iterations):
                 phdLogger.info("Relaxing iteration %d" % i)
-                simulation.simulation_time_manager.output(self)
+                simulation.simulation_time_manager.output(simulation)
                 self.mesh.relax(self.particles, self.domain_manager)
 
             # build mesh with ghost
