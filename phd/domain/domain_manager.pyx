@@ -16,14 +16,17 @@ cdef dict fields_for_parallel = {
         }
 
 cdef class DomainManager:
-    def __init__(self, double param_initial_radius, double param_search_radius_factor=2.0):
+    def __init__(self, double initial_radius,
+                 double search_radius_factor=2.0, **kwargs):
 
-        self.param_initial_radius = param_initial_radius
-        self.param_search_radius_factor = param_search_radius_factor
+        self.initial_radius = initial_radius
+        self.search_radius_factor = search_radius_factor
 
         self.domain = None
         self.load_balance = None
         self.boundary_condition = None
+
+        self.particle_fields_registered = False
 
         # list of particle to create ghost particles from
         self.flagged_particles.clear()
@@ -39,9 +42,11 @@ cdef class DomainManager:
             self.recv_disp = np.zeros(phd.size, dtype=np.int32)
 
     def register_fields(self, CarrayContainer particles):
-        """
-        Register mesh fields into the particle container (i.e.
+        """Register mesh fields into the particle container (i.e.
         volume, center of mass)
+
+        Parameters
+        ----------
         """
         cdef str field, dtype
         cdef int num_particles = particles.get_carray_size()
@@ -57,8 +62,12 @@ cdef class DomainManager:
 
         # set initial radius for mesh generation
         self.setup_initial_radius(particles)
+        self.particle_fields_registered = True
 
     def initialize(self):
+        if not self.particle_fields_registered:
+            raise RuntimeError("ERROR: Fields not registered in particles by Mesh!")
+
         if not self.domain or not self.boundary_condition:
                 #not self.load_balance or
             raise RuntimeError("Not all setters defined in DomainMangaer")
@@ -91,24 +100,34 @@ cdef class DomainManager:
         pass
 
     cpdef setup_initial_radius(self, CarrayContainer particles):
+        """At the start of the simulation assign every particle an
+        initial radius used for constructing the mesh. This values
+        gets updated after each mesh build.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        """
         cdef int i
         cdef DoubleArray r = particles.get_carray("radius")
         cdef DoubleArray rold = particles.get_carray("old_radius")
 
         for i in range(particles.get_carray_size()):
-            r.data[i] = self.param_initial_radius
-            rold.data[i] = self.param_initial_radius
+            r.data[i] = self.initial_radius
+            rold.data[i] = self.initial_radius
 
     cpdef setup_for_ghost_creation(self, CarrayContainer particles):
-        """
-        Go through each particle and flag for ghost creation. For particles
+        """Go through each particle and flag for ghost creation. For particles
         with infinite radius use domain size (serial) or partition tile
         (parallel) as initial search radius.
 
         Parameters
         ----------
-        pc : CarrayContainer
-            Particle data
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         cdef int i, k, dim
         cdef FlagParticle *p
@@ -119,8 +138,8 @@ cdef class DomainManager:
 
         dim = len(particles.carray_named_groups["position"])
 
-        particles.pointer_groups(x, particles.carray_named_groups['position'])
-        particles.pointer_groups(mv, particles.carray_named_groups['momentum'])
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
+        particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
 
         # set ghost buffer to zero
         self.ghost_vec.clear()
@@ -149,7 +168,7 @@ cdef class DomainManager:
 
             # scale search radius from voronoi radius
             p.old_search_radius = 0.  # initial pass 
-            p.search_radius = min(r.data[i], self.param_search_radius_factor*rold.data[i])
+            p.search_radius = min(r.data[i], self.search_radius_factor*rold.data[i])
 
             # copy position and velocity
             for k in range(dim):
@@ -161,16 +180,16 @@ cdef class DomainManager:
             i += 1
 
     cpdef update_search_radius(self, CarrayContainer particles):
-        """
-        Go through each flag particle and update its radius. If
+        """Go through each flag particle and update its radius. If
         the particle is still infinite double the search radius. If
-        the new radius is smaller then the old search radius that
+        the new radius is smaller then the old search radius then that
         particle is done.
 
         Parameters
         ----------
-        pc : CarrayContainer
-            Particle data
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         cdef int i, k
         cdef FlagParticle *p
@@ -188,7 +207,7 @@ cdef class DomainManager:
             if r.data[i] < 0: # infinite radius
                 # grow until finite
                 p.old_search_radius = p.search_radius
-                p.search_radius = self.param_search_radius_factor*p.search_radius
+                p.search_radius = self.search_radius_factor*p.search_radius
                 inc(it) # next particle
 
             else: # finite radius
@@ -198,14 +217,19 @@ cdef class DomainManager:
                     it = self.flagged_particles.erase(it)
                 else:
                     p.old_search_radius = p.search_radius
-                    p.search_radius = self.param_search_radius_factor*r.data[i]
+                    p.search_radius = self.search_radius_factor*r.data[i]
                     inc(it) # next particle
 
     cpdef create_ghost_particles(self, CarrayContainer particles):
-        """
-        After mesh generation, this method goes through partilce list
+        """After mesh generation, this method goes through partilce list
         and generates ghost particles and communicates them. This method
         is called by mesh repeatedly until the mesh is complete.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         cdef int i
         cdef FlagParticle *p
@@ -228,25 +252,52 @@ cdef class DomainManager:
         self.copy_particles(particles)
 
     cdef create_interior_ghost_particle(self, FlagParticle* p):
-        # not implement yet
+        """Create interior ghost particles to stitch back the solutions
+        across processor.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        """
         pass
 
     cdef copy_particles(self, CarrayContainer particles):
         """
-        Copy particles that where flagged for ghost creation and append them into particle
-        container.
+        Copy particles that where flagged for ghost creation and append them
+        into particle container.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         if phd._in_parallel:
-            raise NotImplemented("copy_particles called!")
+            self.copy_particles_parallel(particles)
         else:
             self.copy_particles_serial(particles)
 
     cdef copy_particles_parallel(self, CarrayContainer particles):
-            raise RuntimeError("not implemented yet")
+        """Copy particles from ghost_particle vector in parallel run.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        """
+        raise RuntimeError("not implemented yet")
 
     cdef copy_particles_serial(self, CarrayContainer particles):
-        """
-        Copy particles from ghost_particle vector
+        """Copy particles from ghost_particle vector in serial run.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         cdef IntArray tags
         cdef LongArray maps
@@ -259,7 +310,7 @@ cdef class DomainManager:
 
         cdef np.float64_t *xg[3], *mvg[3]
 
-        dim = len(particles.carray_named_groups['position'])
+        dim = len(particles.carray_named_groups["position"])
 
         if self.ghost_vec.size() == 0:
             return
@@ -277,8 +328,8 @@ cdef class DomainManager:
         types = ghosts.get_carray("type")
         maps  = ghosts.get_carray("map")
 
-        ghosts.pointer_groups(mvg, particles.carray_named_groups['momentum'])
-        ghosts.pointer_groups(xg,  particles.carray_named_groups['position'])
+        ghosts.pointer_groups(mvg, particles.carray_named_groups["momentum"])
+        ghosts.pointer_groups(xg,  particles.carray_named_groups["position"])
 
         # transfer ghost position and velocity 
         for i in range(self.ghost_vec.size()):
@@ -298,9 +349,13 @@ cdef class DomainManager:
         particles.append_container(ghosts)
 
     cpdef bint ghost_complete(self):
-        """
-        Return True if no particles have been flagged for ghost
-        creation
+        """Return True if no particles have been flagged for ghost
+        creation.
+
+        Particles that have been flagged for ghost creation are stored
+        in flagged_particles. When flagged particles have a complete
+        voronoi cell they are removed from flagged_particles.
+
         """
         if phd._in_parallel:
             raise RuntimeError("not implemented yet")
@@ -308,8 +363,16 @@ cdef class DomainManager:
             return self.flagged_particles.empty()
 
     cpdef move_generators(self, CarrayContainer particles, double dt):
-        """
-        Move particles after flux update.
+        """Move particles after flux update.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        dt : float
+            Time step of the simulation.
+
         """
         cdef int i, k, dim
         cdef np.float64_t *x[3], *wx[3]
@@ -328,9 +391,14 @@ cdef class DomainManager:
         self.migrate_particles(particles)
 
     cpdef migrate_particles(self, CarrayContainer particles):
-        """
-        For particles that have left the domain or processor patch
+        """For particles that have left the domain or processor patch
         move particles to their appropriate spot.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
         self.boundary_condition.migrate_particles(particles, self)
 
@@ -339,7 +407,7 @@ cdef class DomainManager:
         """Transfer ghost fields from their image particle.
 
         After ghost particles are created their are certain fields that
-        cannot be calculated (i.e. volumen, center-of-mass ...) and need
+        cannot be calculated (i.e. volume, center-of-mass ...) and need
         to be upated from their resepective image particle.
 
         Parameters
@@ -390,8 +458,8 @@ cdef class DomainManager:
 
         gradients : CarrayContainer
             Container of gradients for each primitive field.
-        """
 
+        """
         cdef str field
         cdef LongArray indices = LongArray()
         cdef IntArray types = particles.get_carray("type")
