@@ -76,8 +76,8 @@ cdef class Reflective(BoundaryConditionBase):
                 # lower boundary
                 # does particle radius leave global boundary 
                 # skip if processed in earlier iteration 
-                if p.x[i] < domain_manager.domain.translate[i]/2.0:
-                    if(p.x[i] - p.search_radius < domain_manager.domain.bounds[0][i]) and\
+                if p.x[i] <= domain_manager.domain.translate[i]/2.0:
+                    if(p.x[i] - p.search_radius <= domain_manager.domain.bounds[0][i]) and\
                         (p.x[i] - p.old_search_radius > domain_manager.domain.bounds[0][i]):
 
                         # copy particle information
@@ -98,7 +98,7 @@ cdef class Reflective(BoundaryConditionBase):
                 # does particle radius leave global boundary 
                 # skip if processed in earlier iteration 
                 if p.x[i] > domain_manager.domain.translate[i]/2.0:
-                    if (domain_manager.domain.bounds[1][i] < p.x[i] + p.search_radius) and\
+                    if (domain_manager.domain.bounds[1][i] <= p.x[i] + p.search_radius) and\
                         (domain_manager.domain.bounds[1][i] > p.x[i] + p.old_search_radius):
 
                         # copy particle information
