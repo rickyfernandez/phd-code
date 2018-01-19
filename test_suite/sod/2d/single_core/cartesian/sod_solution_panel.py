@@ -59,6 +59,5 @@ ax.set_ylim(-0.1,1.1)
 ax.set_xlabel("X")
 ax.set_ylabel("Pressure")
 
-#plt.tight_layout()
-#plt.savefig("sod_example.png")
+plt.savefig("sod_example.png")
 plt.show()
