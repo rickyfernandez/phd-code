@@ -65,23 +65,31 @@ cdef class Mesh:
 
     Attributes
     ----------
-    regularize : bool
-        Add regularization to velocity mesh generators.
-
     eta : double
         Regularize parameter.
+
+    max_iterations : int
+        The max number of mesh updates in a build. This is
+        stop an infinite loop for bad meshes.
 
     num_neighbors : int
         Initial number of neighbors for each particle. Used
         to allocate storage space.
 
+    regularize : bool
+        Add regularization to velocity mesh generators.
+
+    relax_iterations : int
+        Number of times to perform lloyd relaxation on startup.
+
     """
     def __init__(self, bint regularize=True, int relax_iterations = 0,
-                 double eta=0.25, int num_neighbors=128, **kwargs):
+                 double eta=0.25, int num_neighbors=128,
+                 max_iterations = 5, **kwargs):
         # domain manager needs to be set
         self.particle_fields_registered = False
 
-        # perform lloyd relaxtion scheme if non-zero
+        self.max_iterations = max_iterations
         self.relax_iterations = relax_iterations
 
         self.eta = eta
@@ -195,17 +203,15 @@ cdef class Mesh:
         particles.pointer_groups(xp, particles.carray_named_groups["position"])
 
         # first attempt of mesh, radius updated
-        #assert(self.tess.build_initial_tess(xp, rp, end_particles) != -1)
-        assert(self.tess.build_initial_tess(xp,
-            rp, start_new_ghost, stop_new_ghost) != -1)
+        assert(self.tess.build_initial_tess(xp, rp, stop_new_ghost) != -1)
 
         # every infinite radius set to boundary 
         domain_manager.setup_for_ghost_creation(particles)
 
-        while True:
+        for i in range(self.max_iterations):
 
             # add ghost particles untill mesh is complete
-            #start_new_ghost = particles.get_carray_size()
+            start_new_ghost = particles.get_carray_size()
             domain_manager.create_ghost_particles(particles)
             stop_new_ghost = particles.get_carray_size()
 
@@ -214,23 +220,22 @@ cdef class Mesh:
             particles.pointer_groups(xp, particles.carray_named_groups["position"])
 
             # add ghost particle to mesh
-            #if start_new_ghost != stop_new_ghost:
+            if start_new_ghost != stop_new_ghost:
 
-            # FIX: having a problem with cgal adding particles
-            self.reset_mesh()
-            assert(self.tess.build_initial_tess(xp, rp,
-                start_new_ghost, stop_new_ghost) != -1)
-            #assert(self.tess.update_initial_tess(xp,
-            #    start_new_ghost, stop_new_ghost) != -1)
+                assert(self.tess.update_initial_tess(xp,
+                    start_new_ghost, stop_new_ghost) != -1)
 
-            self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
+                self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
 
-            # update radius of old flagged particles 
-            domain_manager.update_search_radius(particles)
+                # update radius of old flagged particles 
+                domain_manager.update_search_radius(particles)
 
             # if all process are done flagging
             if domain_manager.ghost_complete():
                 break
+
+        if (i+1) == self.max_iterations:
+            raise RuntimeError("Mesh failed to converged!")
 
     cpdef build_geometry(self, CarrayContainer particles, DomainManager domain_manager):
         """Build the voronoi mesh and then extract mesh information, i.e
@@ -303,8 +308,7 @@ cdef class Mesh:
         domain_manager.update_ghost_fields(particles, self.update_ghost_fields)
 
     cpdef reset_mesh(self):
-        """Clear out mesh data.
-        """
+        """Clear out mesh data."""
         self.tess.reset_tess()
 
     cpdef relax(self, CarrayContainer particles, DomainManager domain_manager):
@@ -541,7 +545,7 @@ cdef class Mesh:
 #        for i in range(num_ghost_particles)
 #            self.sortd_indices[i].proc  = proc.data[num_real_particles+i]
 #            self.sortd_indices[i].index = proc.data[num_real_particles+i]
-#            self.sortd_indices[i].pos = i
+#            self.sortd_indices[i].export_index = i
 #
 #        # put ghost in process order for neighbor information
 #        qsort(<void*> self.sorted_indices, <size_t> self.sorted_indices.size(),

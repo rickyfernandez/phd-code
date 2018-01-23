@@ -16,7 +16,8 @@ cdef class Mesh:
 
     # initialization parameters
     cdef public int relax_iterations
-    cdef public int dim
+    cdef public int max_iterations
+
     cdef public double eta
     cdef public bint regularize
     cdef public int num_neighbors

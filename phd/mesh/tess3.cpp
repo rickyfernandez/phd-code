@@ -1,5 +1,4 @@
 #include "tess.h"
-//#include <vector>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Delaunay_triangulation_3.h>
 #include <CGAL/Triangulation_vertex_base_with_info_3.h> 
@@ -35,12 +34,11 @@ void Tess3d::reset_tess(void) {
 int Tess3d::build_initial_tess(
         double *x[3],
         double *radius,
-        int start_ghost,
-        int total_particles) {
+        int num_real_particles) {
     /*
 
-    Creates a tessellation for particles and store the radius for
-    each real particle.
+    Creates initial tessellation of real particles and calculates
+    the radius. If the radius is infinite the values is to -1.
 
     Parameters
     ----------
@@ -52,25 +50,22 @@ int Tess3d::build_initial_tess(
         the circle than encompass all circumcircles from the voronoi
         for the given particle.
 
-    start_ghost : int
+    num_real_particles : int
         Starting index of the first ghost particle in the particle
         data container.
 
-    total_particles : int
-        Total number of particles in the particle data container.
-
     */
-    local_num_particles = start_ghost;
-    tot_num_particles = total_particles;
+    local_num_particles = num_real_particles;
+    total_num_particles = num_real_particles;
 
     // add all particles
     std::vector<Point> particles;
-    for (int i=0; i<total_particles; i++)
+    for (int i=0; i<num_real_particles; i++)
         particles.push_back(Point(x[0][i], x[1][i], x[2][i]));
 
     // create tessellation
     ptess = (void*) new Tess;
-    pvt_list = (void*) (new std::vector<Vertex_handle>(total_particles));
+    pvt_list = (void*) (new std::vector<Vertex_handle>(num_real_particles));
 
     // pointers to tessellation and vertices
     Tess &tess = *(Tess*) ptess;
@@ -82,10 +77,10 @@ int Tess3d::build_initial_tess(
 
     // sort particles
     std::vector<std::ptrdiff_t> indices;
-    indices.reserve(total_particles);
+    indices.reserve(num_real_particles);
     std::copy(
             boost::counting_iterator<std::ptrdiff_t>(0),
-            boost::counting_iterator<std::ptrdiff_t>(total_particles),
+            boost::counting_iterator<std::ptrdiff_t>(num_real_particles),
             std::back_inserter(indices));
 
     // sort particles by hilbert keys
@@ -105,11 +100,11 @@ int Tess3d::build_initial_tess(
     std::vector<Cell_handle> cells;
 
     // hold neighbors and flag neighbors accounted for
-    std::vector<bool> sites_ngb_used(total_particles, false);
+    std::vector<bool> sites_ngb_used(num_real_particles, false);
     std::vector<int>  site_ngb_list;
 
     // loop over local particles
-    for (int i=0; i<start_ghost; i++) {
+    for (int i=0; i<num_real_particles; i++) {
 
         // exctract particle position and vertex
         const Vertex_handle& vi = vt_list[i];
@@ -206,14 +201,73 @@ int Tess3d::build_initial_tess(
     return 0;
 }
 
-int Tess3d::count_number_of_faces(void) {
+int Tess3d::update_initial_tess(
+        double *x[3],
+        int begin_particles,
+        int end_particles) {
+    /*
 
+    Update the mesh by adding ghost particles. This function
+    is called multiple times untill all real particles have
+    finite volume.
+
+    Parameters
+    ----------
+    x : double[3]*
+        Pointer to the position of the particles.
+
+    begin_particles : int
+        Starting index of ghost particles to add.
+
+    end_particles : int
+        Ending index of ghost particles to add.
+
+    */
+    if (begin_particles == end_particles)
+        return 0;
+
+    total_num_particles = end_particles;
+    Tess &tess = *(Tess*) ptess;
+
+    // create points for ghost particles 
+    std::vector<Point> particles;
+    for (int i=begin_particles; i<end_particles; i++)
+        particles.push_back(Point(x[0][i], x[1][i], x[2][i]));
+
+    // sort particles
+    std::vector<std::ptrdiff_t> indices;
+    indices.reserve(particles.size());
+    std::copy(
+            boost::counting_iterator<std::ptrdiff_t>(0),
+            boost::counting_iterator<std::ptrdiff_t>(particles.size()),
+            std::back_inserter(indices));
+
+    // sort particles by hilbert keys
+    CGAL::spatial_sort(indices.begin(), indices.end(), Search_traits_3(&(particles[0])),
+            CGAL::Hilbert_sort_median_policy());
+
+    Vertex_handle vt;
+    for (std::vector<std::ptrdiff_t>::iterator it=indices.begin(); it!=indices.end(); it++) {
+        vt = tess.insert(particles[*it]);
+        vt->info() = *it + begin_particles;
+    }
+    return 0;
+}
+
+int Tess3d::count_number_of_faces(void) {
+    /*
+
+    Count the number of faces that belong to a real
+    particle. This is used to allocate storage for
+    containers holding face information.
+
+    */
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
     int num_faces = 0;
 
     std::vector<Cell_handle> cells;
-    std::vector<bool> sites_ngb_used(tot_num_particles, false);
+    std::vector<bool> sites_ngb_used(total_num_particles, false);
     std::vector<int>  site_ngb_list;
 
     for (int i=0; i<local_num_particles; i++) {
@@ -255,7 +309,6 @@ int Tess3d::count_number_of_faces(void) {
                 site_ngb_list.push_back(id);
             }
         }
-
         const int nngb = site_ngb_list.size();
         for (int j=0; j<nngb; j++)
             sites_ngb_used[site_ngb_list[j]] = false;
@@ -263,28 +316,6 @@ int Tess3d::count_number_of_faces(void) {
     return num_faces;
 }
 
-//int Tess3d::update_initial_tess(
-//        double *x[3],
-//        int up_num_particles) {
-//
-//    int start_num = local_num_particles;
-//    tot_num_particles = local_num_particles + up_num_particles;
-//
-//    Tess &tess = *(Tess*) ptess;
-//
-//    // create points for ghost particles 
-//    std::vector<Point> particles;
-//    for (int i=start_num; i<tot_num_particles; i++)
-//        particles.push_back(Point(x[0][i], x[1][i], x[2][i]));
-//
-//    // add ghost particles to the tess
-//    Vertex_handle vt;
-//    for (int i=0, j=local_num_particles; i<up_num_particles; i++, j++) {
-//        vt = tess.insert(particles[i]);
-//        vt->info() = j;
-//    }
-//    return 0;
-//}
 
 int Tess3d::extract_geometry(
         double* x[3],
@@ -296,7 +327,36 @@ int Tess3d::extract_geometry(
         int* pair_i,
         int* pair_j,
         std::vector< std::vector<int> > &neighbors) {
+    /*
 
+    Extract all geometric information pertaining to the mesh,
+    i.e. area, normal, volume, ...
+
+    Parameters
+    ----------
+    x : double[3]*
+        Pointer to the position of the particles.
+
+    dcenter_of_mass : double[3]*
+        Pointer to the center of mass of each real particle
+        realtive to its position.
+
+    volume : double*
+        Pointer to the volume of each real particle.
+
+    face_area : double*
+        Pointer to face area defined by particle i and j .
+
+    face_com : double[3]*
+        Pointer to face center of mass defined by particle i and j .
+
+    pair_i : int*
+        Pointer to left most particle defining the face.
+
+    pair_j : int*
+        Pointer to right most particle defining the face.
+
+    */
     // face counter
     int fc=0;
     Tess &tess = *(Tess*) ptess;
@@ -305,7 +365,7 @@ int Tess3d::extract_geometry(
     double tot_volume = 0;
     std::vector<Edge> edges;
     std::vector<Cell_handle> cells;
-    std::vector<bool> sites_ngb_used(tot_num_particles, false);
+    std::vector<bool> sites_ngb_used(total_num_particles, false);
     std::vector<int>  site_ngb_list;
 
     // only process local particle information
@@ -365,7 +425,6 @@ int Tess3d::extract_geometry(
 
             do {
                 if (tess.is_infinite(cc)) {
-                    std::cout << "infinite vertex" << std::endl;
                     return -1;
                 } else {
                     const Point c = tess.dual(cc);
@@ -418,9 +477,6 @@ int Tess3d::extract_geometry(
             id2 = (i1 == i) ? i2 : i1;
 
             if (id1 != i){
-                std::cout << id1 << " != " << i << " not equal!" << std::endl;
-                std::cout << "id1 failed" << std::endl;
-                std::cout << "i=" << i << " id1=" << id1 << " i1=" << i1 << " id2=" << id2 << " i2=" << i2 << std::endl;
                 return -1;
             }
 
@@ -498,8 +554,8 @@ int Tess3d::update_radius(
         std::list<FlagParticle> flagged_particles) {
     /*
 
-    Creates a tessellation for particles and store the radius for
-    each real particle.
+    For particle in flagged_particle container, upater their
+    radius.
 
     Parameters
     ----------
@@ -525,7 +581,7 @@ int Tess3d::update_radius(
 
     // store neighbors not allow repeats
     std::vector<int>  site_ngb_list;
-    std::vector<bool> sites_ngb_used(tot_num_particles, false);
+    std::vector<bool> sites_ngb_used(total_num_particles, false);
 
     // loop over all flagged particles
     for(std::list<FlagParticle>::iterator it = flagged_particles.begin();

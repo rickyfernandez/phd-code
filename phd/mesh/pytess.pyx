@@ -3,11 +3,11 @@ cdef class PyTess:
     cdef void reset_tess(self):
         raise NotImplementedError, "PyTess::reset_tess"
 
-    cdef int build_initial_tess(self, double *x[3], double *radius, int start_ghost, int total_particles):
+    cdef int build_initial_tess(self, double *x[3], double *radius, int num_real_particles):
         raise NotImplementedError, "PyTess::build_initial_tess"
 
-    #cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles):
-    #    raise NotImplementedError, "PyTess::update_initial_tess"
+    cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles):
+        raise NotImplementedError, "PyTess::update_initial_tess"
 
     cdef int count_number_of_faces(self):
         raise NotImplementedError, "PyTess::count_number_of_faces"
@@ -31,11 +31,11 @@ cdef class PyTess2d(PyTess):
     cdef void reset_tess(self):
         self.thisptr.reset_tess()
 
-    cdef int build_initial_tess(self, double *x[3], double *radius, int start_ghost, int total_particles):
-        return self.thisptr.build_initial_tess(x, radius, start_ghost, total_particles)
+    cdef int build_initial_tess(self, double *x[3], double *radius, int num_real_particles):
+        return self.thisptr.build_initial_tess(x, radius, num_real_particles)
 
-    #cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles):
-    #    return self.thisptr.update_initial_tess(x, begin_particles, end_particles)
+    cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles):
+        return self.thisptr.update_initial_tess(x, begin_particles, end_particles)
 
     cdef int count_number_of_faces(self):
         return self.thisptr.count_number_of_faces()
@@ -61,11 +61,11 @@ cdef class PyTess3d(PyTess):
     cdef void reset_tess(self):
         self.thisptr.reset_tess()
 
-    cdef int build_initial_tess(self, double *x[3], double *radius, int start_ghost, int total_particles):
-        return self.thisptr.build_initial_tess(x, radius, start_ghost, total_particles)
+    cdef int build_initial_tess(self, double *x[3], double *radius, int num_real_particles):
+        return self.thisptr.build_initial_tess(x, radius, num_real_particles)
 
-    #cdef int update_initial_tess(self, double *x[3], int up_num_particles):
-    #    return self.thisptr.update_initial_tess(x, up_num_particles)
+    cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles):
+        return self.thisptr.update_initial_tess(x, begin_particles, end_particles)
 
     cdef int count_number_of_faces(self):
         return self.thisptr.count_number_of_faces()

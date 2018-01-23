@@ -10,8 +10,8 @@ cdef extern from "tess.h":
     cdef cppclass Tess2d:
         Tess2d() except +
         void reset_tess()
-        int build_initial_tess(double *x[3], double *radius, int start_ghost, int total_particles)
-        #int update_initial_tess(double *x[3], int begin_particles, int end_particles)
+        int build_initial_tess(double *x[3], double *radius, int num_real_particles)
+        int update_initial_tess(double *x[3], int begin_particles, int end_particles)
         int count_number_of_faces()
         int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
@@ -21,8 +21,8 @@ cdef extern from "tess.h":
     cdef cppclass Tess3d:
         Tess3d() except +
         void reset_tess()
-        int build_initial_tess(double *x[3], double *radius, int start_ghost, int total_particles)
-        #int update_initial_tess(double *x[3], int begin_particles, int end_particles)
+        int build_initial_tess(double *x[3], double *radius, int num_real_particles)
+        int update_initial_tess(double *x[3], int begin_particles, int end_particles)
         int count_number_of_faces()
         int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
@@ -32,8 +32,8 @@ cdef extern from "tess.h":
 cdef class PyTess:
 
     cdef void reset_tess(self)
-    cdef int build_initial_tess(self, double *x[3], double *radius, int start_ghost, int total_particles)
-    #cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles)
+    cdef int build_initial_tess(self, double *x[3], double *radius, int num_real_particles)
+    cdef int update_initial_tess(self, double *x[3], int begin_particles, int end_particles)
     cdef int count_number_of_faces(self)
     cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],

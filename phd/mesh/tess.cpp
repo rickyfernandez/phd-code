@@ -35,33 +35,51 @@ void Tess2d::reset_tess(void) {
 int Tess2d::build_initial_tess(
         double *x[3],
         double *radius,
-        int start_new_ghost,
-        int stop_new_ghost) {
-    
-    // save local number of particles
-    local_num_particles = start_new_ghost;
+        int num_real_particles) {
+    /*
+
+    Creates initial tessellation of real particles and calculates
+    the radius. If the radius is infinite the values is to -1.
+
+    Parameters
+    ----------
+    x : double[3]*
+       Pointer to the position of the particles.
+
+    radius : double*
+        Pointer to store the radius of real particles. The radius is
+        the circle than encompass all circumcircles from the voronoi
+        for the given particle.
+
+    num_real_particles : int
+        Starting index of the first ghost particle in the particle
+        data container.
+
+    */
+    local_num_particles = num_real_particles;
+    total_num_particles = num_real_particles;
 
     // gernerating vertices for the tesselation 
     std::vector<Point> particles;
-    for (int i=0; i<stop_new_ghost; i++)
+    for (int i=0; i<num_real_particles; i++)
         particles.push_back(Point(x[0][i], x[1][i]));
 
     // create tessellation
     ptess = (void*) new Tess;
-    pvt_list = (void*) (new std::vector<Vertex_handle>(stop_new_ghost));
+    pvt_list = (void*) (new std::vector<Vertex_handle>(num_real_particles));
 
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
 
     Vertex_handle vt;
-    for (int i=0; i<stop_new_ghost; i++) {
+    for (int i=0; i<num_real_particles; i++) {
         vt = tess.insert(particles[i]);
         vt->info() = i;
         vt_list[i] = vt;
     }
 
     // only real particles
-    for (int i=0; i<start_new_ghost; i++) {
+    for (int i=0; i<num_real_particles; i++) {
 
         const Vertex_handle &vi = vt_list[i];
         const Point& pos = particles[i];
@@ -123,32 +141,56 @@ int Tess2d::build_initial_tess(
     return 0;
 }
 
-//int Tess2d::update_initial_tess(
-//        double *x[3],
-//        int begin_particles,
-//        int end_particles) {
-//
-//    if (begin_particles == end_particles)
-//        return 0;
-//
-//    Tess &tess = *(Tess*) ptess;
-//
-//    // create points for ghost particles 
-//    std::vector<Point> particles;
-//    for (int i=begin_particles; i<end_particles; i++)
-//        particles.push_back(Point(x[0][i], x[1][i]));
-//
-//    // add ghost particles to the tessellation
-//    Vertex_handle vt;
-//    for (int i=0, j=begin_particles; i<end_particles; i++, j++) {
-//        vt = tess.insert(particles[i]);
-//        vt->info() = j;
-//    }
-//    return 0;
-//}
+int Tess2d::update_initial_tess(
+        double *x[3],
+        int begin_particles,
+        int end_particles) {
+    /*
+
+    Update the mesh by adding ghost particles. This function
+    is called multiple times untill all real particles have
+    finite volume.
+
+    Parameters
+    ----------
+    x : double[3]*
+        Pointer to the position of the particles.
+
+    begin_particles : int
+        Starting index of ghost particles to add.
+
+    end_particles : int
+        Ending index of ghost particles to add.
+
+    */
+    if (begin_particles == end_particles)
+        return 0;
+
+    Tess &tess = *(Tess*) ptess;
+    total_num_particles = end_particles;
+
+    // create points for ghost particles 
+    std::vector<Point> particles;
+    for (int i=begin_particles; i<end_particles; i++)
+        particles.push_back(Point(x[0][i], x[1][i]));
+
+    // add ghost particles to the tessellation
+    Vertex_handle vt;
+    for (int i=0, j=begin_particles; i<particles.size(); i++, j++) {
+        vt = tess.insert(particles[i]);
+        vt->info() = j;
+    }
+    return 0;
+}
 
 int Tess2d::count_number_of_faces(void) {
+    /*
 
+    Count the number of faces that belong to a real
+    particle. This is used to allocate storage for
+    containers holding face information.
+
+    */
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
     int num_faces = 0;
@@ -200,7 +242,36 @@ int Tess2d::extract_geometry(
         int* pair_i,
         int* pair_j,
         std::vector< std::vector<int> > &neighbors) {
+    /*
 
+    Extract all geometric information pertaining to the mesh,
+    i.e. area, normal, volume, ...
+
+    Parameters
+    ----------
+    x : double[3]*
+        Pointer to the position of the particles.
+
+    dcenter_of_mass : double[3]*
+        Pointer to the center of mass of each real particle
+        realtive to its position.
+
+    volume : double*
+        Pointer to the volume of each real particle.
+
+    face_area : double*
+        Pointer to face area defined by particle i and j .
+
+    face_com : double[3]*
+        Pointer to face center of mass defined by particle i and j .
+
+    pair_i : int*
+        Pointer to left most particle defining the face.
+
+    pair_j : int*
+        Pointer to right most particle defining the face.
+
+    */
     // face counter
     int fc=0;
     Tess &tess = *(Tess*) ptess;
@@ -224,7 +295,6 @@ int Tess2d::extract_geometry(
         do {
             // edge that contains infinite vertex
             if (tess.is_infinite(ed)) {
-                std::cout << "infinite" << "x: " << xp << " y: " << yp << std::endl;
                 return -1;
             }
 
@@ -244,8 +314,6 @@ int Tess2d::extract_geometry(
 
                 double xn = x[0][id2], x1 = p1.x(), x2 = p2.x();
                 double yn = x[1][id2], y1 = p1.y(), y2 = p2.y();
-                //double xn = x[0][id2], x1 = CGAL::to_double(p1.x()), x2 = CGAL::to_double(p2.x());
-                //double yn = x[1][id2], y1 = CGAL::to_double(p1.y()), y2 = CGAL::to_double(p2.y());
 
                 // difference vector between particles
                 double xr = xn - xp;
@@ -312,7 +380,6 @@ int Tess2d::extract_geometry(
                 }
 
             } else {
-                std::cout << "infinite face " << "x: " << xp << " y: " << yp << std::endl;
                 return -1;
             }
         } while (++ed != done);
@@ -324,8 +391,6 @@ int Tess2d::extract_geometry(
 
     }
 
-    //std::size_t memory = CGAL::Memory_sizer().resident_size();
-    //std::cout << "Tessellation size: " << (memory >> 20) <<  " Mib" <<std::endl;
     return fc;
 }
 
@@ -333,7 +398,26 @@ int Tess2d::update_radius(
         double* x[3],
         double *radius,
         std::list<FlagParticle> flagged_particles) {
+    /*
 
+    For particle in flagged_particle container, upater their
+    radius.
+
+    Parameters
+    ----------
+    x : double[3]*
+       Pointer to the position of the particles.
+
+    radius : double*
+        Pointer to store the radius of real particles. The radius is
+        the circle than encompass all circumcircles from the voronoi
+        for the given particle.
+
+    flagged_particles : list<FlagParticle>
+        List of particles that have been flagged by the domain mananger
+        to create ghost particles.
+
+    */
     Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
 
