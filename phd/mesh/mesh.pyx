@@ -533,32 +533,39 @@ cdef class Mesh:
 
 
 #    cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
-#        self.tess.reindex_ghost(particles, ...)
+#        cdef LongLongArray keys
+#        cdef LongArray proc
+#        cdef LongArray indices = LongArray()
+#        cdef CarrayContainer ghost
 #
-#        # remove ghost particles
-#        num_ghost_particles = particle.get_carray_size() - num_real_particles
-#        for i in range(num_ghost_particles):
-#            self.indices[i] = num_real_particles + i
+#        cdef int num_real_particles
+#        cdef int num_ghost_particles
 #
-#        # sort particles by processor order
+#        num_ghost_particles = stop_new_ghost - start_new_ghost
+#
+#        j = 0
+#        # copy ghost information for sort 
 #        self.sorted_indices.resize(num_ghost_particles)
+#        for i in range(start_new_ghost, stop_new_ghost)
+#
+#            self.sorted_indices[j].index = i 
+#            self.sorted_indices[j].proc = proc.data[i] 
+#            self.sorted_indices[j].export_index = key.data[i]
+#            j += 1
+#
+#        # sort ghost particle by processor than by export index 
+#        sort(self.sorted_indices.begin(), self.sorted_indices.end(),
+#                proc_index_compare)
+#
+#        self.indices.resize(num_ghost_particles)
 #        for i in range(num_ghost_particles)
-#            self.sortd_indices[i].proc  = proc.data[num_real_particles+i]
-#            self.sortd_indices[i].index = proc.data[num_real_particles+i]
-#            self.sortd_indices[i].export_index = i
+#            indices[i] = self.sorted_indices[i].index
 #
-#        # put ghost in process order for neighbor information
-#        qsort(<void*> self.sorted_indices, <size_t> self.sorted_indices.size(),
-#                sizeof(SortedIndex), proc_index_compare)
-#
-#        for i in range(num_ghost_particles)
-#            self.indices[i] = self.sorted_indices[i].index
-#
-#        # reappend ghost particle in ghost order
-#        ghost_particles = particles.extract_items(self.indices)
-#        particles.remove_tagged_particles(ParticleTAGS.Ghost)
+#        # reappend ghost particles in correct order 
+#        ghost = particles.extract_items(indices)
+#        particles.resize(start_new_ghost)
 #        particles.append(ghost)
 #
-#        # map for creating neighbors with ghost
-#        for i in range(num_ghost_particles)
-#            self.indices[i] = self.sorted_indices[i].index
+#        # finally reindex ghost in tessellation for
+#        # correct neighbors will be extracted
+#        self.tess.reindex_ghost(self.sorted_indices)
