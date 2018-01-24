@@ -24,7 +24,13 @@ cdef extern from "particle.h":
         double v[3]
         int proc
         int index
-        int boundary_type
+        #int boundary_type
+
+    cdef cppclass GhostID:
+        GhostID(int _index, int _proc, int _export_num)
+        int index;
+        int proc;
+        int export_num;
 
     FlagParticle* particle_flag_deref(cpplist[FlagParticle].iterator &it)
 
@@ -60,11 +66,10 @@ cdef class DomainManager:
     cpdef setup_for_ghost_creation(self, CarrayContainer particles)
 
     cpdef create_ghost_particles(self, CarrayContainer particles)
-    cdef create_interior_ghost_particle(self, FlagParticle* p)
+    cdef create_interior_ghost_particle(self, CarrayContainer particles)
 
     cpdef update_search_radius(self, CarrayContainer particles)
 
-    cdef copy_particles(self, CarrayContainer particles)
     cdef copy_particles_serial(self, CarrayContainer particles)
     cdef copy_particles_parallel(self, CarrayContainer particles)
 

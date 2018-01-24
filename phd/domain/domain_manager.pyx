@@ -6,6 +6,7 @@ from cython.operator cimport preincrement as inc
 
 from ..utils.tools import check_class
 from ..utils.particle_tags import ParticleTAGS
+from ..utils.exchange_particles import exchange_particles
 
 cdef int REAL = ParticleTAGS.Real
 cdef int GHOST = ParticleTAGS.Ghost
@@ -56,8 +57,9 @@ cdef class DomainManager:
             for field, dtype in fields_for_parallel.iteritems():
                 if field not in particles.carrays.keys():
                     particles.register_carray(num_particles, field, dtype)
+        else:
+            particles.register_carray(num_particles, "map", "long")
 
-        particles.register_carray(num_particles, "map", "long")
         particles.register_carray(num_particles, "radius", "double")
         particles.register_carray(num_particles, "old_radius", "double")
 
@@ -144,6 +146,11 @@ cdef class DomainManager:
 
         # set ghost buffer to zero
         self.ghost_vec.clear()
+
+        if phd._in_parallel:
+            self.export_ghost_buffer.clear()
+            self.import_ghost_buffer.clear()
+
         self.flagged_particles.resize(particles.get_carray_size(), FlagParticle())
 
         # there should be no ghost particles in the particle container
@@ -253,9 +260,12 @@ cdef class DomainManager:
             self.create_interior_ghost_particle(particles)
 
         # copy particles, put in processor order and export
-        self.copy_particles(particles)
+        if phd._in_parallel:
+            self.copy_particles_parallel(particles)
+        else:
+            self.copy_particles_serial(particles)
 
-    cdef create_interior_ghost_particle(self, FlagParticle* p):
+    cdef create_interior_ghost_particle(self, CarrayContainer particles):
         """Create interior ghost particles to stitch back the solutions
         across processor.
 
@@ -265,66 +275,41 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
-        cdef int i, j
-        cdef np.ndarray nbrs_pid_npy
-        cdef LongArray nbrs_pid = LongArray()
-        cdef LongArray leaf_pid = self.load_bal.leaf_pid
-        cdef Tree glb_tree = self.load_bal.tree
-
+        cdef int i
         cdef FlagParticle *p
-        cdef LongLongArray keys = particles.get_carray("key")
+        cdef LongArray nbrs_pid = LongArray()
+        cdef Tree glb_tree = self.load_balance.tree
+        cdef LongArray leaf_pid = self.load_balance.leaf_pid
 
-        # create particles from flagged particles
+        # create interior ghost particles from flagged particles
         cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
         while it != self.flagged_particles.end():
 
             # retrieve particle
             p = particle_flag_deref(it)
 
-            # find overlaping processors
+            # find all processors encolsed between old_search_radius
+            # and search_radius from domain partition
             nbrs_pid.reset()
-            glb_tree.get_nearest_process_neighbors(
-                    p.x, p.search_radius, leaf_pid, phd._rank, nbrs_pid)
+            glb_tree.get_nearest_intersect_process_neighbors(
+                    p.x, p.old_search_radius, p.search_radius,
+                    leaf_pid, phd._rank, nbrs_pid)
 
             if nbrs_pid.length:
+                for i in range(1, nbrs_pid.length):
 
-                # put in processors in order to avoid duplicates
-                nbrs_pid_npy = nbrs_pid.get_npy_array()
-                nbrs_pid_npy.sort()
+                    pid = nbrs_pid_npy[i]
 
-                # put particles in buffer
-                self.buffer_ids.append(i)               # store particle id
-                self.buffer_pid.append(nbrs_pid_npy[0]) # store export processor
+                    # store export information 
+                    self.export_ghost_buffer.push_back(GhostID(
+                        p.index, pid, self.num_export))
+                    self.num_export += 1
 
-                for j in range(1, nbrs_pid.length):
-
-                    if nbrs_pid_npy[j] != nbrs_pid_npy[j-1]:
-
-                        self.buffer_ids.append(i)               # store particle id
-                        self.buffer_pid.append(nbrs_pid_npy[j]) # store export processor
-
-                        self.ghost_vec.push_back(
-                                BoundaryParticle(p.x, p.v,
-                                    p.index, nbrs_pid_npy[j],
-                                    REFLECTIVE, dim))
+                    # store particle information for ghost creation
+                    self.ghost_vec.push_back(BoundaryParticle(
+                        p.x, p.v, p.index, pid, dim))
 
             inc(it)  # increment iterator
-
-    cdef copy_particles(self, CarrayContainer particles):
-        """
-        Copy particles that where flagged for ghost creation and append them
-        into particle container.
-
-        Parameters
-        ----------
-        particles : CarrayContainer
-            Class that holds all information pertaining to the particles.
-
-        """
-        if phd._in_parallel:
-            self.copy_particles_parallel(particles)
-        else:
-            self.copy_particles_serial(particles)
 
     cdef copy_particles_parallel(self, CarrayContainer particles):
         """Copy particles from ghost_particle vector in parallel run.
@@ -335,58 +320,69 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
-        cdef DoubleArray mass
-        cdef CarrayContainer ghosts
+        cdef IntArray tags
+        cdef IntArray types
+        cdef LongArray maps
 
-        cdef int i, j
+        cdef int i, k, dim, num_import
+
         cdef BoundaryParticle *p
-        cdef np.float64_t *x[3], *v[3], *mv[3]
-        cdef np.float64_t *xg[3], *vg[3], *mv[3]
+        cdef CarrayContainer ghosts
+        cdef LongArray indices = LongArray()
+
+        cdef np.float64_t *xg[3], *mvg[3]
+
+        dim = len(particles.carray_named_groups["position"])
 
         # reset import/export counts
-        for i in range(self.size):
+        for i in range(phd._size):
             self.send_cnts[i] = 0
             self.recv_cnts[i] = 0
 
-        if ghost_vec.size():
+        if self.ghost_vec.size() == 0:
+            return
 
-            # sort particles in processor order
-            sort(ghost_vec.begin(), ghost_vec.end(), proc_cmp)
+        # sort particles in processor order
+        sort(ghost_vec.begin(), ghost_vec.end(), proc_cmp)
 
-            # copy indices
-            indices.resize(ghost_vec.size())
-            for i in range(ghost_vec.size()):
-                p = &ghost_vec[i]
+        # copy indices
+        indices.resize(ghost_vec.size())
+        for i in range(ghost_vec.size()):
 
-                indices.data[i] = p.index
-                self.send_cnts[p.proc] += 1
+            p = &ghost_vec[i]
+            indices.data[i] = p.index
+            self.send_cnts[p.proc] += 1
 
-            # transfer updated position and velocity
-            ghosts.pointer_groups(xg, particles.carray_named_groups["position"])
-            ghosts.pointer_groups(vg, particles.carray_named_groups["velocity"])
-            mass = ghosts.get_carray("mass")
-            ghosts.pointer_groups(mv, particles.carray_named_groups["momentum"])
-
-            # transfer new data to ghost 
-            for i in range(ghosts.get_carray_size()):
-                p = &ghost_vec[i]
-
-                # for ghost to retrieve info later 
-                maps.data[i] = p.index
-                for j in range(dim):
-
-                    xg[j][i] = p.x[j]
-                    vg[j][i] = p.v[j]
-                    mv[j][i] = mass.data[i]*p.v[j]
-
-        # create ghost particles from flagged particles
+        # copy all particles to make ghost from
         ghosts = particles.extract_items(indices)
-        self.load_bal.comm.Alltoall([self.send_cnts, MPI.INT],
+
+        tags = ghosts.get_carray("tag")
+        types = ghosts.get_carray("type")
+
+        # transfer updated position and velocity
+        ghosts.pointer_groups(mvg, particles.carray_named_groups["momentum"])
+        ghosts.pointer_groups(xg, particles.carray_named_groups["position"])
+
+        # transfer new data to ghost 
+        for i in range(ghosts.get_carray_size()):
+            p = &self.ghost_vec[i]
+            tags.data[i] = GHOST
+            types.data[i] = INTERIOR
+            keys.data[i] = p.
+
+            for k in range(dim):
+
+                # update values
+                xg[k][i] = p.x[j]
+                mvg[k][i] = p.v[k] # momentum not velocity
+
+        # how many particles are going to each processor
+        phd._comm.Alltoall([self.send_cnts, MPI.INT],
                 [self.recv_cnts, MPI.INT])
 
         # how many incoming particles
         num_import = 0
-        for i in range(self.size):
+        for i in range(phd._size):
             num_import += self.recv_cnts[i]
 
         # create displacement arrays 
@@ -395,11 +391,15 @@ cdef class DomainManager:
             self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
             self.recv_disp[i] = self.recv_cnts[i-1] + self.recv_disp[i-1]
 
+        # index to start adding new ghost particles
+        start_index = particles.get_carray_size()
+
         # send our particles / recieve particles 
-        self.exchange_particles(particles, ghosts,
+        particles.extend(num_import)
+        exchange_particles(particles, ghosts,
                 self.send_cnts, self.recv_cnts,
-                0, self.comm,
-                self.pc.carray_named_groups['gravity-walk-export'],
+                start_index, phd._comm,
+                particles.carrays.keys(),
                 self.send_disp, self.recv_disp)
 
     cdef copy_particles_serial(self, CarrayContainer particles):
@@ -412,8 +412,8 @@ cdef class DomainManager:
 
         """
         cdef IntArray tags
-        cdef LongArray maps
         cdef IntArray types
+        cdef LongArray maps
 
         cdef int i, k, dim
         cdef BoundaryParticle *p
@@ -449,7 +449,7 @@ cdef class DomainManager:
 
             maps.data[i]  = p.index  # reference to image
             tags.data[i]  = GHOST    # ghost label
-            types.data[i] = Exterior # ghost outside the domain
+            types.data[i] = INTERIOR
 
             for k in range(dim):
 
@@ -469,8 +469,19 @@ cdef class DomainManager:
         voronoi cell they are removed from flagged_particles.
 
         """
+        # we are done when their are no  more particles are flagged
         if phd._in_parallel:
-            raise RuntimeError("not implemented yet")
+
+            self.glb_done[0] = 0
+            self.loc_done[0] = self.flagged_particles.size()
+
+            phd._comm.Allreduce(
+                    [self.loc_done, MPI.INT],
+                    [self.glb_done, MPI.INT],
+                    op=MPI.SUM)
+
+            return self.loc_done[0] == 0
+
         else:
             return self.flagged_particles.empty()
 
@@ -599,99 +610,3 @@ cdef class DomainManager:
 
             # modify gradient by boundary condition
             self.boundary_condition.update_gradients(particles, gradients, self)
-
-# ---------------------- add after serial working again -------------------------------
-#cdef class DomainManager:
-#    cdef filter_radius(self, CarrayContainer particles):
-#        for i in range(particles.get_carray_size()):
-#            if phd._in_parallel:
-#                raise NotImplemented("filter_radius called")
-#                if r.data[i] < 0.:
-#                    r.data[i] = self.param_box_fraction*\
-#                            self.load_balance.get_node_width(keys.data[i])
-#
-#    cdef copy_particles_parallel(CarrayContainer particles, vector[BoundaryParticle] ghost_vec):
-#        """
-#        Copy particles from ghost_particle vector
-#        """
-#        cdef CarrayContainer ghosts
-#        cdef DoubleArray mass
-#
-#        cdef int i, j
-#        cdef BoundaryParticle *p
-#        cdef np.float64_t *x[3], *v[3], *mv[3]
-#        cdef np.float64_t *xg[3], *vg[3], *mv[3]
-#
-#        # reset import/export counts
-#        for i in range(self.size):
-#            self.send_cnts[i] = 0
-#            self.recv_cnts[i] = 0
-#
-#        if ghost_vec.size():
-#
-#            # sort particles in processor order
-#            sort(ghost_vec.begin(), ghost_vec.end(), proc_cmp)
-#
-#            # copy indices
-#            indices.resize(ghost_vec.size())
-#            for i in range(ghost_vec.size()):
-#                p = &ghost_vec[i]
-#
-#                indices.data[i] = p.index
-#                self.send_cnts[p.proc] += 1
-#
-#            # transfer updated position and velocity
-#            ghosts.pointer_groups(xg, particles.carray_named_groups['position'])
-#            ghosts.pointer_groups(vg, particles.carray_named_groups['velocity'])
-#            mass = ghosts.get_carray("mass")
-#            ghosts.pointer_groups(mv, particles.carray_named_groups['momentum'])
-#
-#        # transfer new data to ghost 
-#        for i in range(ghosts.get_carray_size()):
-#            p = &ghost_vec[i]
-#
-#            # for ghost to retrieve info later 
-#            maps.data[i] = p.index
-#            for j in range(dim):
-#
-#                xg[j][i] = p.x[j]
-#                vg[j][i] = p.v[j]
-#                mv[j][i] = mass.data[i]*p.v[j]
-#
-#        # add new ghost to total ghost container
-#        self.total_ghost_particles.append_container(exterior_ghost)
-#
-#        # create ghost particles from flagged particles
-#        ghosts = particles.extract_items(indices)
-#        self.load_bal.comm.Alltoall([self.send_cnts, MPI.INT],
-#                [self.recv_cnts, MPI.INT])
-#
-#        # how many incoming particles
-#        num_import = 0
-#        for i in range(self.size):
-#            num_import += self.recv_cnts[i]
-#
-#        # create displacement arrays 
-#        self.send_disp[0] = self.recv_disp[0] = 0
-#        for i in range(1, self.size):
-#            self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
-#            self.recv_disp[i] = self.recv_cnts[i-1] + self.recv_disp[i-1]
-#
-#        # send our particles / recieve particles 
-#        self.exchange_particles(particles, ghosts,
-#                self.send_cnts, self.recv_cnts,
-#                0, self.comm,
-#                self.pc.carray_named_groups['gravity-walk-export'],
-#                self.send_disp, self.recv_disp)
-#    cdef bint ghost_complete(self):
-#        if phd._in_parallel:
-#            raise RuntimeError("not implemented yet")
-#            # let all processors know if walk is complete 
-#            glb_done[0] = 0
-#            loc_done[0] = self.export_interaction.done_processing()
-#            self.load_bal.comm.Allreduce([loc_done, MPI.INT], [glb_done, MPI.INT], op=MPI.SUM)
-#
-#            return (self.new_exterior_flagged.empty() and\
-#                    self.new_interior_flagged.empty())
-#        else:
-#            return True
