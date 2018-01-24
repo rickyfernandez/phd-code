@@ -35,12 +35,12 @@ cdef class DomainManager:
         if phd._in_parallel:
 
             # mpi send/receive counts
-            self.send_cnts = np.zeros(phd.size, dtype=np.int32)
-            self.recv_cnts = np.zeros(phd.size, dtype=np.int32)
+            self.send_cnts = np.zeros(phd._size, dtype=np.int32)
+            self.recv_cnts = np.zeros(phd._size, dtype=np.int32)
 
             # mpi send/recieve displacements
-            self.send_disp = np.zeros(phd.size, dtype=np.int32)
-            self.recv_disp = np.zeros(phd.size, dtype=np.int32)
+            self.send_disp = np.zeros(phd._size, dtype=np.int32)
+            self.recv_disp = np.zeros(phd._size, dtype=np.int32)
 
     def register_fields(self, CarrayContainer particles):
         """Register mesh fields into the particle container (i.e.
@@ -57,9 +57,9 @@ cdef class DomainManager:
                 if field not in particles.carrays.keys():
                     particles.register_carray(num_particles, field, dtype)
 
-        particles.register_carray(num_particles, 'map', 'long')
-        particles.register_carray(num_particles, 'radius', 'double')
-        particles.register_carray(num_particles, 'old_radius', 'double')
+        particles.register_carray(num_particles, "map", "long")
+        particles.register_carray(num_particles, "radius", "double")
+        particles.register_carray(num_particles, "old_radius", "double")
 
         # set initial radius for mesh generation
         self.setup_initial_radius(particles)
@@ -144,24 +144,20 @@ cdef class DomainManager:
 
         # set ghost buffer to zero
         self.ghost_vec.clear()
-
-        # fraction of domain size FIX: search radius should be twice old radius
         self.flagged_particles.resize(particles.get_carray_size(), FlagParticle())
 
-        # there should be no ghost particles
+        # there should be no ghost particles in the particle container
+
         i = 0
         cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
         while(it != self.flagged_particles.end()):
 
-            # for infinite particles have fraction of domain size or
-            # processor tile as initial radius
-            if phd._in_parallel:
-                raise NotImplemented("parallel function called")
-                # FIX: add runtime time method to set initial radius
-            else:
-                if r.data[i] < 0: # infinite radius
-                    # radius from previous step
-                    r.data[i] = rold.data[i]
+            # at this moment the radius of each particle should be
+            # finite or infinte. for infinite radius use scaled radius
+            # from previous time step. If finite the radius can still
+            # be very large so we need to minimize it.
+            if r.data[i] < 0:
+                r.data[i] = self.search_radius_factor*rold.data[i]
 
             # populate with particle information
             p = particle_flag_deref(it)
@@ -171,7 +167,8 @@ cdef class DomainManager:
             p.old_search_radius = 0.  # initial pass 
             p.search_radius = min(r.data[i], self.search_radius_factor*rold.data[i])
 
-            # copy position and velocity
+            # copy position and momentum, momentum is used because
+            # after an update only the momentum is correct
             for k in range(dim):
                 p.x[k] = x[k][i]
                 p.v[k] = mv[k][i]
@@ -201,9 +198,12 @@ cdef class DomainManager:
         cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
         while(it != self.flagged_particles.end()):
 
-            # populate with particle information
+            # retrieve particle
             p = particle_flag_deref(it)
             i = p.index
+
+            # at this point the radius of each particle has been
+            # updated by the mesh
 
             if r.data[i] < 0: # infinite radius
                 # grow until finite
