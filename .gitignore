@@ -11,6 +11,7 @@
 *.dat
 *.f
 *.txt
+*.log
 domain.cpp
 domain_manager.cpp
 riemann.cpp
@@ -23,3 +24,4 @@ mesh.cpp
 phd/gravity/*.cpp
 build/
 .DS_Store
+phd.egg-info/

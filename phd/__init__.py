@@ -82,8 +82,8 @@ from phd.utils.particle_tags import \
 from phd.utils.plot_voro import \
         vor_collection
 
-from phd.utils.store_class import \
-        to_dict
+#from phd.utils.store_class import \
+#        to_dict
 
 from phd.utils.particle_creator import \
         HydroParticleCreator

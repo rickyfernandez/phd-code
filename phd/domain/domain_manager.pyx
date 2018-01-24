@@ -1,4 +1,5 @@
 import phd
+import numpy as np
 
 from libc.math cimport fmin
 from cython.operator cimport preincrement as inc

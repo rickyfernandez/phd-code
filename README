@@ -1,0 +1,7 @@
+this is a moving mesh code written mostly in python and cython.
+In order to run the code you will need the following libraries.
+
+numpy
+cython
+mpi4py
+cgal
