@@ -1,7 +1,7 @@
 from libcpp.vector cimport vector
 from libcpp.list cimport list as cpplist
 
-from ..domain.domain_manager cimport FlagParticle
+from ..domain.domain_manager cimport FlagParticle, Ghost
 
 ctypedef vector[int] nn
 ctypedef vector[nn] nn_vec
@@ -16,7 +16,8 @@ cdef extern from "tess.h":
         int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
                 int* pair_i, int* pair_j, nn_vec &neighbors)
-        int update_radius(double *x[3], double *radius, cpplist[FlagParticle] flagged_particles)
+        int update_radius(double *x[3], double *radius, cpplist[FlagParticle] &flagged_particles)
+        int reindex_ghost(vector[GhostID] &import_ghost_buffer)
 
     cdef cppclass Tess3d:
         Tess3d() except +
@@ -27,7 +28,8 @@ cdef extern from "tess.h":
         int extract_geometry(double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
                 int* pair_i, int* pair_j, nn_vec &neighbors)
-        int update_radius(double *x[3], double *radius, cpplist[FlagParticle] flagged_particles)
+        int update_radius(double *x[3], double *radius, cpplist[FlagParticle] &flagged_particles)
+        int reindex_ghost(vector[GhostID] &import_ghost_buffer)
 
 cdef class PyTess:
 
@@ -38,7 +40,8 @@ cdef class PyTess:
     cdef int extract_geometry(self, double* x[3], double* dcenter_of_mass[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3],
                 int* pair_i, int* pair_j, nn_vec &neighbors)
-    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] flagged_particles)
+    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] &flagged_particles)
+    cdef int reindex_ghost(vector[GhostID] &import_ghost_buffer)
 
 cdef class PyTess2d(PyTess):
     cdef Tess2d *thisptr

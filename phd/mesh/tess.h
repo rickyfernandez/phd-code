@@ -67,7 +67,8 @@ class Tess2d {
         int extract_geometry(double* x[3], double* dcom[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j,
                 std::vector< std::vector<int> > &neighbors);
-        int update_radius(double *x[3], double *radius, std::list<FlagParticle> flagged_particles);
+        int update_radius(double *x[3], double *radius, std::list<FlagParticle> &flagged_particles);
+        int reindex_ghost(std::vector<GhostID> &import_ghost_buffer);
 };
 
 class Tess3d {
@@ -87,7 +88,8 @@ class Tess3d {
         int extract_geometry(double* x[3], double* dcom[3], double* volume,
                 double* face_area, double* face_com[3], double* face_n[3], int* pair_i, int* pair_j,
                 std::vector< std::vector<int> > &neighbors);
-        int update_radius(double *x[3], double *radius, std::list<FlagParticle> flagged_particles);
+        int update_radius(double *x[3], double *radius, std::list<FlagParticle> &flagged_particles);
+        int reindex_ghost(std::vector<GhostID> &import_ghost_buffer);
 };
 
 #endif

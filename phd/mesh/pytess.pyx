@@ -17,8 +17,11 @@ cdef class PyTess:
                 int* pair_i, int* pair_j, nn_vec &neighbors):
         raise NotImplementedError, 'PyTess::extract_geometry'
 
-    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] flagged_particles):
-        pass
+    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] &flagged_particles):
+        raise NotImplementedError, 'PyTess::update_radius'
+
+    cdef int reindex_ghost(vector[GhostID] &import_ghost_buffer):
+        raise NotImplementedError, 'PyTess::reindex_ghost'
 
 
 cdef class PyTess2d(PyTess):
@@ -48,7 +51,10 @@ cdef class PyTess2d(PyTess):
                 pair_i, pair_j, neighbors)
 
     cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] flagged_particles):
-        return self.thisptr.update_radius(x, radius, flagged_particles)
+        return self.thisptr.update_radius(x, radius, &flagged_particles)
+
+    cdef int reindex_ghost(vector[GhostID] &import_ghost_buffer):
+        return self.thisptr.reindex_ghost(import_ghost_buffer)
 
 
 cdef class PyTess3d(PyTess):
@@ -79,3 +85,6 @@ cdef class PyTess3d(PyTess):
 
     cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] flagged_particles):
         return self.thisptr.update_radius(x, radius, flagged_particles)
+
+    cdef int reindex_ghost(vector[GhostID] &import_ghost_buffer):
+        return self.thisptr.reindex_ghost(import_ghost_buffer)

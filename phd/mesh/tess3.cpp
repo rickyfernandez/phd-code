@@ -226,6 +226,8 @@ int Tess3d::update_initial_tess(
     if (begin_particles == end_particles)
         return 0;
 
+    std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
+
     total_num_particles = end_particles;
     Tess &tess = *(Tess*) ptess;
 
@@ -250,6 +252,7 @@ int Tess3d::update_initial_tess(
     for (std::vector<std::ptrdiff_t>::iterator it=indices.begin(); it!=indices.end(); it++) {
         vt = tess.insert(particles[*it]);
         vt->info() = *it + begin_particles;
+        vt_list.push_back(vt);
     }
     return 0;
 }
@@ -551,7 +554,7 @@ int Tess3d::extract_geometry(
 int Tess3d::update_radius(
         double *x[3],
         double *radius,
-        std::list<FlagParticle> flagged_particles) {
+        std::list<FlagParticle> &flagged_particles) {
     /*
 
     For particle in flagged_particle container, upater their
@@ -677,4 +680,28 @@ int Tess3d::update_radius(
             radius[i] = 2.0*std::sqrt(radius_max_sq);
     }
     return 0;
+}
+
+int Tess3d::reindex_ghost(std::vector<GhostID> &import_ghost_buffer) {
+    /*
+
+    Reorder ghost particles because after the mesh is complete in parallel
+    ghost particles are put in processor and export order.
+
+    Parameters
+    ----------
+    import_ghost_buffer : std:vector<GhostID>
+        Vector holding old indices and sorted indices of ghost particles
+
+    */
+    // create tessellation
+    Tess &tess = *(Tess*) ptess;
+    std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
+
+    Vertex_handle vt;
+    for (int i=local_num_particles, j=0; j<import_ghost_buffer.size(); i++, j++) {
+        int index = import_ghost_buffer[j].index;
+        const Vertex_handle &vt = vt_list[index];
+        vt->info() = i; 
+    }
 }

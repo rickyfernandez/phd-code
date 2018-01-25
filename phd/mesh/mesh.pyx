@@ -191,11 +191,13 @@ cdef class Mesh:
         cdef int i
         cdef int fail
         cdef np.float64_t *xp[3], *rp
-        cdef int start_new_ghost, stop_new_ghost
         cdef DoubleArray r = particles.get_carray("radius")
+        cdef int start_new_ghost, stop_new_ghost, num_real_particles
 
         # remove current ghost particles
         particles.remove_tagged_particles(ParticleTAGS.Ghost)
+
+        num_real_particles = particles.get_carray_size()
         start_new_ghost = stop_new_ghost = particles.get_carray_size()
 
         # reference position and radius 
@@ -236,6 +238,15 @@ cdef class Mesh:
 
         if (i+1) == self.max_iterations:
             raise RuntimeError("Mesh failed to converged!")
+
+        if phd._in_parallel:
+
+            # finally reindex ghost in particles and tessellation
+            # for correct neighbors will be extracted and exports
+            # will be correct
+            domain_manager.reindex_ghost(particles, real_num_particles,
+                    particles.get_carray_size())
+            self.tess.reindex_ghost(domain_manager.import_ghost_buffer)
 
     cpdef build_geometry(self, CarrayContainer particles, DomainManager domain_manager):
         """Build the voronoi mesh and then extract mesh information, i.e
@@ -526,46 +537,3 @@ cdef class Mesh:
                 # momentum
                 for k in range(dim):
                     mv[k][j] += dt*a*fmv[k][n]
-
-
-
-
-
-
-#    cpdef tessellate(self, CarrayContainer particles, DomainManager domain_manager):
-#        cdef LongLongArray keys
-#        cdef LongArray proc
-#        cdef LongArray indices = LongArray()
-#        cdef CarrayContainer ghost
-#
-#        cdef int num_real_particles
-#        cdef int num_ghost_particles
-#
-#        num_ghost_particles = stop_new_ghost - start_new_ghost
-#
-#        j = 0
-#        # copy ghost information for sort 
-#        self.sorted_indices.resize(num_ghost_particles)
-#        for i in range(start_new_ghost, stop_new_ghost)
-#
-#            self.sorted_indices[j].index = i 
-#            self.sorted_indices[j].proc = proc.data[i] 
-#            self.sorted_indices[j].export_index = key.data[i]
-#            j += 1
-#
-#        # sort ghost particle by processor than by export index 
-#        sort(self.sorted_indices.begin(), self.sorted_indices.end(),
-#                proc_index_compare)
-#
-#        self.indices.resize(num_ghost_particles)
-#        for i in range(num_ghost_particles)
-#            indices[i] = self.sorted_indices[i].index
-#
-#        # reappend ghost particles in correct order 
-#        ghost = particles.extract_items(indices)
-#        particles.resize(start_new_ghost)
-#        particles.append(ghost)
-#
-#        # finally reindex ghost in tessellation for
-#        # correct neighbors will be extracted
-#        self.tess.reindex_ghost(self.sorted_indices)
