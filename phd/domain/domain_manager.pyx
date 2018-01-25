@@ -8,14 +8,39 @@ from ..utils.tools import check_class
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.exchange_particles import exchange_particles
 
+
 cdef int REAL = ParticleTAGS.Real
 cdef int GHOST = ParticleTAGS.Ghost
-cdef int Exterior = ParticleTAGS.Exterior
+cdef int EXTERIOR = ParticleTAGS.Exterior
+cdef int INTERIOR = ParticleTAGS.Exterior
+
 
 cdef dict fields_for_parallel = {
         "key": "longlong",
         "process": "long",
         }
+
+
+cdef inline bint boundary_particle_cmp(
+        const BoundaryParticle &a, const BoundaryParticle &b) nogil:
+    """Sort boundary particles by processor order. This is
+    used for exporting particles"""
+    return a.proc < b.proc:
+
+
+cdef inline bint ghostid_cmp(
+        const GhostID &a, const GhostID &b) nogil:
+    """Sort boundary particles by processor order and by export
+    order. This is used as a final sort such that imports and
+    export have the same order.
+    """
+    if a.proc < b.proc:
+        return True
+    elif a.proc > b.proc:
+        return False
+    else:
+        return a.export_num < b.export_num
+
 
 cdef class DomainManager:
     def __init__(self, double initial_radius,
@@ -32,8 +57,12 @@ cdef class DomainManager:
 
         # list of particle to create ghost particles from
         self.flagged_particles.clear()
+        self.num_export = 0
 
         if phd._in_parallel:
+
+            self.loc_done = np.zeros(1, dtype=np.int32)
+            self.glb_done = np.zeros(1, dtype=np.int32)
 
             # mpi send/receive counts
             self.send_cnts = np.zeros(phd._size, dtype=np.int32)
@@ -123,8 +152,7 @@ cdef class DomainManager:
 
     cpdef setup_for_ghost_creation(self, CarrayContainer particles):
         """Go through each particle and flag for ghost creation. For particles
-        with infinite radius use domain size (serial) or partition tile
-        (parallel) as initial search radius.
+        with infinite radius use radius from previous time step. 
 
         Parameters
         ----------
@@ -147,13 +175,16 @@ cdef class DomainManager:
         # set ghost buffer to zero
         self.ghost_vec.clear()
 
+        # buffer to keep track of which particles
+        # have to exported for ghost updates
         if phd._in_parallel:
+
+            self.num_export = 0
             self.export_ghost_buffer.clear()
-            self.import_ghost_buffer.clear()
 
-        self.flagged_particles.resize(particles.get_carray_size(), FlagParticle())
-
+        # flag all real particles for ghost creation
         # there should be no ghost particles in the particle container
+        self.flagged_particles.resize(particles.get_carray_size(), FlagParticle())
 
         i = 0
         cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
@@ -242,6 +273,7 @@ cdef class DomainManager:
         cdef int i
         cdef FlagParticle *p
 
+        # clear out for next batch of ghost particles
         self.ghost_vec.clear()
 
         # create particles from flagged particles
@@ -267,7 +299,7 @@ cdef class DomainManager:
 
     cdef create_interior_ghost_particle(self, CarrayContainer particles):
         """Create interior ghost particles to stitch back the solutions
-        across processor.
+        across processors.
 
         Parameters
         ----------
@@ -295,6 +327,8 @@ cdef class DomainManager:
                     p.x, p.old_search_radius, p.search_radius,
                     leaf_pid, phd._rank, nbrs_pid)
 
+            # if processors found put the particle in buffer
+            # for ghost creation and export
             if nbrs_pid.length:
                 for i in range(nbrs_pid.length):
 
@@ -315,7 +349,7 @@ cdef class DomainManager:
         """
         cdef IntArray tags
         cdef IntArray types
-        cdef LongArray maps
+        cdef LongLongArray keys
 
         cdef int i, k, dim, num_import
 
@@ -334,23 +368,25 @@ cdef class DomainManager:
 
         if self.ghost_vec.size() != 0:
 
-            # sort particles in processor order
-            sort(ghost_vec.begin(), ghost_vec.end(), proc_cmp)
+            # sort particles in processor order for export
+            sort(ghost_vec.begin(), ghost_vec.end(), boundary_particle_cmp)
 
-            # copy indices
+            # copy indices to make ghost particles
             indices.resize(ghost_vec.size())
             for i in range(ghost_vec.size()):
 
                 p = &ghost_vec[i]            # retrieve particle
                 indices.data[i] = p.index    # index of particle
-                self.send_cnts[p.proc] += 1  # bin processor to export to
+                self.send_cnts[p.proc] += 1  # bin processor for export
 
-            # copy all particles to make ghost from
+            # copy particles to make ghost
             ghosts = particles.extract_items(indices)
+
             tags = ghosts.get_carray("tag")
             types = ghosts.get_carray("type")
+            keys = ghosts.get_carray("key")
 
-            # transfer updated position and velocity
+            # update position and velocity
             ghosts.pointer_groups(mvg, particles.carray_named_groups["momentum"])
             ghosts.pointer_groups(xg, particles.carray_named_groups["position"])
 
@@ -375,6 +411,9 @@ cdef class DomainManager:
                     # update values
                     xg[k][i] = p.x[j]
                     mvg[k][i] = p.v[k] # momentum not velocity
+
+        else:
+            ghosts = CarrayContainer(0, particles.carray_dtypes)
 
         # how many particles are going to each processor
         phd._comm.Alltoall([self.send_cnts, MPI.INT],
@@ -469,7 +508,7 @@ cdef class DomainManager:
         voronoi cell they are removed from flagged_particles.
 
         """
-        # we are done when their are no  more particles are flagged
+        # we are done when their are no more particles flagged
         if phd._in_parallel:
 
             self.glb_done[0] = 0
@@ -480,7 +519,7 @@ cdef class DomainManager:
                     [self.glb_done, MPI.INT],
                     op=MPI.SUM)
 
-            return self.loc_done[0] == 0
+            return self.glb_done[0] == 0
 
         else:
             return self.flagged_particles.empty()
@@ -555,7 +594,7 @@ cdef class DomainManager:
 
             # find all ghost that need to be updated
             for i in range(particles.get_carray_size()):
-                if types.data[i] == Exterior:
+                if types.data[i] == EXTERIOR:
                     indices.append(i)
 
             if indices.length:
@@ -596,7 +635,7 @@ cdef class DomainManager:
             # find all ghost that are outside the domain that
             #need to be updated
             for i in range(particles.get_carray_size()):
-                if types.data[i] == Exterior:
+                if types.data[i] == EXTERIOR:
                     indices.append(i)
 
             # each ghost particle knows the id from which

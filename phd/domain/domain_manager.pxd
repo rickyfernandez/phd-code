@@ -34,6 +34,17 @@ cdef extern from "particle.h":
 
     FlagParticle* particle_flag_deref(cpplist[FlagParticle].iterator &it)
 
+
+cdef extern from "<algorithm>" namespace "std" nogil:
+    void sort[Iter, Compare](Iter first, Iter last, Compare comp)
+
+
+cdef inline bint boundary_particle_cmp(
+        const BoundaryParticle &a, const BoundaryParticle &b) nogil
+
+cdef inline bint ghostid_cmp(
+        const GhostID &a, const GhostID &b) nogil
+
 cdef class DomainManager:
 
     cdef public DomainLimits domain
@@ -51,10 +62,17 @@ cdef class DomainManager:
     cdef cpplist[FlagParticle] flagged_particles
 
     # for parallel runs
-    cdef public np.ndarray send_cnts    # send counts for mpi
-    cdef public np.ndarray recv_cnts    # send counts for mpi
-    cdef public np.ndarray send_disp    # send displacments for mpi
-    cdef public np.ndarray recv_disp    # receive displacments for mpi
+    cdef int num_export
+
+    cdef np.ndarray loc_done
+    cdef np.ndarray glb_done
+
+    cdef vector[GhostId] export_ghost_buffer
+
+    cdef np.ndarray send_cnts    # send counts for mpi
+    cdef np.ndarray recv_cnts    # send counts for mpi
+    cdef np.ndarray send_disp    # send displacments for mpi
+    cdef np.ndarray recv_disp    # receive displacments for mpi
 
     # load balance methods
     cpdef check_for_partition(self, CarrayContainer particles)
