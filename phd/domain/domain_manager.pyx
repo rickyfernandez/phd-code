@@ -296,18 +296,11 @@ cdef class DomainManager:
                     leaf_pid, phd._rank, nbrs_pid)
 
             if nbrs_pid.length:
-                for i in range(1, nbrs_pid.length):
-
-                    pid = nbrs_pid_npy[i]
-
-                    # store export information 
-                    self.export_ghost_buffer.push_back(GhostID(
-                        p.index, pid, self.num_export))
-                    self.num_export += 1
+                for i in range(nbrs_pid.length):
 
                     # store particle information for ghost creation
                     self.ghost_vec.push_back(BoundaryParticle(
-                        p.x, p.v, p.index, pid, dim))
+                        p.x, p.v, p.index, nbrs_pid[i], dim))
 
             inc(it)  # increment iterator
 
@@ -339,42 +332,49 @@ cdef class DomainManager:
             self.send_cnts[i] = 0
             self.recv_cnts[i] = 0
 
-        if self.ghost_vec.size() == 0:
-            return
+        if self.ghost_vec.size() != 0:
 
-        # sort particles in processor order
-        sort(ghost_vec.begin(), ghost_vec.end(), proc_cmp)
+            # sort particles in processor order
+            sort(ghost_vec.begin(), ghost_vec.end(), proc_cmp)
 
-        # copy indices
-        indices.resize(ghost_vec.size())
-        for i in range(ghost_vec.size()):
+            # copy indices
+            indices.resize(ghost_vec.size())
+            for i in range(ghost_vec.size()):
 
-            p = &ghost_vec[i]
-            indices.data[i] = p.index
-            self.send_cnts[p.proc] += 1
+                p = &ghost_vec[i]            # retrieve particle
+                indices.data[i] = p.index    # index of particle
+                self.send_cnts[p.proc] += 1  # bin processor to export to
 
-        # copy all particles to make ghost from
-        ghosts = particles.extract_items(indices)
+            # copy all particles to make ghost from
+            ghosts = particles.extract_items(indices)
+            tags = ghosts.get_carray("tag")
+            types = ghosts.get_carray("type")
 
-        tags = ghosts.get_carray("tag")
-        types = ghosts.get_carray("type")
+            # transfer updated position and velocity
+            ghosts.pointer_groups(mvg, particles.carray_named_groups["momentum"])
+            ghosts.pointer_groups(xg, particles.carray_named_groups["position"])
 
-        # transfer updated position and velocity
-        ghosts.pointer_groups(mvg, particles.carray_named_groups["momentum"])
-        ghosts.pointer_groups(xg, particles.carray_named_groups["position"])
+            # transfer new data to ghost 
+            for i in range(ghosts.get_carray_size()):
+                p = &self.ghost_vec[i]
 
-        # transfer new data to ghost 
-        for i in range(ghosts.get_carray_size()):
-            p = &self.ghost_vec[i]
-            tags.data[i] = GHOST
-            types.data[i] = INTERIOR
-            keys.data[i] = p.
+               # store export information 
+                self.export_ghost_buffer.push_back(GhostID(
+                    p.index, p.proc, self.num_export))
 
-            for k in range(dim):
+                tags.data[i] = GHOST
+                types.data[i] = INTERIOR
 
-                # update values
-                xg[k][i] = p.x[j]
-                mvg[k][i] = p.v[k] # momentum not velocity
+                # we store export number in the keys data, temporarily
+                # for reordering after the mesh is complete
+                keys.data[i] = self.num_export
+                self.num_export += 1
+
+                for k in range(dim):
+
+                    # update values
+                    xg[k][i] = p.x[j]
+                    mvg[k][i] = p.v[k] # momentum not velocity
 
         # how many particles are going to each processor
         phd._comm.Alltoall([self.send_cnts, MPI.INT],
