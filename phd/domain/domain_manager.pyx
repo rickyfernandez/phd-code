@@ -649,3 +649,52 @@ cdef class DomainManager:
 
             # modify gradient by boundary condition
             self.boundary_condition.update_gradients(particles, gradients, self)
+
+    cdef reindex_ghost(self, CarrayContainer particles, int real_num_particles,
+            int total_num_particles):
+        """Since ghost particles are exported in batches in processor order we
+        have to sort all particles such that when ghost particle information
+        is exported later on it arrives exactly in the order which ghost particles
+        are in the particle container.
+        """
+        cdef int i, j
+        cdef LongArray procs
+        cdef LongLongArray keys
+        cdef LongArray indices = LongArray()
+
+        cdef CarrayContainer ghost
+        cdef int num_ghost_particles
+        cdef vector[GhostId] import_ghost_buffer
+
+        num_ghost_particles = total_num_particles - real_num_particles
+
+        # sort our export ghost in processor and export order
+        sort(self.export_ghost_buffer.begin(),
+                self.export_ghost_buffer.end(), ghostid_cmp)
+
+        procs = particles.get_carray("proc")
+        keys = particles.get_carray("key")
+
+        j = 0
+        # copy ghost information for sort 
+        self.import_ghost_buffer.resize(num_ghost_particles)
+        for i in range(real_num_particles, total_num_particles):
+
+            self.import_ghost_buffer[j].index = i
+            self.import_ghost_buffer[j].proc = procs.data[i]
+            self.import_ghost_buffer[j].export_num = keys.data[i]
+            j += 1
+
+        # sort ghost particle by processor than by export index 
+        sort(self.import_ghost_buffer.begin(),
+                self.import_ghost_buffer.end(), ghostid_cmp)
+
+        # copy particle in correct import order
+        indices.resize(num_ghost_particles)
+        for i in range(num_ghost_particles):
+            indices.data[i] = self.import_ghost_buffer[i].index
+
+        # reappend ghost particles in correct order 
+        ghost = particles.extract_items(indices)
+        particles.resize(real_num_particles)
+        particles.append(ghost)

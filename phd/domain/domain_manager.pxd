@@ -98,3 +98,5 @@ cdef class DomainManager:
 
     cdef update_ghost_fields(self, CarrayContainer particles, list fields)
     cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients)
+    cdef reindex_ghost(self, CarrayContainer particles, int real_num_particles,
+                       int total_num_particles)
