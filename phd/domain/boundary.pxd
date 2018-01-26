@@ -8,7 +8,7 @@ cdef enum:
     REFLECTIVE = 0x01
     PERIODIC   = 0x02
 
-cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim)
+cdef inline bint intersect_bounds(double x[3], double r, np.float64_t bounds[2][3], int dim)
 
 cdef class BoundaryConditionBase:
     cdef void create_ghost_particle(self, FlagParticle *p, DomainManager domain_manager)
