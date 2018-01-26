@@ -6,20 +6,24 @@ from ..utils.particle_tags import ParticleTAGS
 cdef int REAL = ParticleTAGS.Real
 cdef int EXTERIOR = ParticleTAGS.Exterior
 
-cdef inline bint in_box(double x[3], double r, np.float64_t bounds[2][3], int dim):
-    """
-    Check if particle bounding box overlaps with a box defined by bounds.
+cdef inline bint intersect_bounds(double x[3], double r, np.float64_t bounds[2][3], int dim):
+    """Check if box with center x and half edge r intersects with
+    bounds.
 
     Parameters
     ----------
     x : array[3]
-        Particle position
+        Box center position.
+
     r : np.float64_t
-        Particle radius
+        Half edge of box.
+
     bounds : array[2][3]
-        min/max of bounds in each dimension
+        Bounds of interest, min/max in each dimension.
+
     dim : int
-        Problem dimension
+        Problem dimension.
+
     """
     cdef int i
     for i in range(dim):
@@ -55,30 +59,35 @@ cdef class BoundaryConditionBase:
 
 cdef class Reflective(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
-        """
-        Create reflective ghost particles in the simulation. Can be used in non-parallel
-        and parallel runs. Ghost particles are appended right after real particles in
-        the container. Particle container should only have real particles when used.
+        """Create reflective ghost particles in serial run.
 
         Parameters
         ----------
+        p : FlagParticle*
+            Pointer to flagged particle.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
         """
         cdef int i, k
         cdef double xs[3], vs[3]
         cdef int dim = domain_manager.domain.dim
+        cdef double pos_new, pos_old, domaind_edge
 
         # skip particle does not intersect boundary
-        if in_box(p.x, p.search_radius, domain_manager.domain.bounds, dim):
-
-            # extract real particle
+        if intersect_bounds(p.x, p.search_radius, domain_manager.domain.bounds, dim):
             for i in range(dim):
+
+                pos_new = p.x[i] - p.search_radius 
+                pos_old = p.x[i] - p.old_search_radius 
+                domain_edge = domain_manager.domain.bounds[0][i]
 
                 # lower boundary
                 # does particle radius leave global boundary 
                 # skip if processed in earlier iteration 
                 if p.x[i] <= domain_manager.domain.translate[i]/2.0:
-                    if(p.x[i] - p.search_radius <= domain_manager.domain.bounds[0][i]) and\
-                        (p.x[i] - p.old_search_radius > domain_manager.domain.bounds[0][i]):
+                    if (pos_new <= domain_edge) and (pos_old > domain_edge):
 
                         # copy particle information
                         for k in range(dim):
@@ -86,20 +95,23 @@ cdef class Reflective(BoundaryConditionBase):
                             vs[k] = p.v[k]
 
                         # reflect particle position and velocity 
-                        xs[i] =  xs[i] - 2*(xs[i] - domain_manager.domain.bounds[0][i])
+                        xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
                         vs[i] = -vs[i]
 
                         # create ghost particle
                         domain_manager.ghost_vec.push_back(
                                 BoundaryParticle(xs, vs,
-                                    p.index, 0, REFLECTIVE, dim))
+                                    p.index, 0, dim))
+
+                pos_new = p.x[i] + p.search_radius 
+                pos_old = p.x[i] + p.old_search_radius 
+                domain_edge = domain_manager.domain.bounds[1][i]
 
                 # upper boundary
                 # does particle radius leave global boundary 
                 # skip if processed in earlier iteration 
                 if p.x[i] > domain_manager.domain.translate[i]/2.0:
-                    if (domain_manager.domain.bounds[1][i] <= p.x[i] + p.search_radius) and\
-                        (domain_manager.domain.bounds[1][i] > p.x[i] + p.old_search_radius):
+                    if (new_pos >= domain_edge) and (pos_old < domain_edge):
 
                         # copy particle information
                         for k in range(dim):
@@ -107,30 +119,127 @@ cdef class Reflective(BoundaryConditionBase):
                             vs[k] = p.v[k]
 
                         # reflect particle position and velocity
-                        xs[i] =  xs[i] - 2*(xs[i] - domain_manager.domain.bounds[1][i])
+                        xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
                         vs[i] = -vs[i]
 
                         # create ghost particle
                         domain_manager.ghost_vec.push_back(
                                 BoundaryParticle(xs, vs,
-                                    p.index, 0, REFLECTIVE, dim))
+                                    p.index, 0, dim))
+
+    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)
+        """Create reflective ghost particles in parallel run.
+
+        Parameters
+        ----------
+        p : FlagParticle*
+            Pointer to flagged particle.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        cdef int i, j, k
+        cdef double xs[3], vs[3]
+        cdef dim = domain_manager.dim
+        cdef double pos_new, domaind_edge
+        cdef LongArray proc_nbrs = LongArray()
+
+        # skip if it does not intersect boundary
+        if intersect_bounds(p.x, p.search_radius, domain.bounds, dim):
+            for i in range(dim):
+
+                pos_new = p.x[i] - p.search_radius 
+                domain_edge = domain_manager.domain.bounds[0][i]
+
+                # lower boundary
+                # does particle radius leave global boundary 
+                # skip if processed in earlier iteration 
+                if p.x[i] <= domain_manager.domain.translate[i]/2.0:
+                    if (pos_new <= domain_edge):
+
+                        # copy particle information
+                        for k in range(dim):
+                            xs[k] = p.x[k]
+                            vs[k] = p.v[k]
+
+                        # reflect particle position and velocity 
+                        xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
+                        vs[i] = -vs[i]
+
+                        # find processor neighbors, proc=-1 is used to
+                        # query our own processor
+                        prob_nbrs.reset()
+                        domain_manager.processor_neighbors_intersection(
+                                xs, p.radius, p.search_radius,
+                                proc_nbrs, -1)
+
+                        if proc_nbrs.size():
+                            for j in range(proc_nbrs.size()):
+                                domain_manager.ghost_vec.push_back(
+                                        BoundaryParticle(
+                                            xs, p.v, p.index,
+                                            proc_nbrs[j], dim))
+
+                pos_new = p.x[i] + p.search_radius 
+                domain_edge = domain_manager.domain.bounds[1][i]
+
+                # upper boundary
+                # does particle radius leave global boundary 
+                # skip if processed in earlier iteration 
+                if p.x[i] > domain_manager.domain.translate[i]/2.0:
+                    if (new_pos >= domain_edge):
+
+                        # copy particle information
+                        for k in range(dim):
+                            xs[k] = p.x[k]
+                            vs[k] = p.v[k]
+
+                        # reflect particle position and velocity
+                        xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
+                        vs[i] = -vs[i]
+
+                        # find processor neighbors, proc=-1 is used to
+                        # query our own processor
+                        prob_nbrs.reset()
+                        domain_manager.processor_neighbors_intersection(
+                                xs, p.radius, p.search_radius,
+                                proc_nbrs, -1)
+
+                        if proc_nbrs.size():
+                            for j in range(proc_nbrs.size()):
+                                domain_manager.ghost_vec.push_back(
+                                        BoundaryParticle(
+                                            xs, p.v, p.index,
+                                            proc_nbrs[j], dim))
 
     cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
+        """After a time step particles are moved. This implements the boundary
+        condition to particles that have left the domain.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
         cdef int k, dim
         cdef double xs[3]
         cdef np.float64_t *x[3]
+        cdef IntArray tags = particles.get_carray("tag")
 
-        cdef IntArray tags = particles.get_carray('tag')
-
-        dim = len(particles.carray_named_groups['position'])
-        particles.pointer_groups(x, particles.carray_named_groups['position'])
+        dim = len(particles.carray_named_groups["position"])
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
 
         for i in range(particles.get_carray_size()):
             if tags.data[i] == REAL:
                 for k in range(dim):
                     xs[k] = x[k][i]
 
-                if not in_box(xs, 0.0, domain_manager.domain.bounds, dim):
+                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
                     raise RuntimeError("particle left domain in reflective boundary condition!!")
 
 
@@ -200,9 +309,16 @@ cdef class Reflective(BoundaryConditionBase):
 
 cdef class Periodic(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, FlagParticle *p, DomainManager domain_manager):
-        """
-        Create periodic ghost particles in the simulation. Should only be used in
-        serial run.
+        """Create periodic ghost particles in serial run.
+
+        Parameters
+        ----------
+        p : FlagParticle*
+            Pointer to flagged particle.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
         """
         cdef int j, k
         cdef double xs[3]
@@ -210,7 +326,7 @@ cdef class Periodic(BoundaryConditionBase):
         cdef int dim = domain_manager.domain.dim
 
         # skip partilce if does not intersect boundary
-        if in_box(p.x, p.search_radius, domain_manager.domain.bounds, dim):
+        if intersect_bounds(p.x, p.search_radius, domain_manager.domain.bounds, dim):
 
             # shift particle
             for i in range(3**dim):
@@ -227,15 +343,60 @@ cdef class Periodic(BoundaryConditionBase):
 
                 # find if shifted particle intersects domain
                 # skip if processed in earlier iteration 
-                if(in_box(xs, p.search_radius,
-                        domain_manager.domain.bounds, dim)) and\
-                                not (in_box(xs, p.old_search_radius,
-                                    domain_manager.domain.bounds, dim)):
+                if intersect_bounds(xs, p.search_radius, domain_manager.domain.bounds, dim) and\
+                        not intersect_bounds(xs, p.old_search_radius, domain_manager.domain.bounds, dim):
 
-                        # create ghost particle
+                    # create ghost particle
+                    domain_manager.ghost_vec.push_back(
+                            BoundaryParticle(xs, vs,
+                                p.index, 0, dim))
+
+    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)
+        """Create periodic ghost particles in parallel run.
+
+        Parameters
+        ----------
+        p : FlagParticle*
+            Pointer to flagged particle.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        cdef int i, j, k
+        cdef double xs[3]
+        cdef int index[3]
+        cdef int dim = domain_manager.dim
+        cdef LongArray proc_nbrs = LongArray()
+
+        # skip if it does not intersect boundary
+        if intersect_bounds(p.x, p.search_radius, domain.bounds, dim):
+
+            # shift particle
+            for i in range(3**dim):
+
+                # create shift indices
+                index[0] = i%3; index[1] = (i/3)%3; index[2] = i/9
+                if (i == 4 and dim == 2) or (i == 13 and dim == 3):
+                    continue # skip no shift
+
+                # shifted position
+                for k in range(dim):
+                    xs[k] = p.x[k] +\
+                            (index[k]-1)*domain_manager.domain.translate[k]
+
+                # find processor neighbors
+                prob_nbrs.reset()
+                domain_manager.processor_neighbors_intersection(
+                        xs, p.radius, p.search_radius,
+                        proc_nbrs, phd._rank)
+
+                if proc_nbrs.size():
+                    for j in range(proc_nbrs.size()):
                         domain_manager.ghost_vec.push_back(
-                                BoundaryParticle(xs, p.v,
-                                    p.index, 0, PERIODIC, dim))
+                                BoundaryParticle(
+                                    xs, p.v, p.index,
+                                    proc_nbrs[j], dim))
 
     cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
                                DomainManager domain_manager):
@@ -251,137 +412,47 @@ cdef class Periodic(BoundaryConditionBase):
 
         gradients : CarrayContainer
             Container of gradients for each primitive field.
+        p : FlagParticle*
+            Pointer to flagged particle.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
 
         """
         pass
 
-#    cdef void create_ghost_particle_serial(self, np.float64_t x[3], np.float64_t *xp[3], DomainManager domain_manager):
-#        cdef int k
-#        cdef int dim = domain_manager.domain.dim
-#
-#        for j in range(dim):
-#            if x[j] <= self.domain.bounds[0][j]:
-#                xp[j][i] += self.domain.translate[j]
-#            if x[j] >= self.domain.bounds[1][j]:
-#                xp[j][i] -= self.domain.translate[j]
+    cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
+        """After a time step particles are moved. This implements the periodic boundary
+        condition to particles that have left the domain.
 
-#cdef class Reflective(BoundaryBase):
-#    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)
-#        """
-#        Create reflective ghost particles in the simulation. Can be used in non-parallel
-#        and parallel runs. Ghost particles are appended right after real particles in
-#        the container. Particle container should only have real particles when used.
-#
-#        Parameters
-#        ----------
-#        """
-#        cdef int i, k
-#        cdef double xs[3], vs[3]
-#        cdef dim = domain_manager.dim
-#
-#        # skip if it does not intersect boundary
-#        if in_box(p.x, p.search_radius, domain.bounds, dim):
-#
-#            # extract real particle
-#            for i in range(dim):
-#
-#                # lower boundary
-#                # does particle radius leave global boundary 
-#                if p.x[i] - p.search_radius < domain_manager.domain.bounds[0][i]:
-#
-#                    # copy particle information
-#                    for k in range(dim):
-#                        xp[k] = p.x[k]
-#                        vp[k] = p.v[k]
-#
-#                    # reflect particle position and velocity 
-#                    xp[i] =  xp[i] - 2*(xp[i] - domain_manager.domain.bounds[0][i])
-#                    vp[i] = -vp[i]
-#
-#                    # find processor neighbors
-#                    domain_manager.processor_intersection(
-#                            xs, p.radius, p.search_radius)
-#
-#                    if domain_manger.processor_nbrs.size():
-#                        for i in range(domain_manager.processor_nbrs.size()):
-#                            domain_manager.ghost_vec.push_back(
-#                                    BoundaryParticle(
-#                                        xs, p.v,
-#                                        p.index,
-#                                        domain_manager.processor_nbrs[i],
-#                                        REFLECTIVE,
-#                                        dim))
-#
-#                # upper boundary
-#                # does particle radius leave global boundary 
-#                if domain_manager.domain.bounds[1][j] < p.x[j] + p.search_radius:
-#
-#                    # copy particle information
-#                    for k in range(dim):
-#                        xp[k] = p.x[k]
-#                        vp[k] = p.v[k]
-#
-#                    # reflect particle position and velocity
-#                    xp[j] =  xp[j] - 2*(xp[j] - domain_manager.domain.bounds[1][j])
-#                    vp[j] = -vp[j]
-#
-#                    # find processor neighbors
-#                    domain_manager.processor_intersection(
-#                            xs, p.radius, p.search_radius)
-#
-#                    # copy particle for every flagged processor
-#                    if domain_manger.processor_nbrs.size():
-#                        for i in range(domain_manager.processor_nbrs.size()):
-#                            domain_manager.ghost_vec.push_back(
-#                                    BoundaryParticle(
-#                                        xs, p.v,
-#                                        p.index,
-#                                        domain_manager.processor_nbrs[i],
-#                                        REFLECTIVE,
-#                                        dim))
-#
-#class Periodic(BoundaryBase):
-#    cdef void create_ghost_particle_parallel(self, FlagParticle *p, DomainManager domain_manager)
-#        """
-#        Create periodic ghost particles in the simulation. Should only be used in
-#        """
-#        cdef int i, j, k
-#        cdef double xs[3]
-#        cdef int index[3]
-#        cdef int dim = domain_manager.dim
-#
-#        # skip if it does not intersect boundary
-#        if in_box(p.x, p.search_radius, domain.bounds, dim):
-#
-#            # shift particle
-#            for i in range(3**dim):
-#
-#                # create shift indices
-#                index[0] = i%3; index[1] = (i/3)%3; index[2] = i/9
-#                if (i == 4 and dim == 2) or (i == 13 and dim == 3):
-#                    continue # skip no shift
-#
-#                # copy particle
-#                for k in range(dim):
-#                    xs[k] = p.x[k]
-#
-#                # shifted position
-#                for k in range(dim):
-#                    xs[k] = p.x[k] +\
-#                            (index[k]-1)*domain_manager.domain.translate[k]
-#
-#                # find processor neighbors
-#                domain_manager.processor_intersection(
-#                        xs, p.radius, p.search_radius)
-#
-#                # copy particle for every flagged process 
-#                if domain_manger.processor_nbrs.size():
-#                    for j in range(domain_manager.processor_nbrs.size()):
-#                        domain_manager.ghost_particle.push_back(
-#                                BoundaryParticle(
-#                                    xs, p.v,
-#                                    p.index,
-#                                    domain_manager.processor_nbrs[j],
-#                                    PERIODIC,
-#                                    dim))
-#
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        cdef int k, dim
+        cdef double xs[3]
+        cdef np.float64_t *x[3]
+
+        cdef IntArray tags = particles.get_carray("tag")
+
+        dim = len(particles.carray_named_groups["position"])
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
+
+        for i in range(particles.get_carray_size()):
+            if tags.data[i] == REAL:
+                for k in range(dim):
+                    xs[k] = x[k][i]
+
+                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
+
+                    for k in range(dim):
+                        if xs[k] <= domain_mananger.domain.bounds[0][j]:
+                            x[k][i] += domain_manager.translate[j]
+                        if xp[k] >= domain_manager.domain.bounds[1][j]:
+                            x[k][i] -= domain_manager.translate[j]
+
