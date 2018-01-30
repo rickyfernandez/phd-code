@@ -244,7 +244,7 @@ cdef class Mesh:
             # finally reindex ghost in particles and tessellation
             # for correct neighbors will be extracted and exports
             # will be correct
-            domain_manager.reindex_ghost(particles, real_num_particles,
+            domain_manager.reindex_ghost(particles, num_real_particles,
                     particles.get_carray_size())
             self.tess.reindex_ghost(domain_manager.import_ghost_buffer)
 
