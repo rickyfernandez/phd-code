@@ -181,6 +181,7 @@ cdef class DomainManager:
 
             self.num_export = 0
             self.export_ghost_buffer.clear()
+            self.import_ghost_buffer.clear()
 
         # flag all real particles for ghost creation
         # there should be no ghost particles in the particle container
@@ -270,7 +271,6 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
-        cdef int i
         cdef FlagParticle *p
 
         # clear out for next batch of ghost particles
@@ -426,7 +426,7 @@ cdef class DomainManager:
 
         # create displacement arrays 
         self.send_disp[0] = self.recv_disp[0] = 0
-        for i in range(1, self.size):
+        for i in range(1, phd._size):
             self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
             self.recv_disp[i] = self.recv_cnts[i-1] + self.recv_disp[i-1]
 
@@ -681,7 +681,7 @@ cdef class DomainManager:
             # modify gradient by boundary condition
             self.boundary_condition.update_gradients(particles, gradients, self)
 
-    cdef reindex_ghost(self, CarrayContainer particles, int real_num_particles,
+    cdef reindex_ghost(self, CarrayContainer particles, int num_real_particles,
             int total_num_particles):
         """Since ghost particles are exported in batches in processor order we
         have to sort all particles such that when ghost particle information
@@ -695,9 +695,8 @@ cdef class DomainManager:
 
         cdef CarrayContainer ghost
         cdef int num_ghost_particles
-        cdef vector[GhostId] import_ghost_buffer
 
-        num_ghost_particles = total_num_particles - real_num_particles
+        num_ghost_particles = total_num_particles - num_real_particles
 
         # sort our export ghost in processor and export order
         sort(self.export_ghost_buffer.begin(),
@@ -709,14 +708,14 @@ cdef class DomainManager:
         j = 0
         # copy ghost information for sort 
         self.import_ghost_buffer.resize(num_ghost_particles)
-        for i in range(real_num_particles, total_num_particles):
+        for i in range(num_real_particles, total_num_particles):
 
             self.import_ghost_buffer[j].index = i
             self.import_ghost_buffer[j].proc = procs.data[i]
             self.import_ghost_buffer[j].export_num = keys.data[i]
             j += 1
 
-        # sort ghost particle by processor than by export index 
+        # sort out ghost particles by processor than by export index 
         sort(self.import_ghost_buffer.begin(),
                 self.import_ghost_buffer.end(), ghostid_cmp)
 
@@ -727,5 +726,5 @@ cdef class DomainManager:
 
         # reappend ghost particles in correct order 
         ghost = particles.extract_items(indices)
-        particles.resize(real_num_particles)
+        particles.resize(num_real_particles)
         particles.append(ghost)
