@@ -27,7 +27,7 @@ subdirs = [
 ]
 
 #cpp = ("mesh", "boundary", "reconstruction", "riemann", "integrate", "gravity")
-cpp = ("mesh", "boundary", "domain", "reconstruction", "riemann", "gravity")
+cpp = ("mesh", "boundary", "domain", "reconstruction", "riemann", "gravity", "domain_manager")
 
 extensions = []
 for subdir in subdirs:

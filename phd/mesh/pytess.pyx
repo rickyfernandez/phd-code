@@ -20,7 +20,7 @@ cdef class PyTess:
     cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] &flagged_particles):
         raise NotImplementedError, 'PyTess::update_radius'
 
-    cdef int reindex_ghost(vector[GhostID] &import_ghost_buffer):
+    cdef int reindex_ghost(self, vector[GhostID] &import_ghost_buffer):
         raise NotImplementedError, 'PyTess::reindex_ghost'
 
 
@@ -50,10 +50,10 @@ cdef class PyTess2d(PyTess):
                 face_area, face_com, face_n,
                 pair_i, pair_j, neighbors)
 
-    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] flagged_particles):
-        return self.thisptr.update_radius(x, radius, &flagged_particles)
+    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] &flagged_particles):
+        return self.thisptr.update_radius(x, radius, flagged_particles)
 
-    cdef int reindex_ghost(vector[GhostID] &import_ghost_buffer):
+    cdef int reindex_ghost(self, vector[GhostID] &import_ghost_buffer):
         return self.thisptr.reindex_ghost(import_ghost_buffer)
 
 
@@ -83,8 +83,8 @@ cdef class PyTess3d(PyTess):
                 face_area, face_com, face_n,
                 pair_i, pair_j, neighbors)
 
-    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] flagged_particles):
+    cdef int update_radius(self, double *x[3], double *radius, cpplist[FlagParticle] &flagged_particles):
         return self.thisptr.update_radius(x, radius, flagged_particles)
 
-    cdef int reindex_ghost(vector[GhostID] &import_ghost_buffer):
+    cdef int reindex_ghost(self, vector[GhostID] &import_ghost_buffer):
         return self.thisptr.reindex_ghost(import_ghost_buffer)

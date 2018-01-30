@@ -11,15 +11,25 @@ struct FlagParticle{
     double search_radius;
 };
 
-struct GhostId{
+struct GhostID{
     public:
         int index;
         int proc;
         int export_num;
 
+    GhostID() {
+        index = 0;
+        proc = -1;
+        export_num = -1;
+    }
+
     GhostID(const int _index, const int _proc,
-            const int _export_num) : index(_index),
-            proc(_proc), export_num(_export_num) {}
+            const int _export_num) {
+        index = _index;
+        proc = _proc;
+        export_num = _export_num;
+    }
+};
 
 struct BoundaryParticle{
     public:
@@ -27,11 +37,9 @@ struct BoundaryParticle{
         double v[3];
         int proc;
         int index;
-        //int boundary_type;
 
     BoundaryParticle(const double _x[3], const double _v[3],
-            const int _index, const int _proc, //const int _boundary_type,
-            const int dim) {
+            const int _index, const int _proc, const int dim) {
 
         for(int i=0; i<dim; i++) {
             x[i] = _x[i];
@@ -39,7 +47,6 @@ struct BoundaryParticle{
         }
         proc  = _proc;
         index = _index;
-        //boundary_type = _boundary_type;
     }
 };
 

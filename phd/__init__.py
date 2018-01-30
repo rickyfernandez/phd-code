@@ -93,13 +93,13 @@ from phd.utils.logger import \
 
 
 try:
-    import mpi4py.MPI as mpi
+    import mpi4py.MPI as MPI
     _has_mpi = True
 except ImportError:
     _has_mpi = False
 
 if _has_mpi:
-    _comm = mpi.COMM_WORLD
+    _comm = MPI.COMM_WORLD
     _rank = _comm.Get_rank()
     _size = _comm.Get_size()
     _in_parallel = _comm.Get_size() > 1

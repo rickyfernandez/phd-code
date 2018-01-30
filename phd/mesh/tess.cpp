@@ -168,7 +168,6 @@ int Tess2d::update_initial_tess(
 
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
 
-    Vertex_handle vt;
     Tess &tess = *(Tess*) ptess;
     total_num_particles = end_particles;
 
@@ -492,7 +491,6 @@ int Tess2d::reindex_ghost(std::vector<GhostID> &import_ghost_buffer) {
 
     */
     // create tessellation
-    Tess &tess = *(Tess*) ptess;
     std::vector<Vertex_handle> &vt_list = *(std::vector<Vertex_handle>*) pvt_list;
 
     Vertex_handle vt;
@@ -501,4 +499,5 @@ int Tess2d::reindex_ghost(std::vector<GhostID> &import_ghost_buffer) {
         const Vertex_handle &vt = vt_list[index];
         vt->info() = i; 
     }
+    return 0;
 }

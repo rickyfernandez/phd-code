@@ -18,13 +18,12 @@ cdef extern from "particle.h":
         double search_radius
 
     cdef cppclass BoundaryParticle:
-        BoundaryParticle(double _x[3], double _v[3], int _index, int _proc,
-                int _boundary_type, int dim)
+        BoundaryParticle(double _x[3], double _v[3], int _index,
+                int _proc, int dim)
         double x[3]
         double v[3]
         int proc
         int index
-        #int boundary_type
 
     cdef cppclass GhostID:
         GhostID(int _index, int _proc, int _export_num)
@@ -39,10 +38,10 @@ cdef extern from "<algorithm>" namespace "std" nogil:
     void sort[Iter, Compare](Iter first, Iter last, Compare comp)
 
 
-cdef inline bint boundary_particle_cmp(
+cdef bint boundary_particle_cmp(
         const BoundaryParticle &a, const BoundaryParticle &b) nogil
 
-cdef inline bint ghostid_cmp(
+cdef bint ghostid_cmp(
         const GhostID &a, const GhostID &b) nogil
 
 cdef class DomainManager:
@@ -67,7 +66,8 @@ cdef class DomainManager:
     cdef np.ndarray loc_done
     cdef np.ndarray glb_done
 
-    cdef vector[GhostId] export_ghost_buffer
+    cdef vector[GhostID] export_ghost_buffer
+    cdef vector[GhostID] import_ghost_buffer
 
     cdef np.ndarray send_cnts    # send counts for mpi
     cdef np.ndarray recv_cnts    # send counts for mpi
@@ -84,7 +84,7 @@ cdef class DomainManager:
     cpdef setup_for_ghost_creation(self, CarrayContainer particles)
 
     cpdef create_ghost_particles(self, CarrayContainer particles)
-    cdef create_interior_ghost_particle(self, CarrayContainer particles)
+    cdef create_interior_ghost_particles(self, CarrayContainer particles)
 
     cpdef update_search_radius(self, CarrayContainer particles)
 
@@ -98,5 +98,5 @@ cdef class DomainManager:
 
     cdef update_ghost_fields(self, CarrayContainer particles, list fields)
     cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients)
-    cdef reindex_ghost(self, CarrayContainer particles, int real_num_particles,
+    cdef reindex_ghost(self, CarrayContainer particles, int num_real_particles,
                        int total_num_particles)

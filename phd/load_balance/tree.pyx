@@ -10,6 +10,17 @@ cdef int Ghost = ParticleTAGS.Ghost
 cdef int Exterior = ParticleTAGS.Exterior
 cdef int Interior = ParticleTAGS.Interior
 
+cdef int int_cmp(const void *pa, const void *pb):
+    cdef int a = (<int*>pa)[0]
+    cdef int b = (<int*>pb)[0]
+
+    if a < b:
+        return -1
+    elif a > b:
+        return 1
+    else:
+        return 0
+
 cdef class TreeMemoryPool:
 
     def __init__(self, int num_nodes):
@@ -588,16 +599,18 @@ cdef class Tree:
 
         self._neighbors(self.root, smin, smax, leaf_pid.data, rank, nbrs)
 
-        # remove duplicates
-#        qsort(<void*> &self.nbrs.data[0], <size_t> self.nbrs.length,
-#                sizeof(int), int_compare)
-#        if nbrs.length != 0:
-#            j = 0
-#            for i in range(1, nbrs.length):
-#                if nbrs.data[i] != nbrs.data[j]:
-#                    j += 1
-#                    nbrs.data[j] = nbrs.data[i]
-#            nbrs.resize(j + 1)
+        if nbrs.length != 0:
+
+            # remove duplicates
+            qsort(<void*> nbrs.data, <size_t> nbrs.length,
+                    sizeof(np.int32_t), int_cmp)
+
+            j = 0
+            for i in range(1, nbrs.length):
+                if nbrs.data[i] != nbrs.data[j]:
+                    j += 1
+                    nbrs.data[j] = nbrs.data[i]
+            nbrs.resize(j + 1)
 
         # return number of processors found
         return nbrs.length
@@ -607,6 +620,10 @@ cdef class Tree:
 
         # is node a leaf
         if node.children_start == -1:
+            for i in range(self.dim):
+                if (node.center[i] + 0.5*node.box_length) < smin[i]: return
+                if (node.center[i] - 0.5*node.box_length) > smax[i]: return
+
             # dont count nodes on our process
             if rank != leaf_pid[node.array_index]:
                 nbrs.append(leaf_pid[node.array_index])
@@ -620,6 +637,61 @@ cdef class Tree:
             # node overlaps open sub nodes
             for i in range(1 << self.dim):
                 self._neighbors(node + node.children_start + i, smin, smax, leaf_pid, rank, nbrs)
+
+    cdef int get_nearest_intersect_process_neighbors(self, double center[3], double old_h,
+            double new_h, LongArray leaf_pid, int rank, LongArray nbrs):
+        """
+        Gather all processors enclosed in square.
+
+        Parameters
+        ----------
+        center : double array
+            Center of search square in physical space.
+        h : double
+            Box length of search square in physical space.
+        leaf_pid : LongArray
+            Array of processors ids, index corresponds to a leaf in global tree.
+        rank : int
+            Current processor.
+        nbrs : LongArray
+            Container to hold all the processors ids.
+        """
+        cdef LongArray old_nbrs = LongArray()
+        cdef LongArray new_nbrs = LongArray()
+        cdef int i, j, num_new_nbrs, num_old_nbrs
+
+        nbrs.reset()
+
+        # find all processors from previous radius
+        self.get_nearest_process_neighbors(center, old_h, leaf_pid,
+                rank, old_nbrs)
+
+        # find all processors from new readius
+        self.get_nearest_process_neighbors(center, new_h, leaf_pid,
+                rank, new_nbrs)
+
+        # remove processors that where already flagged
+        i = j = 0
+        num_old_nbrs = old_nbrs.length
+        num_new_nbrs = new_nbrs.length
+
+        while(i != num_new_nbrs):
+            if j == num_old_nbrs:
+                while(i < num_new_nbrs):
+                    nbrs.append(nbrs.data[i])
+                    i += 1
+                return nbrs.length
+
+            if new_nbrs.data[i] < old_nbrs.data[j]:
+                nbrs.append(new_nbrs.data[i])
+                i += 1
+            elif new_nbrs.data[i] > old_nbrs.data[j]:
+                j += 1
+            else:
+                i += 1
+                j += 1
+
+        return nbrs.length
 
     # temporary function to do outputs in python
     def dump_data(self):

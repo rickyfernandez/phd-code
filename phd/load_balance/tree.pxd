@@ -5,6 +5,12 @@ from ..containers.containers cimport CarrayContainer
 
 ctypedef np.int64_t (*hilbert_type)(np.int32_t, np.int32_t, np.int32_t, int)
 
+cdef extern from "stdlib.h":
+    void qsort(void *array, size_t count, size_t size,
+            int (*compare)(const void *, const void *))
+
+cdef int int_cmp(const void *pa, const void *pb)
+
 # forward decleration
 cdef struct Node
 
@@ -78,3 +84,5 @@ cdef class Tree:
     cdef int get_nearest_process_neighbors(self, double center[3], double h,
             LongArray leaf_pid, int rank, LongArray nbrs)
     cdef void _neighbors(self, Node* node, double smin[3], double smax[3], np.int32_t* leaf_proc, int rank, LongArray nbrs)
+    cdef int get_nearest_intersect_process_neighbors(self, double center[3], double old_h,
+            double new_h, LongArray leaf_pid, int rank, LongArray nbrs)
