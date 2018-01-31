@@ -84,5 +84,3 @@ cdef class Tree:
     cdef int get_nearest_process_neighbors(self, double center[3], double h,
             LongArray leaf_pid, int rank, LongArray nbrs)
     cdef void _neighbors(self, Node* node, double smin[3], double smax[3], np.int32_t* leaf_proc, int rank, LongArray nbrs)
-    cdef int get_nearest_intersect_process_neighbors(self, double center[3], double old_h,
-            double new_h, LongArray leaf_pid, int rank, LongArray nbrs)
