@@ -63,7 +63,7 @@ def exchange_particles(particles, send_data, send_particles, recv_particles, dis
         first1 = offset_se[phd._rank]
         last1 = first1 + send_particles[phd._rank]
 
-        first2 = offset_re[phd._rank]
+        first2 = disp + offset_re[phd._rank]
         last2 = first2 + recv_particles[phd._rank]
 
         for prop in export_fields:
