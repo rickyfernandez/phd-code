@@ -235,35 +235,34 @@ cdef class Reflective(BoundaryConditionBase):
 
             inc(it)  # increment iterator
 
-#    cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
-#        """After a time step particles are moved. This implements the boundary
-#        condition to particles that have left the domain.
-#
-#        Parameters
-#        ----------
-#        particles : CarrayContainer
-#            Class that holds all information pertaining to the particles.
-#
-#        domain_manager : DomainManager
-#            Class that handels all things related with the domain.
-#
-#        """
-#        cdef int k, dim
-#        cdef double xs[3]
-#        cdef np.float64_t *x[3]
-#        cdef IntArray tags = particles.get_carray("tag")
-#
-#        dim = len(particles.carray_named_groups["position"])
-#        particles.pointer_groups(x, particles.carray_named_groups["position"])
-#
-#        for i in range(particles.get_carray_size()):
-#            if tags.data[i] == REAL:
-#                for k in range(dim):
-#                    xs[k] = x[k][i]
-#
-#                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
-#                    raise RuntimeError("particle left domain in reflective boundary condition!!")
+    cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
+        """After a time step particles are moved. This implements the boundary
+        condition to particles that have left the domain.
 
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        cdef int k, dim
+        cdef double xs[3]
+        cdef np.float64_t *x[3]
+        cdef IntArray tags = particles.get_carray("tag")
+
+        dim = len(particles.carray_named_groups["position"])
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
+
+        for i in range(particles.get_carray_size()):
+            if tags.data[i] == REAL:
+                for k in range(dim):
+                    xs[k] = x[k][i]
+
+                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
+                    raise RuntimeError("particle left domain in reflective boundary condition!!")
 
 #    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
 #                               DomainManager domain_manager):
@@ -435,61 +434,59 @@ cdef class Periodic(BoundaryConditionBase):
 
             inc(it)  # increment iterator
 
-#    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
-#                               DomainManager domain_manager):
-#        """Transfer gradient from image particle to ghost particle with reflective
-#        boundary condition.
-#
-#        For periodic boundary condition the there is no need to update gradients.
-#
-#        Parameters
-#        ----------
-#        particles : CarrayContainer
-#            Gradient data
-#
-#        gradients : CarrayContainer
-#            Container of gradients for each primitive field.
-#        p : FlagParticle*
-#            Pointer to flagged particle.
-#
-#        domain_manager : DomainManager
-#            Class that handels all things related with the domain.
-#
-#        """
-#        pass
+    cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
+                               DomainManager domain_manager):
+        """Transfer gradient from image particle to ghost particle with reflective
+        boundary condition.
 
-#    cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
-#        """After a time step particles are moved. This implements the periodic boundary
-#        condition to particles that have left the domain.
-#
-#        Parameters
-#        ----------
-#        particles : CarrayContainer
-#            Class that holds all information pertaining to the particles.
-#
-#        domain_manager : DomainManager
-#            Class that handels all things related with the domain.
-#
-#        """
-#        cdef int k, dim
-#        cdef double xs[3]
-#        cdef np.float64_t *x[3]
-#
-#        cdef IntArray tags = particles.get_carray("tag")
-#
-#        dim = len(particles.carray_named_groups["position"])
-#        particles.pointer_groups(x, particles.carray_named_groups["position"])
-#
-#        for i in range(particles.get_carray_size()):
-#            if tags.data[i] == REAL:
-#                for k in range(dim):
-#                    xs[k] = x[k][i]
-#
-#                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
-#
-#                    for k in range(dim):
-#                        if xs[k] <= domain_mananger.domain.bounds[0][j]:
-#                            x[k][i] += domain_manager.translate[j]
-#                        if xp[k] >= domain_manager.domain.bounds[1][j]:
-#                            x[k][i] -= domain_manager.translate[j]
-#
+        For periodic boundary condition the there is no need to update gradients.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Gradient data
+
+        gradients : CarrayContainer
+            Container of gradients for each primitive field.
+        p : FlagParticle*
+            Pointer to flagged particle.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        pass
+
+    cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager):
+        """After a time step particles are moved. This implements the periodic boundary
+        condition to particles that have left the domain.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        cdef int k, dim
+        cdef double xs[3]
+        cdef np.float64_t *x[3]
+        cdef IntArray tags = particles.get_carray("tag")
+
+        dim = len(particles.carray_named_groups["position"])
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
+
+        for i in range(particles.get_carray_size()):
+            if tags.data[i] == REAL:
+                for k in range(dim):
+                    xs[k] = x[k][i]
+
+                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
+                    # wrap particle back into domain
+                    for k in range(dim):
+                        if xs[k] <= domain_mananger.domain.bounds[0][j]:
+                            x[k][i] += domain_manager.translate[j]
+                        if xp[k] >= domain_manager.domain.bounds[1][j]:
+                            x[k][i] -= domain_manager.translate[j]
