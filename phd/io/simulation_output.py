@@ -48,11 +48,12 @@ class SimulationOutputterBase(object):
         # directory to store data
         self._data_directory = self.output_directory + "/" + self.base_name
 
-        if os.path.isdir(self._data_directory):
-            phdLogger.warning("Directory %s already exists, "
-                    "files maybe over written!" % self._data_directory)
-        else:
-            os.mkdir(self._data_directory)
+        if phd._rank == 0:
+            if os.path.isdir(self._data_directory):
+                phdLogger.warning("Directory %s already exists, "
+                        "files maybe over written!" % self._data_directory)
+            else:
+                os.mkdir(self._data_directory)
 
     def set_output_directory(self, output_directory):
         """Set directory where to output files."""
@@ -90,6 +91,10 @@ class SimulationOutputterBase(object):
         """For each data output create a directory to store that output."""
         # new directory
         self._file_name = self.base_name + str(self.counter).zfill(self.pad)
+
+        if phd._in_parallel:
+            self._file_name += "_cpu" + str(self._rank).zfill(self.pad)
+
         self._snapshot_directory = self._data_directory + "/" + self._file_name
 
         if os.path.isdir(self._snapshot_directory):
