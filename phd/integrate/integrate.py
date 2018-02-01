@@ -115,9 +115,10 @@ class IntegrateBase(object):
         self.domain_manager = None
         self.boundary_condition = None
 
-        # for communication dt across processors
-        self.loc_dt = np.zeros(1, dtype=np.float64)  # local dt
-        self.glb_dt = np.zeros(1, dtype=np.float64)  # global dt
+        if phd._in_parallel:
+            # for communication dt across processors
+            self.local_dt  = np.zeros(1, dtype=np.float64)
+            self.global_dt = np.zeros(1, dtype=np.float64)
 
     @check_class(BoundaryConditionBase)
     def set_boundary_condition(self, boundary_condition):
@@ -227,6 +228,13 @@ class IntegrateBase(object):
         dt = self.riemann.compute_time_step(
                 self.particles, self.equation_state)
 
+        if phd._in_parallel:
+
+            self.local_dt[0] = dt
+            phd._comm.Allreduce(sendbuf=self.local_dt,
+                    recvbuf=self.global_dt, op=phd.MPI.MIN)
+            dt = self.global_dt[0]
+
         # modify time step
 #        if self.iteration == 0 and not self.restart:
 #            # shrink if first iteration
@@ -235,9 +243,9 @@ class IntegrateBase(object):
 #            # constrain rate of change
 #            dt = min(self.max_dt_change*self.old_dt, dt)
 #            self.old_dt = self.dt
+
         self.dt = dt
 
-        # if in parallel find smallest dt across TODO
         return dt
 
     def evolve_timestep(self):
@@ -336,11 +344,12 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
 
         # update mesh generator positions
         self.domain_manager.move_generators(self.particles, self.dt)
-        self.domain_manager.migrate_particles(self.particles)
 
         # ignored if serial run
-        if self.domain_manager.check_for_partition(self.particles):
+        if self.domain_manager.check_for_partition(self.particles, self):
             self.domain_manager.partion(self.particles)
+        else:
+            self.domain_manager.migrate_particles(self.particles)
 
         # setup the mesh for the next setup 
         self.mesh.build_geometry(self.particles, self.domain_manager)
