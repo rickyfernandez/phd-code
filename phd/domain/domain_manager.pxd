@@ -51,6 +51,8 @@ cdef class DomainManager:
     cdef public LoadBalance load_balance
     cdef public BoundaryConditionBase boundary_condition
 
+    cdef public int load_balance_freq
+
     cdef public double initial_radius
     cdef public double search_radius_factor
 
@@ -75,7 +77,7 @@ cdef class DomainManager:
     cdef np.ndarray recv_disp    # receive displacments for mpi
 
     # load balance methods
-    cpdef check_for_partition(self, CarrayContainer particles)
+    cpdef check_for_partition(self, CarrayContainer particles, object integrator)
     cpdef partition(self, CarrayContainer particles)
 
     # ghost generation

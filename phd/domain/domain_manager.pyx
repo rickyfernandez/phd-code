@@ -4,6 +4,8 @@ import numpy as np
 from libc.math cimport fmin
 from cython.operator cimport preincrement as inc
 
+from ..load_balance.tree cimport Node
+
 from ..utils.tools import check_class
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.exchange_particles import exchange_particles
@@ -44,9 +46,11 @@ cdef inline bint ghostid_cmp(
 
 cdef class DomainManager:
     def __init__(self, double initial_radius,
-                 double search_radius_factor=2.0, **kwargs):
+                 double search_radius_factor=2.0,
+                 int load_balance_freq = 5, **kwargs):
 
         self.initial_radius = initial_radius
+        self.load_balance_freq = load_balance_freq
         self.search_radius_factor = search_radius_factor
 
         self.domain = None
@@ -119,17 +123,26 @@ cdef class DomainManager:
         '''add boundary condition to list'''
         self.load_balance = load_balance
 
-    cpdef check_for_partition(self, CarrayContainer particles):
+    cpdef check_for_partition(self, CarrayContainer particles, object integrator):
         """
         Check if partition needs to called
         """
-        pass
+        if phd._in_parallel:
+            return integrator.iteration % self.load_balance_freq == 0
+        else:
+            return False
 
     cpdef partition(self, CarrayContainer particles):
         """
         Distribute particles across processors.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
         """
-        pass
+        self.load_balance.decomposition(particles)
 
     cpdef setup_initial_radius(self, CarrayContainer particles):
         """At the start of the simulation assign every particle an
@@ -174,6 +187,7 @@ cdef class DomainManager:
 
         # set ghost buffer to zero
         self.ghost_vec.clear()
+        self.num_real_particles = particles.get_carray_size()
 
         # buffer to keep track of which particles
         # have to exported for ghost updates
@@ -561,11 +575,11 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
-        cdef Tree tree
         cdef Node *node
 
         cdef IntArray tags
         cdef LongLongArray keys
+        cdef LongArray indices = LongArray()
 
         cdef LongArray leaf_pid
         cdef int incoming_particles
@@ -582,6 +596,7 @@ cdef class DomainManager:
 
 
         particles.remove_tagged_particles(GHOST)
+        self.num_real_particles = particles.get_carray_size()
 
         # for particles that left the domain perform boundary
         # condition on those particles
@@ -593,9 +608,6 @@ cdef class DomainManager:
             fac = self.load_balance.fac
             corner = self.load_balance.corner
             leaf_pid = self.load_balance.leaf_pid
-
-            # reference to global tree
-            glb_tree = self.load_bal.tree
 
             tags = particles.get_carray("tag")
             keys = particles.get_carray("key")
@@ -621,7 +633,7 @@ cdef class DomainManager:
                             xh[0], xh[1], xh[2], self.load_balance.order)
 
                     # find which processor particle lives in
-                    node = glb_tree.find_leaf(keys.data[i])
+                    node = self.load_balance.tree.find_leaf(keys.data[i])
                     pid  = leaf_pid.data[node.array_index]
 
                     if pid != rank: # flag to export
@@ -690,40 +702,42 @@ cdef class DomainManager:
             List of field strings to update
 
         """
-        pass
-#        cdef int i
-#        cdef str field
-#        cdef CarrayContainer ghost
-#        cdef LongArray indices = LongArray()
-#        cdef np.ndarray indices_npy, map_indices_npy
-#        cdef IntArray tags = particles.get_carray("tag")
-#
-#        if phd._in_parallel:
-#
-#            # grab indices of particles used to create
-#            # ghost particles
-#            for i in range(self.export_ghost_buffer.size()):
-#                indices.append(self.export_ghost_buffer[i].index)
-#
-#            ghost = particles.extract_items(indices, fields)
-#            exchange_particles(particles, ghosts,
-#                    self.send_cnts, self.recv_cnts,
-#                    start_index, phd._comm, fields,
-#                    self.send_disp, self.recv_disp)
-#
-#        else:
-#
-#            # find all ghost that need to be updated
-#            for i in range(particles.get_carray_size()):
-#                if types.data[i] == GHOST:
-#                    indices.append(i)
-#
-#            indices_npy = indices.get_npy_array()
-#            map_indices_npy = particles["map"][indices_npy]
-#
-#            # update ghost with their image data
-#            for field in fields:
-#                particles[field][indices_npy] = particles[field][map_indices_npy]
+        cdef str field
+        cdef CarrayContainer ghosts
+        cdef int i, num_ghost_particles
+        cdef LongArray indices = LongArray()
+        cdef np.ndarray indices_npy, map_indices_npy
+        cdef IntArray tags = particles.get_carray("tag")
+
+        if phd._in_parallel:
+
+            num_ghost_particles = self.export_ghost_buffer.size()
+            indices.resize(num_ghost_particles)
+
+            # grab indices used to create ghost particles
+            for i in range(num_ghost_particles):
+                indices.data[i] = self.export_ghost_buffer[i].index
+
+            # export updated fields
+            ghosts = particles.extract_items(indices, fields)
+            exchange_particles(particles, ghosts,
+                    self.send_cnts, self.recv_cnts,
+                    self.num_real_particles, phd._comm, fields,
+                    self.send_disp, self.recv_disp)
+
+        else:
+
+            # find all ghost that need to be updated
+            for i in range(particles.get_carray_size()):
+                if tags.data[i] == GHOST:
+                    indices.append(i)
+
+            indices_npy = indices.get_npy_array()
+            map_indices_npy = particles["map"][indices_npy]
+
+            # update ghost with their image data
+            for field in fields:
+                particles[field][indices_npy] = particles[field][map_indices_npy]
 
     cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients):
         """Update ghost gradients from their mirror particle.
@@ -741,49 +755,53 @@ cdef class DomainManager:
             Container of gradients for each primitive field.
 
         """
-        pass
-#        cdef str field
-#        cdef CarrayContainer grad
-#        cdef LongArray indices = LongArray()
-#        cdef IntArray tags = particles.get_carray("tag")
-#        cdef np.ndarray indices_npy, map_indices_npy
-#
-#        if phd._in_parallel:
-#
-#            # grab indices of particles used to create
-#            # ghost particles
-#            for i in range(self.export_ghost_buffer.size()):
-#                indices.append(self.export_ghost_buffer[i].index)
-#
-#            grad = particles.extract_items(indices, fields)
-#            exchange_particles(gradients, grad,
-#                    self.send_cnts, self.recv_cnts, 0, phd._comm,
-#                    gradients.carray_named_groups["primitive"],
-#                    self.send_disp, self.recv_disp)
-#
-#            # modify gradient by boundary condition
-#            self.boundary_condition.update_gradients(particles,
-#                    gradients, self)
-#
-#        else:
-#
-#            # find all ghost that are outside the domain that
-#            #need to be updated
-#            for i in range(particles.get_carray_size()):
-#                if tags.data[i] == GHOST:
-#                    indices.append(i)
-#
-#            # each ghost particle knows the id from which
-#            # it was created from the map array
-#            indices_npy = indices.get_npy_array()
-#            map_indices_npy = particles["map"][indices_npy]
-#
-#            # update ghost gradient from image particle 
-#            for field in gradients.carray_named_groups["primitive"]:
-#                gradients[field][indices_npy] = gradients[field][map_indices_npy]
-#
-#            # modify gradient by boundary condition
-#            self.boundary_condition.update_gradients(particles, gradients, self)
+        cdef str field
+        cdef CarrayContainer grad
+        cdef int i, num_ghost_particles
+        cdef LongArray indices = LongArray()
+        cdef np.ndarray indices_npy, map_indices_npy
+        cdef IntArray tags = particles.get_carray("tag")
+
+        if phd._in_parallel:
+
+            num_ghost_particles = self.export_ghost_buffer.size()
+            indices.resize(num_ghost_particles)
+
+            # grab indices used to create ghost particles
+            for i in range(num_ghost_particles):
+                indices.append(self.export_ghost_buffer[i].index)
+
+            grad = particles.extract_items(indices,
+                    gradients.carray_named_groups["primitive"])
+
+            exchange_particles(gradients, grad,
+                    self.send_cnts, self.recv_cnts, 0, phd._comm,
+                    gradients.carray_named_groups["primitive"],
+                    self.send_disp, self.recv_disp)
+
+            # modify gradient by boundary condition
+            self.boundary_condition.update_gradients(particles,
+                    gradients, self)
+
+        else:
+
+            # find all ghost that are outside the domain that
+            #need to be updated
+            for i in range(particles.get_carray_size()):
+                if tags.data[i] == GHOST:
+                    indices.append(i)
+
+            # each ghost particle knows the id from which
+            # it was created from the map array
+            indices_npy = indices.get_npy_array()
+            map_indices_npy = particles["map"][indices_npy]
+
+            # update ghost gradient from image particle 
+            for field in gradients.carray_named_groups["primitive"]:
+                gradients[field][indices_npy] = gradients[field][map_indices_npy]
+
+            # modify gradient by boundary condition
+            self.boundary_condition.update_gradients(particles, gradients, self)
 
     cdef int get_nearest_intersect_process_neighbors(self, double center[3], double old_h,
             double new_h, int rank, LongArray nbrs):
