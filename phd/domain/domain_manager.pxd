@@ -100,3 +100,5 @@ cdef class DomainManager:
     cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients)
     cdef reindex_ghost(self, CarrayContainer particles, int num_real_particles,
                        int total_num_particles)
+    cdef int get_nearest_intersect_process_neighbors(self, double center[3], double old_h,
+            double new_h, int rank, LongArray nbrs)

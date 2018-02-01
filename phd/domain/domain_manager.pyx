@@ -5,7 +5,6 @@ from libc.math cimport fmin
 from cython.operator cimport preincrement as inc
 
 from ..utils.tools import check_class
-from ..load_balance.tree cimport Tree
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.exchange_particles import exchange_particles
 
@@ -153,7 +152,7 @@ cdef class DomainManager:
 
     cpdef setup_for_ghost_creation(self, CarrayContainer particles):
         """Go through each particle and flag for ghost creation. For particles
-        with infinite radius use radius from previous time step. 
+        with infinite radius use radius from previous time step.
 
         Parameters
         ----------
@@ -203,8 +202,14 @@ cdef class DomainManager:
             p = particle_flag_deref(it)
             p.index = i
 
+            # initial values are flags meant to skip
+            # calcualtion
+            if phd._in_parallel:
+                p.old_search_radius = -1
+            else:
+                p.old_search_radius = 0.
+
             # scale search radius from voronoi radius
-            p.old_search_radius = 0.  # initial pass 
             p.search_radius = min(r.data[i], self.search_radius_factor*rold.data[i])
 
             # copy position and momentum, momentum is used because
@@ -272,28 +277,14 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
-        cdef FlagParticle *p
-
         # clear out for next batch of ghost particles
         self.ghost_vec.clear()
-
-        # create particles from flagged particles
-        cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
-        while it != self.flagged_particles.end():
-
-            # retrieve particle
-            p = particle_flag_deref(it)
-
-            # create ghost particles 
-            self.boundary_condition.create_ghost_particle(p, self)
-            inc(it)  # increment iterator
-
-        # do processor patch ghost particles
-        if phd._in_parallel:
-            self.create_interior_ghost_particles(particles)
+        self.boundary_condition.create_ghost_particle(self.flagged_particles, self)
 
         # copy particles, put in processor order and export
         if phd._in_parallel:
+            # do processor patch ghost particles
+            self.create_interior_ghost_particles(particles)
             self.copy_particles_parallel(particles)
         else:
             self.copy_particles_serial(particles)
@@ -311,7 +302,6 @@ cdef class DomainManager:
         cdef int i, dim
         cdef FlagParticle *p
         cdef LongArray nbrs_pid = LongArray()
-        cdef Tree glb_tree = self.load_balance.tree
         cdef LongArray leaf_pid = self.load_balance.leaf_pid
 
         dim = len(particles.carray_named_groups["position"])
@@ -326,9 +316,9 @@ cdef class DomainManager:
             # find all processors encolsed between old_search_radius
             # and search_radius from domain partition
             nbrs_pid.reset()
-            glb_tree.get_nearest_intersect_process_neighbors(
+            self.get_nearest_intersect_process_neighbors(
                     p.x, p.old_search_radius, p.search_radius,
-                    leaf_pid, phd._rank, nbrs_pid)
+                    phd._rank, nbrs_pid)
 
             # if processors found put the particle in buffer
             # for ghost creation and export
@@ -337,7 +327,7 @@ cdef class DomainManager:
 
                     # store particle information for ghost creation
                     self.ghost_vec.push_back(BoundaryParticle(
-                        p.x, p.v, p.index, nbrs_pid[i], dim))
+                        p.x, p.v, p.index, nbrs_pid.data[i], dim))
 
             inc(it)  # increment iterator
 
@@ -381,7 +371,10 @@ cdef class DomainManager:
             indices.resize(num_new_ghost)
             for i in range(num_new_ghost):
 
-                p = &self.ghost_vec[i]            # retrieve particle
+                p = &self.ghost_vec[i]       # retrieve particle
+                if p.proc > phd._size or p.proc < 0:
+                    raise RuntimeError("Found error in interior ghost")
+
                 indices.data[i] = p.index    # index of particle
                 self.send_cnts[p.proc] += 1  # bin processor for export
 
@@ -397,7 +390,7 @@ cdef class DomainManager:
             ghosts.pointer_groups(xg, particles.carray_named_groups["position"])
 
             # transfer new data to ghost 
-            for i in range(ghosts.get_carray_size()):
+            for i in range(num_new_ghost):
                 p = &self.ghost_vec[i]
 
                # store export information 
@@ -689,6 +682,66 @@ cdef class DomainManager:
 #            # modify gradient by boundary condition
 #            self.boundary_condition.update_gradients(particles, gradients, self)
 
+    cdef int get_nearest_intersect_process_neighbors(self, double center[3], double old_h,
+            double new_h, int rank, LongArray nbrs):
+        """
+        Gather all processors enclosed in square.
+
+        Parameters
+        ----------
+        center : double array
+            Center of search square in physical space.
+        h : double
+            Box length of search square in physical space.
+        leaf_pid : LongArray
+            Array of processors ids, index corresponds to a leaf in global tree.
+        rank : int
+            Current processor.
+        nbrs : LongArray
+            Container to hold all the processors ids.
+        """
+        cdef LongArray old_nbrs = LongArray()
+        cdef LongArray new_nbrs = LongArray()
+
+        cdef int i, j, num_new_nbrs, num_old_nbrs
+        cdef LongArray leaf_pid = self.load_balance.leaf_pid
+
+        nbrs.reset()
+
+        # find all processors from previous radius
+        if old_h > 0:
+            self.load_balance.tree.get_nearest_process_neighbors(
+                    center, old_h, leaf_pid, rank, old_nbrs)
+
+        # find all processors from new radius
+        self.load_balance.tree.get_nearest_process_neighbors(
+                center, new_h, leaf_pid, rank, new_nbrs)
+
+        # remove processors that where already flagged
+        # in previous pass
+
+        i = j = 0
+        num_old_nbrs = old_nbrs.length
+        num_new_nbrs = new_nbrs.length
+
+        while(i != num_new_nbrs):
+            if j == num_old_nbrs:
+                while(i < num_new_nbrs):
+                    nbrs.append(new_nbrs.data[i])
+                    i += 1
+                return nbrs.length
+
+            if new_nbrs.data[i] < old_nbrs.data[j]:
+                nbrs.append(new_nbrs.data[i])
+                i += 1
+            elif new_nbrs.data[i] > old_nbrs.data[j]:
+                j += 1
+            else:
+                i += 1
+                j += 1
+
+        return nbrs.length
+
     cdef reindex_ghost(self, CarrayContainer particles, int num_real_particles,
             int total_num_particles):
         """Since ghost particles are exported in batches in processor order we
@@ -710,7 +763,7 @@ cdef class DomainManager:
         sort(self.export_ghost_buffer.begin(),
                 self.export_ghost_buffer.end(), ghostid_cmp)
 
-        procs = particles.get_carray("proc")
+        procs = particles.get_carray("process")
         keys = particles.get_carray("key")
 
         j = 0
@@ -723,7 +776,7 @@ cdef class DomainManager:
             self.import_ghost_buffer[j].export_num = keys.data[i]
             j += 1
 
-        # sort out ghost particles by processor than by export index 
+        # sort our import ghost in processor and export order
         sort(self.import_ghost_buffer.begin(),
                 self.import_ghost_buffer.end(), ghostid_cmp)
 
@@ -735,4 +788,4 @@ cdef class DomainManager:
         # reappend ghost particles in correct import order 
         ghost = particles.extract_items(indices)
         particles.resize(num_real_particles)
-        particles.append(ghost)
+        particles.append_container(ghost)
