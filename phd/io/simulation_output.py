@@ -1,4 +1,5 @@
 import os
+import phd
 from ..utils.logger import phdLogger
 from ..utils.particle_tags import SimulationTAGS
 
@@ -93,7 +94,7 @@ class SimulationOutputterBase(object):
         self._file_name = self.base_name + str(self.counter).zfill(self.pad)
 
         if phd._in_parallel:
-            self._file_name += "_cpu" + str(self._rank).zfill(self.pad)
+            self._file_name += "_cpu" + str(phd._rank).zfill(self.pad)
 
         self._snapshot_directory = self._data_directory + "/" + self._file_name
 
