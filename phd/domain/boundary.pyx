@@ -198,7 +198,7 @@ cdef class Reflective(BoundaryConditionBase):
                                 for j in range(proc_nbrs.length):
                                     domain_manager.ghost_vec.push_back(
                                             BoundaryParticle(
-                                                xs, p.v, p.index,
+                                                xs, vs, p.index,
                                                 proc_nbrs.data[j], dim))
 
                     pos_new = p.x[i] + p.search_radius
@@ -230,7 +230,7 @@ cdef class Reflective(BoundaryConditionBase):
                                 for j in range(proc_nbrs.length):
                                     domain_manager.ghost_vec.push_back(
                                             BoundaryParticle(
-                                                xs, p.v, p.index,
+                                                xs, vs, p.index,
                                                 proc_nbrs.data[j], dim))
 
             inc(it)  # increment iterator
@@ -468,8 +468,8 @@ cdef class Periodic(BoundaryConditionBase):
 
                         # lower boundary
                         if xs[k] <= domain_manager.domain.bounds[0][k]:
-                            x[k][i] += domain_manager.translate[k]
+                            x[k][i] += domain_manager.domain.translate[k]
 
                         # upper boundary
                         if xs[k] >= domain_manager.domain.bounds[1][k]:
-                            x[k][i] -= domain_manager.translate[k]
+                            x[k][i] -= domain_manager.domain.translate[k]
