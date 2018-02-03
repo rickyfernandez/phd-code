@@ -48,7 +48,7 @@ cdef class LoadBalance:
         self.size = self.comm.Get_size()
 
         fudge_factor = 1.001
-        self.box_length = self.domain.max_length*fudge_factor
+        self.box_length = self.domain.max_length#*fudge_factor
         self.fac = (1 << self.order) / self.box_length
 
         self.corner = np.zeros(3, dtype=np.float64)
