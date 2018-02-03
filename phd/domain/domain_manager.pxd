@@ -64,6 +64,7 @@ cdef class DomainManager:
 
     # for parallel runs
     cdef int num_export
+    cdef int num_real_particles
 
     cdef np.ndarray loc_done
     cdef np.ndarray glb_done
@@ -83,6 +84,7 @@ cdef class DomainManager:
     # ghost generation
     #cdef filter_radius(self, CarrayContainer particles)
     cpdef setup_initial_radius(self, CarrayContainer particles)
+    cpdef store_radius(self, CarrayContainer particles)
     cpdef setup_for_ghost_creation(self, CarrayContainer particles)
 
     cpdef create_ghost_particles(self, CarrayContainer particles)

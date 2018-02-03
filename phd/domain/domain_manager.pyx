@@ -14,7 +14,7 @@ from ..utils.exchange_particles import exchange_particles
 cdef int REAL = ParticleTAGS.Real
 cdef int GHOST = ParticleTAGS.Ghost
 cdef int EXTERIOR = ParticleTAGS.Exterior
-cdef int INTERIOR = ParticleTAGS.Exterior
+cdef int INTERIOR = ParticleTAGS.Interior
 
 
 cdef dict fields_for_parallel = {
@@ -61,6 +61,7 @@ cdef class DomainManager:
 
         # list of particle to create ghost particles from
         self.flagged_particles.clear()
+        self.num_real_particles = 0
         self.num_export = 0
 
         if phd._in_parallel:
@@ -142,7 +143,8 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
-        self.load_balance.decomposition(particles)
+        if phd._in_parallel:
+            self.load_balance.decomposition(particles)
 
     cpdef setup_initial_radius(self, CarrayContainer particles):
         """At the start of the simulation assign every particle an
@@ -162,6 +164,24 @@ cdef class DomainManager:
         for i in range(particles.get_carray_size()):
             r.data[i] = self.initial_radius
             rold.data[i] = self.initial_radius
+
+    cpdef store_radius(self, CarrayContainer particles):
+        """At the start of the simulation assign every particle an
+        initial radius used for constructing the mesh. This values
+        gets updated after each mesh build.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        """
+        cdef int i
+        cdef DoubleArray r = particles.get_carray("radius")
+        cdef DoubleArray rold = particles.get_carray("old_radius")
+
+        for i in range(particles.get_carray_size()):
+            rold.data[i] = r.data[i]
 
     cpdef setup_for_ghost_creation(self, CarrayContainer particles):
         """Go through each particle and flag for ghost creation. For particles
@@ -225,6 +245,10 @@ cdef class DomainManager:
 
             # scale search radius from voronoi radius
             p.search_radius = min(r.data[i], self.search_radius_factor*rold.data[i])
+            #p.search_radius = min(r.data[i], self.doman.min_length)
+            #p.search_radius = max(p.search_rardius, self.search_radius_factor*rold.data[i])
+            p.search_radius = 0.1
+            #p.search_radius = self.search_radius_factor*rold.data[i]
 
             # copy position and momentum, momentum is used because
             # after an update only the momentum is correct
@@ -602,89 +626,89 @@ cdef class DomainManager:
         # condition on those particles
         self.boundary_condition.migrate_particles(particles, self)
 
-        if phd._in_parallel:
-
-            # information to map coordinates to hilbert space
-            fac = self.load_balance.fac
-            corner = self.load_balance.corner
-            leaf_pid = self.load_balance.leaf_pid
-
-            tags = particles.get_carray("tag")
-            keys = particles.get_carray("key")
-            particles.pointer_groups(x, particles.named_groups["position"])
-
-            self.num_export = 0
-            self.export_ghost_buffer.clear()
-            # reset import/export counts
-            for i in range(phd._size):
-                self.send_cnts[i] = 0
-                self.recv_cnts[i] = 0
-
-            # got through real particles
-            for i in range(particles.get_number_of_items()):
-                if tags.data[i] == REAL:
-
-                    # map to hilbert space
-                    for j in range(dim):
-                        xh[j] = <np.int32_t> ( (x[j][i] - corner[j])*fac )
-
-                    # new hilbert key
-                    keys.data[i] = self.load_balance.hilbert_func(
-                            xh[0], xh[1], xh[2], self.load_balance.order)
-
-                    # find which processor particle lives in
-                    node = self.load_balance.tree.find_leaf(keys.data[i])
-                    pid  = leaf_pid.data[node.array_index]
-
-                    if pid != rank: # flag to export
-                        self.export_ghost_buffer.push_back(GhostID(
-                            i, pid, self.num_export))
-
-                        # bin processor for export
-                        self.send_cnts[pid] += 1
-
-            num_export = self.export_ghost_buffer.size()
-            if num_export != 0:
-
-                # sort our export ghost in processor and export order
-                sort(self.export_ghost_buffer.begin(),
-                        self.export_ghost_buffer.end(), ghostid_cmp)
-
-                indices.resize(num_export)
-                for i in range(num_export):
-                    indices.data[i] = self.export_ghost_buffer[i].index
-
-                export_particles = particles.extract_items(indices)
-                particles.remove_items(indices)
-
-            else:
-                export_particles = CarrayContainer(0, particles.carray_dtypes)
-
-            # how many particles are going to each processor
-            phd._comm.Alltoall([self.send_cnts, phd.MPI.INT],
-                    [self.recv_cnts, phd.MPI.INT])
-
-            # how many incoming particles
-            incoming_particles = 0
-            for i in range(phd._size):
-                incoming_particles += self.recv_cnts[i]
-
-            # create displacement arrays 
-            self.send_disp[0] = self.recv_disp[0] = 0
-            for i in range(1, phd._size):
-                self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
-                self.recv_disp[i] = self.recv_cnts[i-1] + self.recv_disp[i-1]
-
-            # index to start adding new ghost particles
-            start_index = particles.get_carray_size()
-
-            # send our particles / recieve particles 
-            particles.extend(incoming_particles)
-            exchange_particles(particles, export_particles,
-                    self.send_cnts, self.recv_cnts,
-                    start_index, phd._comm,
-                    particles.carrays.keys(),
-                    self.send_disp, self.recv_disp)
+#        if phd._in_parallel:
+#
+#            # information to map coordinates to hilbert space
+#            fac = self.load_balance.fac
+#            corner = self.load_balance.corner
+#            leaf_pid = self.load_balance.leaf_pid
+#
+#            tags = particles.get_carray("tag")
+#            keys = particles.get_carray("key")
+#            particles.pointer_groups(x, particles.carray_named_groups["position"])
+#
+#            self.num_export = 0
+#            self.export_ghost_buffer.clear()
+#            # reset import/export counts
+#            for i in range(phd._size):
+#                self.send_cnts[i] = 0
+#                self.recv_cnts[i] = 0
+#
+#            # got through real particles
+#            for i in range(particles.get_carray_size()):
+#                if tags.data[i] == REAL:
+#
+#                    # map to hilbert space
+#                    for j in range(dim):
+#                        xh[j] = <np.int32_t> ( (x[j][i] - corner[j])*fac )
+#
+#                    # new hilbert key
+#                    keys.data[i] = self.load_balance.hilbert_func(
+#                            xh[0], xh[1], xh[2], self.load_balance.order)
+#
+#                    # find which processor particle lives in
+#                    node = self.load_balance.tree.find_leaf(keys.data[i])
+#                    pid  = leaf_pid.data[node.array_index]
+#
+#                    if pid != rank: # flag to export
+#                        self.export_ghost_buffer.push_back(GhostID(
+#                            i, pid, self.num_export))
+#
+#                        # bin processor for export
+#                        self.send_cnts[pid] += 1
+#
+#            num_export = self.export_ghost_buffer.size()
+#            if num_export != 0:
+#
+#                # sort our export ghost in processor and export order
+#                sort(self.export_ghost_buffer.begin(),
+#                        self.export_ghost_buffer.end(), ghostid_cmp)
+#
+#                indices.resize(num_export)
+#                for i in range(num_export):
+#                    indices.data[i] = self.export_ghost_buffer[i].index
+#
+#                export_particles = particles.extract_items(indices)
+#                particles.remove_items(indices.get_npy_array())
+#
+#            else:
+#                export_particles = CarrayContainer(0, particles.carray_dtypes)
+#
+#            # how many particles are going to each processor
+#            phd._comm.Alltoall([self.send_cnts, phd.MPI.INT],
+#                    [self.recv_cnts, phd.MPI.INT])
+#
+#            # how many incoming particles
+#            incoming_particles = 0
+#            for i in range(phd._size):
+#                incoming_particles += self.recv_cnts[i]
+#
+#            # create displacement arrays 
+#            self.send_disp[0] = self.recv_disp[0] = 0
+#            for i in range(1, phd._size):
+#                self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
+#                self.recv_disp[i] = self.recv_cnts[i-1] + self.recv_disp[i-1]
+#
+#            # index to start adding new ghost particles
+#            start_index = particles.get_carray_size()
+#
+#            # send our particles / recieve particles 
+#            particles.extend(incoming_particles)
+#            exchange_particles(particles, export_particles,
+#                    self.send_cnts, self.recv_cnts,
+#                    start_index, phd._comm,
+#                    particles.carrays.keys(),
+#                    self.send_disp, self.recv_disp)
 
     cdef update_ghost_fields(self, CarrayContainer particles, list fields):
         """Transfer ghost fields from their image particle.
