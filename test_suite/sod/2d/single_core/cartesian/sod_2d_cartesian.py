@@ -42,10 +42,10 @@ domain = phd.DomainLimits(minx, maxx)
 
 # computation related to boundaries
 domain_manager = phd.DomainManager(initial_radius=0.1,
-        search_radius_factor=1.25)
+        search_radius_factor=2)
 
 # create voronoi mesh
-mesh = phd.Mesh(regularize=False)
+mesh = phd.Mesh(regularize=False, relax_iterations=0)
 
 # computation
 integrator = phd.MovingMeshMUSCLHancock()
@@ -54,8 +54,9 @@ integrator.set_domain_limits(domain)
 integrator.set_particles(create_particles())
 integrator.set_equation_state(phd.IdealGas())
 integrator.set_domain_manager(domain_manager)
-integrator.set_boundary_condition(phd.Reflective())
-integrator.set_reconstruction(phd.PieceWiseLinear())
+#integrator.set_boundary_condition(phd.Reflective())
+integrator.set_boundary_condition(phd.Periodic())
+integrator.set_reconstruction(phd.PieceWiseConstant())
 
 # add computation
 integrator.set_riemann(phd.HLLC(boost=True))
@@ -66,6 +67,10 @@ simulation_time_manager.add_finish(phd.Time(time_max=0.15))
 
 # output last step
 output = phd.FinalOutput()
+output.set_writer(phd.Hdf5())
+simulation_time_manager.add_output(output)
+
+output = phd.IterationInterval(iteration_interval=1)
 output.set_writer(phd.Hdf5())
 simulation_time_manager.add_output(output)
 
