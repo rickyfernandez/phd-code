@@ -116,6 +116,9 @@ class IntegrateBase(object):
         self.boundary_condition = None
 
         if phd._in_parallel:
+
+            self.load_balance = None
+
             # for communication dt across processors
             self.local_dt  = np.zeros(1, dtype=np.float64)
             self.global_dt = np.zeros(1, dtype=np.float64)
@@ -139,6 +142,11 @@ class IntegrateBase(object):
     def set_equation_state(self, equation_state):
         """Set equation of state for gas."""
         self.equation_state = equation_state
+
+    #@check_class(EquationStateBase)
+    def set_load_balance(self, load_balance):
+        """Set equation of state for gas."""
+        self.load_balance = load_balance
 
     @check_class(CarrayContainer)
     def set_particles(self, particles):
@@ -203,9 +211,11 @@ class IntegrateBase(object):
             for i in range(self.mesh.relax_iterations):
                 phdLogger.info("Relaxing iteration %d" % i)
                 simulation.simulation_time_manager.output(simulation)
+                self.domain_manager.partition(self.particles)
                 self.mesh.relax(self.particles, self.domain_manager)
 
             # build mesh with ghost
+            self.domain_manager.partition(self.particles)
             self.mesh.build_geometry(self.particles, self.domain_manager)
 
         # compute density, velocity, pressure, ...
@@ -231,8 +241,10 @@ class IntegrateBase(object):
         if phd._in_parallel:
 
             self.local_dt[0] = dt
-            phd._comm.Allreduce(sendbuf=self.local_dt,
-                    recvbuf=self.global_dt, op=phd.MPI.MIN)
+            phd._comm.Allreduce(
+                    [self.local_dt,  phd.MPI.DOUBLE],
+                    [self.global_dt, phd.MPI.DOUBLE],
+                    op=phd.MPI.MIN)
             dt = self.global_dt[0]
 
         # modify time step
@@ -275,6 +287,17 @@ class StaticMeshMUSCLHancock(IntegrateBase):
                 not self.boundary_condition:
             raise RuntimeError("ERROR: Not all setters defined in %s!" %\
                     self.__class__.__name__)
+
+        if phd._in_parallel:
+            if not self.load_balance:
+                raise RuntimeError("ERROR: Load Balance setter not defined")
+
+            self.load_balance.comm = phd._comm
+            self.load_balance.domain = self.domain_limits
+            self.load_balance._initialize()
+
+            self.domain_manager.set_load_balance(
+                    self.load_balance)
 
         # initialize domain manager
         self.domain_manager.set_domain_limits(self.domain_limits)
@@ -345,11 +368,9 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         # update mesh generator positions
         self.domain_manager.move_generators(self.particles, self.dt)
 
-        # ignored if serial run
-        if self.domain_manager.check_for_partition(self.particles, self):
-            self.domain_manager.partion(self.particles)
-        else:
-            self.domain_manager.migrate_particles(self.particles)
+        # for moved particles apply boundary conditions and
+        # move particles to correct processor
+        self.domain_manager.partition(self.particles)
 
         # setup the mesh for the next setup 
         self.mesh.build_geometry(self.particles, self.domain_manager)
