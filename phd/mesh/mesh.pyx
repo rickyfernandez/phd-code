@@ -230,8 +230,8 @@ cdef class Mesh:
 
                 self.tess.update_radius(xp, rp, domain_manager.flagged_particles)
 
-                # update radius of old flagged particles 
-                domain_manager.update_search_radius(particles)
+            # update radius of old flagged particles
+            domain_manager.update_search_radius(particles)
 
             # if all process are done flagging
             if domain_manager.ghost_complete():
@@ -239,6 +239,9 @@ cdef class Mesh:
 
         if (i+1) == self.max_iterations:
             raise RuntimeError("Mesh failed to converged!")
+
+        # copy radius for next mesh construction
+        domain_manager.store_radius(particles)
 
         if phd._in_parallel:
 
