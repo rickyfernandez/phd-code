@@ -106,8 +106,11 @@ cdef class DomainManager:
             raise RuntimeError("ERROR: Fields not registered in particles by Mesh!")
 
         if not self.domain or not self.boundary_condition:
-                #not self.load_balance or
             raise RuntimeError("Not all setters defined in DomainMangaer")
+
+        if phd._in_parallel:
+            if not self.load_balance:
+                raise RuntimeError("Not all setters defined in DomainMangaer")
 
     #@check_class(phd.DomainLimits)
     def set_domain_limits(self, domain):
@@ -143,6 +146,10 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
+        # for particles that have left the domain apply boundary
+        # condition to particle back in the domain
+        self.boundary_condition.migrate_particles(particles, self)
+
         if phd._in_parallel:
             self.load_balance.decomposition(particles)
 
@@ -225,30 +232,19 @@ cdef class DomainManager:
         cdef cpplist[FlagParticle].iterator it = self.flagged_particles.begin()
         while(it != self.flagged_particles.end()):
 
-            # at this moment the radius of each particle should be
-            # finite or infinte. for infinite radius use scaled radius
-            # from previous time step. If finite the radius can still
-            # be very large so we need to minimize it.
-            if r.data[i] < 0:
-                r.data[i] = self.search_radius_factor*rold.data[i]
-
             # populate with particle information
             p = particle_flag_deref(it)
             p.index = i
 
             # initial values are flags meant to skip
-            # calcualtion
+            # calcualtion for first mesh build
             if phd._in_parallel:
                 p.old_search_radius = -1
             else:
                 p.old_search_radius = 0.
 
             # scale search radius from voronoi radius
-            p.search_radius = min(r.data[i], self.search_radius_factor*rold.data[i])
-            #p.search_radius = min(r.data[i], self.doman.min_length)
-            #p.search_radius = max(p.search_rardius, self.search_radius_factor*rold.data[i])
-            p.search_radius = 0.1
-            #p.search_radius = self.search_radius_factor*rold.data[i]
+            p.search_radius = self.search_radius_factor*rold.data[i]
 
             # copy position and momentum, momentum is used because
             # after an update only the momentum is correct
@@ -301,7 +297,7 @@ cdef class DomainManager:
                     it = self.flagged_particles.erase(it)
                 else:
                     p.old_search_radius = p.search_radius
-                    p.search_radius = self.search_radius_factor*r.data[i]
+                    p.search_radius = self.search_radius_factor*p.search_radius
                     inc(it) # next particle
 
     cpdef create_ghost_particles(self, CarrayContainer particles):
@@ -586,8 +582,6 @@ cdef class DomainManager:
             if tags.data[i] == REAL:
                 for k in range(dim):
                     x[k][i] += dt*wx[k][i]
-
-        self.migrate_particles(particles)
 
     cpdef migrate_particles(self, CarrayContainer particles):
         """For particles that have left the domain or processor patch
