@@ -787,19 +787,18 @@ cdef class DomainManager:
 
             # grab indices used to create ghost particles
             for i in range(num_ghost_particles):
-                indices.append(self.export_ghost_buffer[i].index)
+                indices.data[i] = self.export_ghost_buffer[i].index
 
-            grad = particles.extract_items(indices,
+            grad = gradients.extract_items(indices,
                     gradients.carray_named_groups["primitive"])
 
             exchange_particles(gradients, grad,
-                    self.send_cnts, self.recv_cnts, 0, phd._comm,
+                    self.send_cnts, self.recv_cnts, self.num_real_particles, phd._comm,
                     gradients.carray_named_groups["primitive"],
                     self.send_disp, self.recv_disp)
 
             # modify gradient by boundary condition
-            self.boundary_condition.update_gradients(particles,
-                    gradients, self)
+            self.boundary_condition.update_gradients(particles, gradients, self)
 
         else:
 
