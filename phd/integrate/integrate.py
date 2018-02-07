@@ -224,13 +224,6 @@ class IntegrateBase(object):
         # compute mass, momentum ...
         self.equation_state.conservative_from_primitive(self.particles)
 
-        # should this be removed? TODO
-        # assign cell and face velocities to zero 
-        dim = len(self.particles.carray_named_groups["position"])
-        for axis in "xyz"[:dim]:
-            self.particles["w-" + axis][:] = 0.
-            self.mesh.faces["velocity-" + axis][:] = 0.
-
     def compute_time_step(self):
         """Compute time step for current state of simulation.
 
