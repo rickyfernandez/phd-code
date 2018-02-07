@@ -12,18 +12,17 @@ from ..utils.carray cimport DoubleArray, LongLongArray, LongArray, IntArray
 cdef extern from "particle.h":
     cdef struct FlagParticle:
         double x[3]
-        double v[3]
         int index
         double old_search_radius
         double search_radius
 
     cdef cppclass BoundaryParticle:
-        BoundaryParticle(double _x[3], double _v[3], int _index,
-                int _proc, int dim)
+        BoundaryParticle(double _x[3], int _index,
+                int _proc, int _ghost_type, int dim)
         double x[3]
-        double v[3]
         int proc
         int index
+        int ghost_type
 
     cdef cppclass GhostID:
         GhostID(int _index, int _proc, int _export_num)
@@ -82,7 +81,6 @@ cdef class DomainManager:
     cpdef partition(self, CarrayContainer particles)
 
     # ghost generation
-    #cdef filter_radius(self, CarrayContainer particles)
     cpdef setup_initial_radius(self, CarrayContainer particles)
     cpdef store_radius(self, CarrayContainer particles)
     cpdef setup_for_ghost_creation(self, CarrayContainer particles)
@@ -100,7 +98,8 @@ cdef class DomainManager:
 
     cpdef bint ghost_complete(self)
 
-    cdef update_ghost_fields(self, CarrayContainer particles, list fields)
+    cdef update_ghost_fields(self, CarrayContainer particles, list fields,
+            bint apply_boundary_condition=*)
     cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients)
     cdef reindex_ghost(self, CarrayContainer particles, int num_real_particles,
                        int total_num_particles)

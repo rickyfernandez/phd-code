@@ -202,15 +202,13 @@ cdef class DomainManager:
         """
         cdef int i, k, dim
         cdef FlagParticle *p
+        cdef np.float64_t *x[3]
         cdef double search_radius
-        cdef np.float64_t *x[3], *mv[3]
         cdef DoubleArray r = particles.get_carray("radius")
         cdef DoubleArray rold = particles.get_carray("old_radius")
 
         dim = len(particles.carray_named_groups["position"])
-
         particles.pointer_groups(x, particles.carray_named_groups["position"])
-        particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
 
         # set ghost buffer to zero
         self.ghost_vec.clear()
@@ -250,7 +248,6 @@ cdef class DomainManager:
             # after an update only the momentum is correct
             for k in range(dim):
                 p.x[k] = x[k][i]
-                p.v[k] = mv[k][i]
 
             # next particle
             inc(it)
@@ -361,7 +358,7 @@ cdef class DomainManager:
 
                     # store particle information for ghost creation
                     self.ghost_vec.push_back(BoundaryParticle(
-                        p.x, p.v, p.index, nbrs_pid.data[i], dim))
+                        p.x, p.index, nbrs_pid.data[i], INTERIOR, dim))
 
             inc(it)  # increment iterator
 
@@ -380,11 +377,10 @@ cdef class DomainManager:
 
         cdef int i, k, dim, num_import, num_new_ghost
 
+        cdef np.float64_t *xg[3]
         cdef BoundaryParticle *p
         cdef CarrayContainer ghosts
         cdef LongArray indices = LongArray()
-
-        cdef np.float64_t *xg[3], *mvg[3]
 
         dim = len(particles.carray_named_groups["position"])
 
@@ -420,7 +416,6 @@ cdef class DomainManager:
             keys = ghosts.get_carray("key")
 
             # update position and momentum
-            ghosts.pointer_groups(mvg, particles.carray_named_groups["momentum"])
             ghosts.pointer_groups(xg, particles.carray_named_groups["position"])
 
             # transfer new data to ghost 
@@ -431,8 +426,8 @@ cdef class DomainManager:
                 self.export_ghost_buffer.push_back(GhostID(
                     p.index, p.proc, self.num_export))
 
-                tags.data[i] = GHOST
-                types.data[i] = INTERIOR
+                tags.data[i]  = GHOST
+                types.data[i] = p.ghost_type
 
                 # we store export number in the keys data, temporarily
                 # for reordering after the mesh is complete
@@ -443,7 +438,6 @@ cdef class DomainManager:
 
                     # update values
                     xg[k][i] = p.x[k]
-                    mvg[k][i] = p.v[k] # momentum not velocity
 
         else:
             ghosts = CarrayContainer(0, particles.carray_dtypes)
@@ -488,11 +482,10 @@ cdef class DomainManager:
         cdef LongArray maps
 
         cdef int i, k, dim
+        cdef np.float64_t *xg[3]
         cdef BoundaryParticle *p
         cdef CarrayContainer ghosts
         cdef LongArray indices = LongArray()
-
-        cdef np.float64_t *xg[3], *mvg[3]
 
         dim = len(particles.carray_named_groups["position"])
 
@@ -512,7 +505,6 @@ cdef class DomainManager:
         types = ghosts.get_carray("type")
         maps  = ghosts.get_carray("map")
 
-        ghosts.pointer_groups(mvg, particles.carray_named_groups["momentum"])
         ghosts.pointer_groups(xg,  particles.carray_named_groups["position"])
 
         # transfer ghost position and velocity 
@@ -521,13 +513,12 @@ cdef class DomainManager:
 
             maps.data[i]  = p.index  # reference to image
             tags.data[i]  = GHOST    # ghost label
-            types.data[i] = INTERIOR
+            types.data[i] = p.ghost_type
 
             for k in range(dim):
 
                 # update values
                 xg[k][i] = p.x[k]
-                mvg[k][i] = p.v[k] # momentum not velocity
 
         # add new ghost to total ghost container
         particles.append_container(ghosts)
@@ -704,7 +695,8 @@ cdef class DomainManager:
 #                    particles.carrays.keys(),
 #                    self.send_disp, self.recv_disp)
 
-    cdef update_ghost_fields(self, CarrayContainer particles, list fields):
+    cdef update_ghost_fields(self, CarrayContainer particles, list fields,
+            bint apply_boundary_condition=False):
         """Transfer ghost fields from their image particle.
 
         After ghost particles are created their are certain fields that
@@ -743,6 +735,11 @@ cdef class DomainManager:
                     self.num_real_particles, phd._comm, fields,
                     self.send_disp, self.recv_disp)
 
+            if apply_boundary_condition:
+                # modify fields by boundary condition
+                self.boundary_condition.update_fields(
+                        particles, self)
+
         else:
 
             # find all ghost that need to be updated
@@ -756,6 +753,11 @@ cdef class DomainManager:
             # update ghost with their image data
             for field in fields:
                 particles[field][indices_npy] = particles[field][map_indices_npy]
+
+            if apply_boundary_condition:
+                # modify fields by boundary condition
+                self.boundary_condition.update_fields(
+                        particles, self)
 
     cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients):
         """Update ghost gradients from their mirror particle.

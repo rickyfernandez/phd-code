@@ -63,6 +63,10 @@ cdef class BoundaryConditionBase:
         msg = "BoundaryBase::update_gradients called!"
         raise NotImplementedError(msg)
 
+    cpdef update_fields(self, CarrayContainer particles, DomainManager domain_manager):
+        msg = "BoundaryBase::update_fields called!"
+        raise NotImplementedError(msg)
+
 cdef class Reflective(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, cpplist[FlagParticle] &flagged_particles,
                                            DomainManager domain_manager):
@@ -78,8 +82,8 @@ cdef class Reflective(BoundaryConditionBase):
 
         """
         cdef int i, k
+        cdef double xs[3]
         cdef FlagParticle *p
-        cdef double xs[3], vs[3]
         cdef int dim = domain_manager.domain.dim
         cdef double pos_new, pos_old, domaind_edge
 
@@ -104,16 +108,14 @@ cdef class Reflective(BoundaryConditionBase):
                             # copy particle information
                             for k in range(dim):
                                 xs[k] = p.x[k]
-                                vs[k] = p.v[k]
 
                             # reflect particle position and velocity 
                             xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
-                            vs[i] = -vs[i]
 
                             # create ghost particle
                             domain_manager.ghost_vec.push_back(
-                                    BoundaryParticle(xs, vs,
-                                        p.index, 0, dim))
+                                    BoundaryParticle(xs, p.index,
+                                        0, EXTERIOR, dim))
 
                     pos_new = p.x[i] + p.search_radius
                     pos_old = p.x[i] + p.old_search_radius
@@ -128,16 +130,14 @@ cdef class Reflective(BoundaryConditionBase):
                             # copy particle information
                             for k in range(dim):
                                 xs[k] = p.x[k]
-                                vs[k] = p.v[k]
 
                             # reflect particle position and velocity
                             xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
-                            vs[i] = -vs[i]
 
                             # create ghost particle
                             domain_manager.ghost_vec.push_back(
-                                    BoundaryParticle(xs, vs,
-                                        p.index, 0, dim))
+                                    BoundaryParticle(xs, p.index,
+                                        0, EXTERIOR, dim))
 
             inc(it)  # increment iterator
 
@@ -155,8 +155,8 @@ cdef class Reflective(BoundaryConditionBase):
 
         """
         cdef int i, j, k
+        cdef double xs[3]
         cdef FlagParticle *p
-        cdef double xs[3], vs[3]
         cdef double pos_new, domain_edge
         cdef int dim = domain_manager.domain.dim
         cdef LongArray proc_nbrs = LongArray()
@@ -181,11 +181,9 @@ cdef class Reflective(BoundaryConditionBase):
                             # copy particle information
                             for k in range(dim):
                                 xs[k] = p.x[k]
-                                vs[k] = p.v[k]
 
                             # reflect particle position and velocity 
                             xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
-                            vs[i] = -vs[i]
 
                             # find processor neighbors, proc=-1 is used to
                             # query our own processor
@@ -198,8 +196,9 @@ cdef class Reflective(BoundaryConditionBase):
                                 for j in range(proc_nbrs.length):
                                     domain_manager.ghost_vec.push_back(
                                             BoundaryParticle(
-                                                xs, vs, p.index,
-                                                proc_nbrs.data[j], dim))
+                                                xs, p.index,
+                                                proc_nbrs.data[j],
+                                                EXTERIOR, dim))
 
                     pos_new = p.x[i] + p.search_radius
                     domain_edge = domain_manager.domain.bounds[1][i]
@@ -213,11 +212,9 @@ cdef class Reflective(BoundaryConditionBase):
                             # copy particle information
                             for k in range(dim):
                                 xs[k] = p.x[k]
-                                vs[k] = p.v[k]
 
                             # reflect particle position and velocity
                             xs[i] =  xs[i] - 2*(xs[i] - domain_edge)
-                            vs[i] = -vs[i]
 
                             # find processor neighbors, proc=-1 is used to
                             # query our own processor
@@ -230,8 +227,9 @@ cdef class Reflective(BoundaryConditionBase):
                                 for j in range(proc_nbrs.length):
                                     domain_manager.ghost_vec.push_back(
                                             BoundaryParticle(
-                                                xs, vs, p.index,
-                                                proc_nbrs.data[j], dim))
+                                                xs, p.index,
+                                                proc_nbrs.data[j],
+                                                EXTERIOR, dim))
 
             inc(it)  # increment iterator
 
@@ -306,6 +304,46 @@ cdef class Reflective(BoundaryConditionBase):
                             # flip gradient component
                             dv[dim*k + j][i] *= -1
 
+    cpdef update_fields(self, CarrayContainer particles, DomainManager domain_manager):
+        """Transfer gradient from image particle to ghost particle with reflective
+        boundary condition.
+
+        For reflective boundary condition the velocity gradient normal to the
+        boundary interface has to be flipped. This function finds all ghost
+        particles outside the domain and flips the corresponding component.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Gradient data
+
+        gradients : CarrayContainer
+            Container of gradients for each primitive field.
+
+        """
+        cdef int i, k, dim
+        cdef np.float64_t *x[3], *v[3], *mv[3]
+        cdef IntArray types = particles.get_carray("type")
+
+        dim = len(particles.carray_named_groups["position"])
+
+        particles.pointer_groups(x,  particles.carray_named_groups["position"])
+        particles.pointer_groups(v,  particles.carray_named_groups["velocity"])
+        particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
+
+        for i in range(particles.get_carray_size()):
+            if types.data[i] == EXTERIOR:
+
+                # check each dimension
+                for k in range(dim):
+
+                    if x[k][i] < domain_manager.domain.bounds[0][k]:
+                        v[k][i]  *= -1
+                        mv[k][i] *= -1
+
+                    if x[k][i] > domain_manager.domain.bounds[1][k]:
+                        v[k][i]  *= -1
+                        mv[k][i] *= -1
 
 cdef class Periodic(BoundaryConditionBase):
     cdef void create_ghost_particle_serial(self, cpplist[FlagParticle] &flagged_particles,
@@ -354,8 +392,8 @@ cdef class Periodic(BoundaryConditionBase):
 
                         # create ghost particle
                         domain_manager.ghost_vec.push_back(
-                                BoundaryParticle(xs, p.v,
-                                    p.index, 0, dim))
+                                BoundaryParticle(xs, p.index,
+                                    0, EXTERIOR, dim))
 
             inc(it)  # increment iterator
 
@@ -408,13 +446,36 @@ cdef class Periodic(BoundaryConditionBase):
                         for j in range(proc_nbrs.length):
                             domain_manager.ghost_vec.push_back(
                                     BoundaryParticle(
-                                        xs, p.v, p.index,
-                                        proc_nbrs.data[j], dim))
+                                        xs, p.index,
+                                        proc_nbrs.data[j],
+                                        EXTERIOR, dim))
 
             inc(it)  # increment iterator
 
     cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
                                DomainManager domain_manager):
+        """Transfer gradient from image particle to ghost particle with reflective
+        boundary condition.
+
+        For periodic boundary condition the there is no need to update gradients.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Gradient data
+
+        gradients : CarrayContainer
+            Container of gradients for each primitive field.
+        p : FlagParticle*
+            Pointer to flagged particle.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        pass
+
+    cpdef update_fields(self, CarrayContainer particles, DomainManager domain_manager):
         """Transfer gradient from image particle to ghost particle with reflective
         boundary condition.
 

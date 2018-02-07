@@ -24,6 +24,7 @@ cdef class BoundaryConditionBase:
     cdef void migrate_particles(self, CarrayContainer particles, DomainManager domain_manager)
     cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
                                DomainManager domain_manager)
+    cpdef update_fields(self, CarrayContainer particles, DomainManager domain_manager)
 
 cdef class Reflective(BoundaryConditionBase):
     pass

@@ -218,7 +218,10 @@ class IntegrateBase(object):
             self.domain_manager.partition(self.particles)
             self.mesh.build_geometry(self.particles, self.domain_manager)
 
-        # compute density, velocity, pressure, ...
+        self.domain_manager.boundary_condition.update_fields(
+                self.particles, self.domain_manager)
+
+        # compute mass, momentum ...
         self.equation_state.conservative_from_primitive(self.particles)
 
         # should this be removed? TODO
@@ -372,9 +375,72 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         # move particles to correct processor
         self.domain_manager.partition(self.particles)
 
-        # setup the mesh for the next setup 
+        # setup the mesh with ghost particles for the next setup 
         self.mesh.build_geometry(self.particles, self.domain_manager)
+        self.domain_manager.boundary_condition.update_fields(
+                self.particles, self.domain_manager)
 
         # convert updated conservative to primitive
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
+
+#class MovingMeshPakmor(StaticMeshMUSCLHancock):
+#    """Moving mesh integrator."""
+#    def evolve_timestep(self):
+#        """Evolve the simulation for one time step."""
+#
+#        phdLogger.info("MovingMeshPakmor: Starting integration")
+#
+#        # assign velocities to mesh cells and faces 
+#        self.mesh.assign_generator_velocities(self.particles, self.equation_state)
+#        self.mesh.assign_face_velocities(self.particles)
+#
+#        # --- first flux update ---
+#        # build left/right states at each face in the mesh
+#        self.reconstruction.compute_gradients(self.particles, self.mesh,
+#                self.domain_manager)
+#
+#        # reconstruct without temporal component
+#        self.reconstruction.compute_states(self.particles, self.mesh,
+#                self.equation_state.get_gamma(), self.domain_manager, 0.,
+#                self.riemann.boost, False)
+#
+#        # solve riemann problem, generate flux
+#        self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
+#                self.equation_state)
+#
+#        # update conservative from fluxes
+#        self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+#
+#
+#        # --- move particles and rebuild the mesh ---
+#        # update mesh generator positions
+#        self.domain_manager.move_generators(self.particles, self.dt)
+#
+#        # for moved particles apply boundary conditions and
+#        # move particles to correct processor
+#        self.domain_manager.partition(self.particles)
+#
+#        # rebuild the mesh
+#        self.mesh.build_geometry(self.particles, self.domain_manager)
+#        self.domain_manager.
+#
+#        
+#        # --- second flux update ---
+#        # reconstruct with temporal component
+#        self.reconstruction.compute_states(self.particles, self.mesh,
+#                self.equation_state.get_gamma(), self.domain_manager, self.dt,
+#                self.riemann.boost, True)
+#
+#        # solve riemann problem, generate flux
+#        self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
+#                self.equation_state)
+#
+#        # update conservative from fluxes
+#        self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+#        self.domain_manager.update_ghost_fields(
+#                self.particles.carray_named_groups["conserative"])
+#
+#        # convert updated conservative to primitive
+#        self.equation_state.primitive_from_conservative(self.particles)
+#        self.iteration += 1; self.time += self.dt
