@@ -695,7 +695,7 @@ cdef class DomainManager:
 #                    particles.carrays.keys(),
 #                    self.send_disp, self.recv_disp)
 
-    cdef update_ghost_fields(self, CarrayContainer particles, list fields,
+    cpdef update_ghost_fields(self, CarrayContainer particles, list fields,
             bint apply_boundary_condition=False):
         """Transfer ghost fields from their image particle.
 
@@ -759,7 +759,7 @@ cdef class DomainManager:
                 self.boundary_condition.update_fields(
                         particles, self)
 
-    cdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients):
+    cpdef update_ghost_gradients(self, CarrayContainer particles, CarrayContainer gradients):
         """Update ghost gradients from their mirror particle.
 
         After reconstruction only real particles have gradients calculated.
