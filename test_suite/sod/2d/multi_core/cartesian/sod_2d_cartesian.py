@@ -92,9 +92,8 @@ integrator.set_particles(particles)
 integrator.set_equation_state(phd.IdealGas())
 integrator.set_domain_manager(domain_manager)
 integrator.set_load_balance(phd.LoadBalance())
-#integrator.set_boundary_condition(phd.Reflective())
-integrator.set_boundary_condition(phd.Periodic())
-integrator.set_reconstruction(phd.PieceWiseConstant())
+integrator.set_boundary_condition(phd.Reflective())
+integrator.set_reconstruction(phd.PieceWiseLinear(limiter=0))
 
 # add finish criteria
 simulation_time_manager = phd.SimulationTimeManager()
