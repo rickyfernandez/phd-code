@@ -619,34 +619,38 @@ cdef class PieceWiseLinear(ReconstructionBase):
                         for k in range(dim):
                             df[dim*n+k] += area*(d_dif*cfx[k] - 0.5*d_sum*dr[k])/(r*_vol)
 
-                # limit gradients Eq. 30
-                for m in range(mesh.neighbors[i].size()):
+                if limiter == 0: # AREPO limiter
 
-                    # index of face neighbor
-                    fid = mesh.neighbors[i][m]
+                    # limit gradients Eq. 30
+                    for n in range(num_fields):
+                        for m in range(mesh.neighbors[i].size()):
 
-                    if limiter == 0: # AREPO limiter
-
-                        for n in range(num_fields):
+                            # index of face neighbor
+                            fid = mesh.neighbors[i][m]
 
                             dphi = 0
                             for k in range(dim):
                                 dphi += df[dim*n+k]*(fij[k][fid] - cx[k])
 
-                            if dphi > 0.0:
+                            if dphi > 0:
                                 psi = (phi_max[n] - prim[n][i])/dphi
-                            elif dphi < 0.0:
+                            elif dphi < 0:
                                 psi = (phi_min[n] - prim[n][i])/dphi
                             else:
                                 psi = 1.0
 
                             alpha[n] = fmin(alpha[n], psi)
 
-                    elif limiter == 1: # TESS limiter
+                elif limiter == 1: # TESS limiter
 
-                        for n in range(num_fields):
+                    # limit gradients Eq. 22
+                    for n in range(num_fields):
+                        for m in range(mesh.neighbors[i].size()):
 
+                            # index of face neighbor
+                            fid = mesh.neighbors[i][m]
                             # extract neighbor from face
+
                             if i == pair_i.data[fid]:
                                 j = pair_j.data[fid]
                             elif i == pair_j.data[fid]:
