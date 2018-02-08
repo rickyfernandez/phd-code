@@ -43,7 +43,7 @@ domain = phd.DomainLimits(minx, maxx)
 
 # computation related to boundaries
 domain_manager = phd.DomainManager(initial_radius=0.1,
-        search_radius_factor=1.25)
+        search_radius_factor=2)
 
 # create voronoi mesh
 mesh = phd.Mesh(regularize=True, relax_iterations=10)
