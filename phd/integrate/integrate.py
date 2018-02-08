@@ -379,23 +379,16 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
 
 #class MovingMeshPakmor(StaticMeshMUSCLHancock):
 #    """Moving mesh integrator."""
-#    def evolve_timestep(self):
-#        """Evolve the simulation for one time step."""
-#
-#        phdLogger.info("MovingMeshPakmor: Starting integration")
-#
+#    def first_stage(self, dt):
 #        # assign velocities to mesh cells and faces 
 #        self.mesh.assign_generator_velocities(self.particles, self.equation_state)
 #        self.mesh.assign_face_velocities(self.particles)
 #
-#        # --- first flux update ---
-#        # build left/right states at each face in the mesh
+#        # reconstruct with temporal component
 #        self.reconstruction.compute_gradients(self.particles, self.mesh,
 #                self.domain_manager)
-#
-#        # reconstruct without temporal component
 #        self.reconstruction.compute_states(self.particles, self.mesh,
-#                self.equation_state.get_gamma(), self.domain_manager, 0.,
+#                self.equation_state.get_gamma(), self.domain_manager, 0,
 #                self.riemann.boost, False)
 #
 #        # solve riemann problem, generate flux
@@ -403,26 +396,23 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
 #                self.equation_state)
 #
 #        # update conservative from fluxes
-#        self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+#        self.mesh.update_from_fluxes(self.particles, self.riemann, 0.5*dt)
 #
+#    def second_stage(self, dt):
+#        # communicate old gradients and boundary conditions
+#        self.reconstruction.grad.resize(self.particles.get_carray_size())
 #
-#        # --- move particles and rebuild the mesh ---
-#        # update mesh generator positions
-#        self.domain_manager.move_generators(self.particles, self.dt)
+#        self.domain_manager.boundary_condition.update_fields(
+#                self.particles, self.domain_manager)
+#        self.domain_manager.update_ghost_gradients(
+#                self.particles, self.reconstruction.grad)
 #
-#        # for moved particles apply boundary conditions and
-#        # move particles to correct processor
-#        self.domain_manager.partition(self.particles)
+#        # assign velocities to mesh cells and faces 
+#        self.mesh.assign_generator_velocities(self.particles, self.equation_state)
+#        self.mesh.assign_face_velocities(self.particles)
 #
-#        # rebuild the mesh
-#        self.mesh.build_geometry(self.particles, self.domain_manager)
-#        self.domain_manager.
-#
-#        
-#        # --- second flux update ---
-#        # reconstruct with temporal component
 #        self.reconstruction.compute_states(self.particles, self.mesh,
-#                self.equation_state.get_gamma(), self.domain_manager, self.dt,
+#                self.equation_state.get_gamma(), self.domain_manager, dt,
 #                self.riemann.boost, True)
 #
 #        # solve riemann problem, generate flux
@@ -430,10 +420,31 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
 #                self.equation_state)
 #
 #        # update conservative from fluxes
-#        self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+#        self.mesh.update_from_fluxes(self.particles, self.riemann, 0.5*dt)
+#
+#        # transfer accumulated updates to ghost for 
+#        # next time step
 #        self.domain_manager.update_ghost_fields(
-#                self.particles.carray_named_groups["conserative"])
+#                self.particles,
+#                self.particles.carray_named_groups["conservative"],
+#                True)
 #
 #        # convert updated conservative to primitive
 #        self.equation_state.primitive_from_conservative(self.particles)
+#
+#    def evolve_timestep(self):
+#        """Evolve the simulation for one time step."""
+#
+#        phdLogger.info("MovingMeshPakmor: Starting integration")
+#
+#        # add 1/2 update with current mesh
+#        self.first_stage(self.dt)
+#
+#        # update mesh generator positions, apply boundary conditions
+#        self.domain_manager.move_generators(self.particles, self.dt)
+#        self.domain_manager.partition(self.particles)
+#        self.mesh.build_geometry(self.particles, self.domain_manager)
+#
+#        # add 1/2 update with updated mesh
+#        self.second_stage(self.dt)
 #        self.iteration += 1; self.time += self.dt
