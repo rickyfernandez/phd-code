@@ -5,95 +5,112 @@ from mpi4py import MPI
 #example to run:
 #$ mpirun -n 5 python sedov_2d_cartesian.py
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
-
-if rank == 0:
+if phd._rank == 0:
 
     gamma = 1.4
 
     Lx = 1.    # domain size in x
-    nx = 51    # particles per dim
+    nx = 101   # particles per dim
     n = nx*nx  # number of particles
 
     dx = Lx/nx # spacing between particles
 
     # create particle container
-    #pc_root = phd.ParticleContainer(n)
-    pc_root = phd.HydroParticleCreator(n, parallel=True)
+    particles_root = phd.HydroParticleCreator(n)
     part = 0
     for i in range(nx):
         for j in range(nx):
-            pc_root['position-x'][part] = (i+0.5)*dx
-            pc_root['position-y'][part] = (j+0.5)*dx
-            pc_root['ids'][part] = part
+            particles_root["position-x"][part] = (i+0.5)*dx
+            particles_root["position-y"][part] = (j+0.5)*dx
+            particles_root["ids"][part] = part
             part += 1
 
     # set ambient values
-    pc_root['density'][:]  = 1.0               # density
-    pc_root['pressure'][:] = 1.0E-5*(gamma-1)  # total energy
+    particles_root["density"][:]  = 1.0               # density
+    particles_root["pressure"][:] = 1.0E-5*(gamma-1)  # total energy
 
     # put all enegery in center particle
     r = dx * 0.51
-    cells = ((pc_root['position-x']-.5)**2 + (pc_root['position-y']-.5)**2) <= r**2
-    pc_root['pressure'][cells] = 1.0/(dx*dx)*(gamma-1)
+    cells = ((particles_root["position-x"]-.5)**2 + (particles_root["position-y"]-.5)**2) <= r**2
+    particles_root["pressure"][cells] = 1.0/(dx*dx)*(gamma-1)
 
     # how many particles to each process
-    nsect, extra = divmod(n, size)
-    lengths = extra*[nsect+1] + (size-extra)*[nsect]
+    nsect, extra = divmod(n, phd._size)
+    lengths = extra*[nsect+1] + (phd._size-extra)*[nsect]
     send = np.array(lengths)
 
     # how many particles 
-    disp = np.zeros(size, dtype=np.int32)
-    for i in range(1,size):
+    disp = np.zeros(phd._size, dtype=np.int32)
+    for i in range(1, phd._size):
         disp[i] = send[i-1] + disp[i-1]
 
 else:
 
     lengths = disp = send = None
-    pc_root = {
-            'position-x': None,
-            'position-y': None,
-            'density': None,
-            'pressure': None,
-            'ids': None
+    particles_root = {
+            "position-x": None,
+            "position-y": None,
+            "density": None,
+            "pressure": None,
+            "ids": None
             }
 
 # tell each processor how many particles it will hold
-send = comm.scatter(send, root=0)
+send = phd._comm.scatter(send, root=0)
 
 # allocate local particle container
-pc = phd.HydroParticleCreator(send, parallel=True)
+particles = phd.HydroParticleCreator(send, parallel=True)
 
 # import particles from root
-fields = ['position-x', 'position-y', 'density', 'pressure', 'ids']
+fields = ["position-x", "position-y", "density", "pressure", "ids"]
 for field in fields:
-    comm.Scatterv([pc_root[field], (lengths, disp)], pc[field])
+    phd._comm.Scatterv([particles_root[field], (lengths, disp)], particles[field])
 
-pc['velocity-x'][:] = 0.0
-pc['velocity-y'][:] = 0.0
-pc['process'][:] = rank
-pc['tag'][:] = phd.ParticleTAGS.Real
-pc['type'][:] = phd.ParticleTAGS.Undefined
+particles["velocity-x"][:] = 0.0
+particles["velocity-y"][:] = 0.0
+particles["tag"][:] = phd.ParticleTAGS.Real
+particles["type"][:] = phd.ParticleTAGS.Undefined
 
-# simulation driver
-sim = phd.SimulationParallel(
-        cfl=0.5, tf=0.1, pfreq=1,
-        relax_num_iterations=0,
-        output_relax=False,
-        fname='sedov_2d_cartesian')
+# unit square domain
+minx = np.array([0., 0.])
+maxx = np.array([1., 1.])
+domain = phd.DomainLimits(minx, maxx)
 
-sim.add_component(pc)                                                      # create inital state of the simulation
-sim.add_component(comm)                                                    # create inital state of the simulation
-sim.add_component(phd.LoadBalance(order=21))                               # tree load balance scheme
-sim.add_component(phd.DomainLimits(dim=2, xmin=0., xmax=1.))               # spatial size of problem 
-sim.add_component(phd.BoundaryParallel(                                    # reflective boundary condition
-    boundary_type=phd.BoundaryType.Reflective))
-sim.add_component(phd.Mesh())                                              # tesselation algorithm
-sim.add_component(phd.PieceWiseLinear())                                   # Linear reconstruction
-sim.add_component(phd.HLLC(gamma=1.4))                                     # riemann solver
-sim.add_component(phd.MovingMesh(regularize=1))                            # Integrator
+# computation related to boundaries
+domain_manager = phd.DomainManager(initial_radius=0.1,
+        search_radius_factor=2)
 
-# run the simulation
-sim.solve()
+# create voronoi mesh
+mesh = phd.Mesh(regularize=False, relax_iterations=0)
+
+# computation
+integrator = phd.MovingMeshMUSCLHancock()
+integrator.set_mesh(mesh)
+integrator.set_domain_limits(domain)
+integrator.set_particles(particles)
+integrator.set_riemann(phd.HLLC(boost=True))
+integrator.set_equation_state(phd.IdealGas())
+integrator.set_domain_manager(domain_manager)
+integrator.set_load_balance(phd.LoadBalance())
+integrator.set_boundary_condition(phd.Reflective())
+integrator.set_reconstruction(phd.PieceWiseLinear(limiter=0))
+
+# add finish criteria
+simulation_time_manager = phd.SimulationTimeManager()
+simulation_time_manager.add_finish(phd.Time(time_max=0.1))
+
+# output last step
+output = phd.FinalOutput()
+output.set_writer(phd.Hdf5())
+simulation_time_manager.add_output(output)
+
+output = phd.IterationInterval(iteration_interval=1)
+output.set_writer(phd.Hdf5())
+simulation_time_manager.add_output(output)
+
+# Create simulator
+simulation = phd.Simulation(simulation_name="sedov", colored_logs=True)
+simulation.set_integrator(integrator)
+simulation.set_simulation_time_manager(simulation_time_manager)
+simulation.initialize()
+simulation.solve()
