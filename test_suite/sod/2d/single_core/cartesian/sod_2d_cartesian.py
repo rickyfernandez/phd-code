@@ -51,15 +51,12 @@ mesh = phd.Mesh(regularize=False, relax_iterations=0)
 integrator = phd.MovingMeshMUSCLHancock()
 integrator.set_mesh(mesh)
 integrator.set_domain_limits(domain)
+integrator.set_riemann(phd.HLLC(boost=True))
 integrator.set_particles(create_particles())
 integrator.set_equation_state(phd.IdealGas())
 integrator.set_domain_manager(domain_manager)
-#integrator.set_boundary_condition(phd.Reflective())
-integrator.set_boundary_condition(phd.Periodic())
-integrator.set_reconstruction(phd.PieceWiseConstant())
-
-# add computation
-integrator.set_riemann(phd.HLLC(boost=True))
+integrator.set_boundary_condition(phd.Reflective())
+integrator.set_reconstruction(phd.PieceWiseLinear(limiter=0))
 
 # add finish criteria
 simulation_time_manager = phd.SimulationTimeManager()
