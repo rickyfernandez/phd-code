@@ -639,7 +639,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
                             else:
                                 psi = 1.0
 
-                            alpha[n] = fmin(alpha[n], psi)
+                            alpha[n] = fmin(alpha[n], fmax(psi, 0.))
 
                 elif limiter == 1: # TESS limiter
 
@@ -667,7 +667,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
                             else:
                                 psi = 1.0
 
-                            alpha[n] = fmin(alpha[n], psi)
+                            alpha[0] = fmin(alpha[0], fmax(psi, 0.))
 
                 # store the gradients
                 for n in range(num_fields):
