@@ -42,6 +42,7 @@ from phd.integrate.integrate import \
         IntegrateBase, \
         StaticMeshMUSCLHancock, \
         MovingMeshMUSCLHancock
+        #MovingMeshPakmor
 
 from phd.reconstruction.reconstruction import \
         ReconstructionBase, \

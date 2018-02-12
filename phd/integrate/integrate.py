@@ -400,12 +400,12 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
 #
 #    def second_stage(self, dt):
 #        # communicate old gradients and boundary conditions
-#        self.reconstruction.grad.resize(self.particles.get_carray_size())
+#        #self.reconstruction.grad.resize(self.particles.get_carray_size())
 #
 #        self.domain_manager.boundary_condition.update_fields(
 #                self.particles, self.domain_manager)
-#        self.domain_manager.update_ghost_gradients(
-#                self.particles, self.reconstruction.grad)
+#        #self.domain_manager.update_ghost_gradients(
+#        #        self.particles, self.reconstruction.grad)
 #
 #        # assign velocities to mesh cells and faces 
 #        self.mesh.assign_generator_velocities(self.particles, self.equation_state)
