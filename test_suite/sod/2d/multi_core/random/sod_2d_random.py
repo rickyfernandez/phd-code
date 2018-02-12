@@ -69,7 +69,6 @@ particles["velocity-x"][:] = 0.0
 particles["velocity-y"][:] = 0.0
 particles["momentum-x"][:] = 0.0
 particles["momentum-y"][:] = 0.0
-#particles["process"][:] = phd._rank
 particles["tag"][:] = phd.ParticleTAGS.Real
 particles["type"][:] = phd.ParticleTAGS.Undefined
 
@@ -80,11 +79,11 @@ maxx = np.array([1., 1.])
 domain = phd.DomainLimits(minx, maxx)
 
 # computation related to boundaries
-domain_manager = phd.DomainManager(initial_radius=0.2,
+domain_manager = phd.DomainManager(initial_radius=0.1,
         search_radius_factor=2)
 
 # create voronoi mesh
-mesh = phd.Mesh(regularize=True, relax_iterations=8, max_iterations=20)
+mesh = phd.Mesh(regularize=True, relax_iterations=8, max_iterations=10)
 
 # computation
 integrator = phd.MovingMeshMUSCLHancock()
@@ -95,9 +94,8 @@ integrator.set_particles(particles)
 integrator.set_equation_state(phd.IdealGas())
 integrator.set_domain_manager(domain_manager)
 integrator.set_load_balance(phd.LoadBalance())
-#integrator.set_boundary_condition(phd.Reflective())
-integrator.set_boundary_condition(phd.Periodic())
-integrator.set_reconstruction(phd.PieceWiseConstant())
+integrator.set_boundary_condition(phd.Reflective())
+integrator.set_reconstruction(phd.PieceWiseLinear(limiter=0))
 
 # add finish criteria
 simulation_time_manager = phd.SimulationTimeManager()
