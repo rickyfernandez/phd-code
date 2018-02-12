@@ -13,7 +13,7 @@ def create_particles(gamma):
     dx = Lx/nx # spacing between particles
 
     # create particle container
-    pc = phd.ParticleContainer(n)
+    particles = phd.HydroParticleCreator(n)
     part = 0
     for i in range(nx):
         for j in range(nx):
@@ -25,41 +25,66 @@ def create_particles(gamma):
 
             if 0.25 < y and y < 0.75:
 
-                pc['density'][part] = rho_1
-                pc['velocity-x'][part] = -(vel + pert)
+                particles["density"][part] = rho_1
+                particles["velocity-x"][part] = -(vel + pert)
 
             else:
 
-                pc['density'][part] = rho_2
-                pc['velocity-x'][part] = vel + pert
+                particles["density"][part] = rho_2
+                particles["velocity-x"][part] = vel + pert
 
 
-            pc['position-x'][part] = x
-            pc['position-y'][part] = y
-            pc['velocity-y'][part] = pert
-            pc['ids'][part] = part
+            particles["position-x"][part] = x
+            particles["position-y"][part] = y
+            particles["ids"][part] = part
             part += 1
 
-    pc['pressure'][:] = 2.5
-    pc['velocity-y'][:] = 0.0
-    pc['tag'][:] = phd.ParticleTAGS.Real
-    pc['type'][:] = phd.ParticleTAGS.Undefined
+    particles["pressure"][:] = 2.5
+    particles["velocity-y"][:] = 0.0
+    particles["tag"][:] = phd.ParticleTAGS.Real
+    particles["type"][:] = phd.ParticleTAGS.Undefined
 
-    return pc
+    return particles
 
-# create inital state of the simulation
-pc = create_particles(1.4)
+# unit square domain
+minx = np.array([0., 0.])
+maxx = np.array([1., 1.])
+domain = phd.DomainLimits(minx, maxx)
 
-domain = phd.DomainLimits(dim=2, xmin=0., xmax=1.)           # spatial size of problem 
-boundary = phd.Boundary(domain,                              # periodic boundary condition
-        boundary_type=phd.BoundaryType.Periodic)
-mesh = phd.Mesh(boundary)                                    # tesselation algorithm
-reconstruction = phd.PieceWiseConstant()                     # constant reconstruction
-riemann = phd.HLLC(reconstruction, gamma=1.4)                 # riemann solver
-integrator = phd.MovingMesh(pc, mesh, riemann, regularize=1) # integrator 
-solver = phd.Solver(integrator,                              # simulation driver
-        cfl=0.5, tf=2.5, pfreq=25,
-        relax_num_iterations=0,
-        output_relax=False,
-        fname='kh_cartesian')
-solver.solve()
+# computation related to boundaries
+domain_manager = phd.DomainManager(initial_radius=0.1,
+        search_radius_factor=2)
+
+# create voronoi mesh
+mesh = phd.Mesh(regularize=True, relax_iterations=0)
+
+# computation
+integrator = phd.MovingMeshMUSCLHancock()
+integrator.set_mesh(mesh)
+integrator.set_riemann(phd.HLLC(boost=True))
+integrator.set_domain_limits(domain)
+integrator.set_particles(create_particles(1.4))
+integrator.set_equation_state(phd.IdealGas())
+integrator.set_domain_manager(domain_manager)
+integrator.set_boundary_condition(phd.Periodic())
+integrator.set_reconstruction(phd.PieceWiseLinear(limiter=0))
+
+# add finish criteria
+simulation_time_manager = phd.SimulationTimeManager()
+simulation_time_manager.add_finish(phd.Time(time_max=2.5))
+
+# output last step
+output = phd.FinalOutput()
+output.set_writer(phd.Hdf5())
+simulation_time_manager.add_output(output)
+
+output = phd.IterationInterval(iteration_interval=25)
+output.set_writer(phd.Hdf5())
+simulation_time_manager.add_output(output)
+
+# Create simulator
+simulation = phd.Simulation(simulation_name="kh", colored_logs=True)
+simulation.set_integrator(integrator)
+simulation.set_simulation_time_manager(simulation_time_manager)
+simulation.initialize()
+simulation.solve()
