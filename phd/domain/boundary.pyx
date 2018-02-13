@@ -84,7 +84,7 @@ cdef class Reflective(BoundaryConditionBase):
         cdef int i, k
         cdef double xs[3]
         cdef FlagParticle *p
-        cdef int dim = domain_manager.domain.dim
+        cdef int dim = domain_manager.dim
         cdef double pos_new, pos_old, domaind_edge
 
         cdef cpplist[FlagParticle].iterator it = flagged_particles.begin()
@@ -92,17 +92,17 @@ cdef class Reflective(BoundaryConditionBase):
             p = particle_flag_deref(it)
 
             # skip particle does not intersect boundary
-            if intersect_bounds(p.x, p.search_radius, domain_manager.domain.bounds, dim):
+            if intersect_bounds(p.x, p.search_radius, domain_manager.bounds, dim):
                 for i in range(dim):
 
                     pos_new = p.x[i] - p.search_radius
                     pos_old = p.x[i] - p.old_search_radius
-                    domain_edge = domain_manager.domain.bounds[0][i]
+                    domain_edge = domain_manager.bounds[0][i]
 
                     # lower boundary
                     # does particle radius leave global boundary 
                     # skip if processed in earlier iteration 
-                    if p.x[i] <= domain_manager.domain.translate[i]/2.0:
+                    if p.x[i] <= domain_manager.translate[i]/2.0:
                         if (pos_new <= domain_edge) and (pos_old > domain_edge):
 
                             # copy particle information
@@ -119,12 +119,12 @@ cdef class Reflective(BoundaryConditionBase):
 
                     pos_new = p.x[i] + p.search_radius
                     pos_old = p.x[i] + p.old_search_radius
-                    domain_edge = domain_manager.domain.bounds[1][i]
+                    domain_edge = domain_manager.bounds[1][i]
 
                     # upper boundary
                     # does particle radius leave global boundary 
                     # skip if processed in earlier iteration 
-                    if p.x[i] > domain_manager.domain.translate[i]/2.0:
+                    if p.x[i] > domain_manager.translate[i]/2.0:
                         if (pos_new >= domain_edge) and (pos_old < domain_edge):
 
                             # copy particle information
@@ -158,7 +158,7 @@ cdef class Reflective(BoundaryConditionBase):
         cdef double xs[3]
         cdef FlagParticle *p
         cdef double pos_new, domain_edge
-        cdef int dim = domain_manager.domain.dim
+        cdef int dim = domain_manager.dim
         cdef LongArray proc_nbrs = LongArray()
 
         cdef cpplist[FlagParticle].iterator it = flagged_particles.begin()
@@ -166,16 +166,16 @@ cdef class Reflective(BoundaryConditionBase):
             p = particle_flag_deref(it)
 
             # skip if it does not intersect boundary
-            if intersect_bounds(p.x, p.search_radius, domain_manager.domain.bounds, dim):
+            if intersect_bounds(p.x, p.search_radius, domain_manager.bounds, dim):
                 for i in range(dim):
 
                     pos_new = p.x[i] - p.search_radius
-                    domain_edge = domain_manager.domain.bounds[0][i]
+                    domain_edge = domain_manager.bounds[0][i]
 
                     # lower boundary
                     # does particle radius leave global boundary 
                     # skip if processed in earlier iteration 
-                    if p.x[i] <= domain_manager.domain.translate[i]/2.0:
+                    if p.x[i] <= domain_manager.translate[i]/2.0:
                         if (pos_new <= domain_edge):
 
                             # copy particle information
@@ -201,12 +201,12 @@ cdef class Reflective(BoundaryConditionBase):
                                                 EXTERIOR, dim))
 
                     pos_new = p.x[i] + p.search_radius
-                    domain_edge = domain_manager.domain.bounds[1][i]
+                    domain_edge = domain_manager.bounds[1][i]
 
                     # upper boundary
                     # does particle radius leave global boundary 
                     # skip if processed in earlier iteration 
-                    if p.x[i] > domain_manager.domain.translate[i]/2.0:
+                    if p.x[i] > domain_manager.translate[i]/2.0:
                         if (pos_new >= domain_edge):
 
                             # copy particle information
@@ -259,7 +259,7 @@ cdef class Reflective(BoundaryConditionBase):
                 for k in range(dim):
                     xs[k] = x[k][i]
 
-                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
+                if not intersect_bounds(xs, 0.0, domain_manager.bounds, dim):
                     raise RuntimeError("particle left domain in reflective boundary condition!!")
 
     cdef void update_gradients(self, CarrayContainer particles, CarrayContainer gradients,
@@ -294,12 +294,12 @@ cdef class Reflective(BoundaryConditionBase):
                 # check each dimension
                 for j in range(dim):
 
-                    if x[j][i] < domain_manager.domain.bounds[0][j]:
+                    if x[j][i] < domain_manager.bounds[0][j]:
                         for k in range(dim):
                             # flip gradient component
                             dv[dim*k + j][i] *= -1
 
-                    if x[j][i] > domain_manager.domain.bounds[1][j]:
+                    if x[j][i] > domain_manager.bounds[1][j]:
                         for k in range(dim):
                             # flip gradient component
                             dv[dim*k + j][i] *= -1
@@ -337,11 +337,11 @@ cdef class Reflective(BoundaryConditionBase):
                 # check each dimension
                 for k in range(dim):
 
-                    if x[k][i] < domain_manager.domain.bounds[0][k]:
+                    if x[k][i] < domain_manager.bounds[0][k]:
                         v[k][i]  *= -1
                         mv[k][i] *= -1
 
-                    if x[k][i] > domain_manager.domain.bounds[1][k]:
+                    if x[k][i] > domain_manager.bounds[1][k]:
                         v[k][i]  *= -1
                         mv[k][i] *= -1
 
@@ -363,14 +363,14 @@ cdef class Periodic(BoundaryConditionBase):
         cdef double xs[3]
         cdef int index[3]
         cdef FlagParticle *p
-        cdef int dim = domain_manager.domain.dim
+        cdef int dim = domain_manager.dim
 
         cdef cpplist[FlagParticle].iterator it = flagged_particles.begin()
         while it != flagged_particles.end():
             p = particle_flag_deref(it)
 
             # skip partilce if does not intersect boundary
-            if intersect_bounds(p.x, p.search_radius, domain_manager.domain.bounds, dim):
+            if intersect_bounds(p.x, p.search_radius, domain_manager.bounds, dim):
 
                 # shift particle
                 for i in range(3**dim):
@@ -383,12 +383,12 @@ cdef class Periodic(BoundaryConditionBase):
                     # shifted particle
                     for k in range(dim):
                         xs[k] = p.x[k] +\
-                                (index[k]-1)*domain_manager.domain.translate[k]
+                                (index[k]-1)*domain_manager.translate[k]
 
                     # find if shifted particle intersects domain
                     # skip if processed in earlier iteration 
-                    if intersect_bounds(xs, p.search_radius, domain_manager.domain.bounds, dim) and\
-                            not intersect_bounds(xs, p.old_search_radius, domain_manager.domain.bounds, dim):
+                    if intersect_bounds(xs, p.search_radius, domain_manager.bounds, dim) and\
+                            not intersect_bounds(xs, p.old_search_radius, domain_manager.bounds, dim):
 
                         # create ghost particle
                         domain_manager.ghost_vec.push_back(
@@ -414,14 +414,14 @@ cdef class Periodic(BoundaryConditionBase):
         cdef double xs[3]
         cdef int index[3]
         cdef LongArray proc_nbrs = LongArray()
-        cdef int dim = domain_manager.domain.dim
+        cdef int dim = domain_manager.dim
 
         cdef cpplist[FlagParticle].iterator it = flagged_particles.begin()
         while it != flagged_particles.end():
             p = particle_flag_deref(it)
 
             # skip if it does not intersect boundary
-            if intersect_bounds(p.x, p.search_radius, domain_manager.domain.bounds, dim):
+            if intersect_bounds(p.x, p.search_radius, domain_manager.bounds, dim):
 
                 # shift particle
                 for i in range(3**dim):
@@ -434,7 +434,7 @@ cdef class Periodic(BoundaryConditionBase):
                     # shifted position
                     for k in range(dim):
                         xs[k] = p.x[k] +\
-                                (index[k]-1)*domain_manager.domain.translate[k]
+                                (index[k]-1)*domain_manager.translate[k]
 
                     # find processor neighbors
                     proc_nbrs.reset()
@@ -523,14 +523,14 @@ cdef class Periodic(BoundaryConditionBase):
                 for k in range(dim):
                     xs[k] = x[k][i]
 
-                if not intersect_bounds(xs, 0.0, domain_manager.domain.bounds, dim):
+                if not intersect_bounds(xs, 0.0, domain_manager.bounds, dim):
                     # wrap particle back into domain
                     for k in range(dim):
 
                         # lower boundary
-                        if xs[k] <= domain_manager.domain.bounds[0][k]:
-                            x[k][i] += domain_manager.domain.translate[k]
+                        if xs[k] <= domain_manager.bounds[0][k]:
+                            x[k][i] += domain_manager.translate[k]
 
                         # upper boundary
-                        if xs[k] >= domain_manager.domain.bounds[1][k]:
-                            x[k][i] -= domain_manager.domain.translate[k]
+                        if xs[k] >= domain_manager.bounds[1][k]:
+                            x[k][i] -= domain_manager.translate[k]

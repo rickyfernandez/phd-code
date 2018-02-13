@@ -5,7 +5,6 @@ import phd
 
 from ..mesh.mesh import Mesh
 from ..utils.tools import check_class
-from ..domain.domain import DomainLimits
 from ..riemann.riemann import RiemannBase
 from ..domain.domain_manager import DomainManager
 from ..containers.containers import CarrayContainer
@@ -26,9 +25,6 @@ class IntegrateBase(object):
     boundary_condition : BoundaryConditionBase
         Class that creates ghost particles from given boundary
         condition.
-
-    domain_limits : DomainLimits
-        Class that holds info of spatial extent.
 
     domain_manager : DomainManager
         Class that handels all things related with the domain.
@@ -110,7 +106,6 @@ class IntegrateBase(object):
         self.mesh = None
         self.riemann = None
         self.particles = None
-        self.domain_limits = None
         self.reconstruction = None
         self.domain_manager = None
         self.boundary_condition = None
@@ -127,11 +122,6 @@ class IntegrateBase(object):
     def set_boundary_condition(self, boundary_condition):
         """Set domain manager for communiating across processors."""
         self.boundary_condition = boundary_condition
-
-    @check_class(DomainLimits)
-    def set_domain_limits(self, domain_limits):
-        """Set domain manager for communiating across processors."""
-        self.domain_limits = domain_limits
 
     @check_class(DomainManager)
     def set_domain_manager(self, domain_manager):
@@ -276,7 +266,6 @@ class StaticMeshMUSCLHancock(IntegrateBase):
         if not self.mesh or\
                 not self.riemann or\
                 not self.particles or\
-                not self.domain_limits or\
                 not self.domain_manager or\
                 not self.equation_state or\
                 not self.reconstruction or\
@@ -288,15 +277,13 @@ class StaticMeshMUSCLHancock(IntegrateBase):
             if not self.load_balance:
                 raise RuntimeError("ERROR: Load Balance setter not defined")
 
-            self.load_balance.comm = phd._comm
-            self.load_balance.domain = self.domain_limits
-            self.load_balance._initialize()
+            self.load_balance.add_domain_info(self.domain_manager)
+            self.load_balance.initialize()
 
             self.domain_manager.set_load_balance(
                     self.load_balance)
 
         # initialize domain manager
-        self.domain_manager.set_domain_limits(self.domain_limits)
         self.domain_manager.set_boundary_condition(self.boundary_condition)
         self.domain_manager.register_fields(self.particles)
         self.domain_manager.initialize()

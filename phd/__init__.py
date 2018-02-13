@@ -6,9 +6,6 @@ from phd.containers.containers import \
 from phd.mesh.mesh import \
         Mesh
 
-from phd.domain.domain import \
-        DomainLimits
-
 from phd.domain.boundary import \
         BoundaryConditionBase, \
         Reflective, \

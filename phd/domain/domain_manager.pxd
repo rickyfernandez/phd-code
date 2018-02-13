@@ -2,7 +2,6 @@ cimport numpy as np
 from libcpp.vector cimport vector
 from libcpp.list cimport list as cpplist
 
-from ..domain.domain cimport DomainLimits
 from ..domain.boundary cimport BoundaryConditionBase
 from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
@@ -45,17 +44,21 @@ cdef bint ghostid_cmp(
 
 cdef class DomainManager:
 
-    cdef public DomainLimits domain
     cdef public DoubleArray old_radius
     cdef public LoadBalance load_balance
     cdef public BoundaryConditionBase boundary_condition
-
-    cdef public int load_balance_freq
 
     cdef public double initial_radius
     cdef public double search_radius_factor
 
     cdef bint particle_fields_registered
+
+    cdef public int dim
+    cdef public list xmin
+    cdef public list xmax
+    cdef np.float64_t[3] translate
+    cdef np.float64_t[2][3] bounds
+    cdef np.float64_t max_length, min_length
 
     # hold/flag particle for ghost creation 
     cdef vector[BoundaryParticle] ghost_vec

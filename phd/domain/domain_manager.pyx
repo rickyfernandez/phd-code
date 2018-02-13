@@ -45,15 +45,13 @@ cdef inline bint ghostid_cmp(
 
 
 cdef class DomainManager:
-    def __init__(self, double initial_radius,
-                 double search_radius_factor=2.0,
-                 int load_balance_freq = 5, **kwargs):
+    def __init__(self, list xmin, list xmax, double initial_radius,
+                 double search_radius_factor=2.0, int dim=2, **kwargs):
 
+        self.dim = dim
         self.initial_radius = initial_radius
-        self.load_balance_freq = load_balance_freq
         self.search_radius_factor = search_radius_factor
 
-        self.domain = None
         self.load_balance = None
         self.boundary_condition = None
 
@@ -63,6 +61,23 @@ cdef class DomainManager:
         self.flagged_particles.clear()
         self.num_real_particles = 0
         self.num_export = 0
+
+        self.xmin = xmin
+        self.xmax = xmax
+
+        self.min_length = 0.
+        self.max_length = 0.
+        for i in range(self.dim):
+            if xmax[i] < xmin[i]:
+                raise RuntimeError("ERROR: Boundary inconsistent")
+
+            self.bounds[0][i] = xmin[i]
+            self.bounds[1][i] = xmax[i]
+            self.translate[i] = xmax[i] - xmin[i]
+
+            # minimum and maximum side length
+            self.min_length = min(self.min_length, self.translate[i])
+            self.max_length = max(self.max_length, self.translate[i])
 
         if phd._in_parallel:
 
@@ -87,6 +102,9 @@ cdef class DomainManager:
         cdef str field, dtype
         cdef int num_particles = particles.get_carray_size()
 
+        if self.dim != len(particles.carray_named_groups["position"]):
+            raise RuntimeError("ERROR: Particle dim does not match")
+
         if phd._in_parallel:
             for field, dtype in fields_for_parallel.iteritems():
                 if field not in particles.carrays.keys():
@@ -105,17 +123,12 @@ cdef class DomainManager:
         if not self.particle_fields_registered:
             raise RuntimeError("ERROR: Fields not registered in particles by Mesh!")
 
-        if not self.domain or not self.boundary_condition:
+        if not self.boundary_condition:
             raise RuntimeError("Not all setters defined in DomainMangaer")
 
         if phd._in_parallel:
             if not self.load_balance:
                 raise RuntimeError("Not all setters defined in DomainMangaer")
-
-    #@check_class(phd.DomainLimits)
-    def set_domain_limits(self, domain):
-        '''add boundary condition to list'''
-        self.domain = domain
 
     #@check_class(phd.BoundaryConditionBase)
     def set_boundary_condition(self, boundary_condition):
@@ -131,10 +144,7 @@ cdef class DomainManager:
         """
         Check if partition needs to called
         """
-        if phd._in_parallel:
-            return integrator.iteration % self.load_balance_freq == 0
-        else:
-            return False
+        return True
 
     cpdef partition(self, CarrayContainer particles):
         """
@@ -584,24 +594,23 @@ cdef class DomainManager:
             Class that holds all information pertaining to the particles.
 
         """
-        cdef Node *node
+        #cdef Node *node
 
-        cdef IntArray tags
-        cdef LongLongArray keys
-        cdef LongArray indices = LongArray()
+        #cdef IntArray tags
+        #cdef LongLongArray keys
+        #cdef LongArray indices = LongArray()
 
-        cdef LongArray leaf_pid
-        cdef int incoming_particles
-        cdef CarrayContainer export_particles
-        cdef int pid, rank = phd._rank, start_index
+        #cdef LongArray leaf_pid
+        #cdef int incoming_particles
+        #cdef CarrayContainer export_particles
+        #cdef int pid, rank = phd._rank, start_index
 
-        cdef double fac
-        cdef np.int32_t xh[3]
-        cdef np.ndarray corner
+        #cdef double fac
+        #cdef np.int32_t xh[3]
+        #cdef np.ndarray corner
 
-        cdef int i, j
-        cdef double xp[3], *x[3]
-        cdef int dim = self.domain.dim
+        #cdef int i, j
+        #cdef double xp[3], *x[3]
 
 
         particles.remove_tagged_particles(GHOST)
@@ -634,7 +643,7 @@ cdef class DomainManager:
 #                if tags.data[i] == REAL:
 #
 #                    # map to hilbert space
-#                    for j in range(dim):
+#                    for j in range(self.dim):
 #                        xh[j] = <np.int32_t> ( (x[j][i] - corner[j])*fac )
 #
 #                    # new hilbert key
