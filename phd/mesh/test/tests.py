@@ -137,9 +137,9 @@ class TestVoronoiMesh3dBox(unittest.TestCase):
 
         # store particles
         self.particles = ParticleContainer(N)
-        self.particles.register_property(N, 'position-z', 'double')
-        self.particles.register_property(N, 'velocity-z', 'double')
-        self.particles.register_property(N, 'com-z', 'double')
+        self.particles.register_carray(N, 'position-z', 'double')
+        self.particles.register_carray(N, 'velocity-z', 'double')
+        self.particles.register_carray(N, 'com-z', 'double')
 
         xp = self.particles["position-x"]
         yp = self.particles["position-y"]
@@ -290,7 +290,7 @@ class TestVoronoiMesh3dBox(unittest.TestCase):
 #        Since the particles are in a uniform lattice there should be
 #        4 times the number of particles in given dimension.
 #        """
-#        indices = np.arange(self.particles.get_number_of_particles())
+#        indices = np.arange(self.particles.get_carray_size())
 #
 #        # generate voronoi mesh 
 #        mesh = VoronoiMesh2D(self.particles)

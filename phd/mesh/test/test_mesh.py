@@ -118,8 +118,8 @@ class TestMesh2dUniformBox(unittest.TestCase):
         # create unit square domain, reflective boundary condition
         minx = np.array([0., 0.])
         maxx = np.array([1., 1.])
-        self.domain_manager = DomainManager(param_initial_radius=0.1,
-                param_search_radius_factor=1.25)
+        self.domain_manager = DomainManager(initial_radius=0.1,
+                search_radius_factor=1.25)
         self.domain_manager.set_domain_limits(DomainLimits(minx, maxx))
         self.domain_manager.register_fields(self.particles)
         self.domain_manager.set_boundary_condition(Reflective())
@@ -147,7 +147,7 @@ class TestMesh2dUniformBox(unittest.TestCase):
 class TestMesh3dUniformBox(TestMesh2dUniformBox):
 
     def setUp(self):
-        n = 500
+        n = 50**3
         self.particles = HydroParticleCreator(num=n, dim=3)
 
         # create uniform random particles in a unit box
@@ -159,8 +159,8 @@ class TestMesh3dUniformBox(TestMesh2dUniformBox):
         # create unit square domain, reflective boundary condition
         minx = np.array([0., 0., 0.])
         maxx = np.array([1., 1., 1.])
-        self.domain_manager = DomainManager(param_initial_radius=0.1,
-                param_search_radius_factor=1.25)
+        self.domain_manager = DomainManager(initial_radius=0.1,
+                search_radius_factor=1.25)
         self.domain_manager.set_domain_limits(DomainLimits(minx, maxx, dim=3))
         self.domain_manager.register_fields(self.particles)
         self.domain_manager.set_boundary_condition(Reflective())
@@ -192,8 +192,8 @@ class TestMesh2dLatticeBox(unittest.TestCase):
         # create unit square domain, reflective boundary condition
         minx = np.array([0., 0.])
         maxx = np.array([1., 1.])
-        self.domain_manager = DomainManager(param_initial_radius=0.1,
-                param_search_radius_factor=1.25)
+        self.domain_manager = DomainManager(initial_radius=0.1,
+                search_radius_factor=1.25)
         self.domain_manager.set_domain_limits(DomainLimits(minx, maxx))
         self.domain_manager.register_fields(self.particles)
         self.domain_manager.set_boundary_condition(Reflective())
@@ -274,8 +274,8 @@ class TestMesh3dLattice(TestMesh2dLatticeBox):
         # create unit square domain, reflective boundary condition
         minx = np.array([0., 0., 0.])
         maxx = np.array([1., 1., 1.])
-        self.domain_manager = DomainManager(param_initial_radius=0.1,
-                param_search_radius_factor=1.25)
+        self.domain_manager = DomainManager(initial_radius=0.1,
+                search_radius_factor=1.25)
         self.domain_manager.set_domain_limits(DomainLimits(minx, maxx, dim=3))
         self.domain_manager.register_fields(self.particles)
         self.domain_manager.set_boundary_condition(Reflective())
