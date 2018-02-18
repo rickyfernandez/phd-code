@@ -2,7 +2,6 @@ from libc.math cimport sqrt
 
 from .gravity_tree cimport Node, LEAF, ROOT
 from ..utils.carray cimport DoubleArray
-from ..domain.domain cimport DomainLimits
 from ..utils.particle_tags import ParticleTAGS
 from ..load_balance.tree cimport TreeMemoryPool as Pool
 
@@ -13,8 +12,8 @@ cdef class Interaction:
     """
     Base class for particle node computation
     """
-    def __init__(self, CarrayContainer pc, DomainLimits domain, Splitter splitter, int add_fields=0):
-        self.dim = domain.dim
+    def __init__(self, CarrayContainer pc, Splitter splitter, int add_fields=0):
+        self.dim = len(pc.carray_named_groups["position"])
         self.splitter = splitter
 
     def add_fields_to_container(self, CarrayContainer pc):
@@ -114,22 +113,19 @@ cdef class GravityAcceleration(Interaction):
     Compute acceleration due to gravity between particle and
     gravity node
     """
-    def __init__(self, CarrayContainer pc, DomainLimits domain, Splitter splitter,
+    def __init__(self, CarrayContainer pc, Splitter splitter,
             int add_fields=0, int calculate_potential=0, double smoothing_length=0.0):
         """
         Initialize gravity interaction
 
         Parameters
         ----------
-
-        domain : DomainLimits
-            Domain of simulation
         potential : int
             Flag to calculate potential
         """
         cdef str axis
 
-        self.dim = domain.dim
+        self.dim = len(pc.carray_named_groups["position"])
         self.splitter = splitter
         self.smoothing_length = smoothing_length
         self.calc_potential = calculate_potential

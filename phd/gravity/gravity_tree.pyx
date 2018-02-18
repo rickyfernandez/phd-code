@@ -43,8 +43,13 @@ cdef class GravityTree:
         self.barnes_angle = barnes_angle
         self.calc_potential = calculate_potential
 
+        self.domain_manager = None
+
         self.parallel = parallel
         self.max_buffer_size = max_buffer_size
+
+    def set_domain_manager(self, DomainManager domain_manager):
+        self.domain_manager = domain_manager
 
     def _initialize(self):
         '''
@@ -56,7 +61,10 @@ cdef class GravityTree:
         cdef dict state_vars = {}
         cdef dict carray_named_groups = {}
 
-        self.dim = self.domain.dim
+        if not self.domain_manager:
+            raise RuntimeError("ERROR: DomainManager not set")
+
+        self.dim = self.domain_manager.dim
         self.number_nodes = 2**self.dim
         self.nodes = GravityPool(1000)
 
@@ -66,7 +74,7 @@ cdef class GravityTree:
             raise RuntimeError("Unrecognized splitter in gravity")
 
         self.export_interaction = GravityAcceleration(self.pc,
-                self.domain, splitter, 1, self.calc_potential)
+                splitter, 1, self.calc_potential)
 
         self.rank = self.size = 0
 
@@ -127,7 +135,7 @@ cdef class GravityTree:
                     list(self.pc.carray_named_groups['position'])
 
             self.import_interaction = GravityAcceleration(self.pc,
-                    self.domain, splitter, 0, self.calc_potential)
+                    splitter, 0, self.calc_potential)
 
     cdef inline int _get_index(self, int parent_index, np.float64_t x[3]):
         """
@@ -372,10 +380,11 @@ cdef class GravityTree:
         # create root with domain information
         root = self.nodes.get(1)
         root.flags = LEAF
-        root.width = self.domain.max_length
+        #root.width = self.domain.max_length
+        root.width = self.domain_manager.max_length
         for k in range(self.dim):
             root.center[k] = .5*\
-                    (self.domain.bounds[1][k] - self.domain.bounds[0][k])
+                    (self.domain_manager.bounds[1][k] - self.domain_manager.bounds[0][k])
 
         # set root children to null
         for k in range(self.number_nodes):

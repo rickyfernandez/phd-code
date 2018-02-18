@@ -3,11 +3,11 @@ from libcpp.map cimport map
 
 from ..utils.carray cimport LongArray
 from .interaction cimport Interaction
-from ..domain.domain cimport DomainLimits
 from .gravity_pool cimport Node, GravityPool
 from ..load_balance.tree cimport Node as LoadNode
 from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
+from ..domain.domain_manager cimport DomainManager
 
 cdef extern from "stdlib.h":
     void qsort(void *array, size_t count, size_t size,
@@ -36,7 +36,7 @@ cdef class GravityTree:
     cdef public CarrayContainer pc              # referecne to particles
     cdef public int number_nodes                # max number of children nodes
     cdef public int dim, rank, size
-    cdef public DomainLimits domain             # simulation domain
+    cdef public DomainManager domain_manager
 
     cdef public str split_type                  # method to open nodes
     cdef public GravityPool nodes               # node array for gravity tree
