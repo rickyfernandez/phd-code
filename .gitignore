@@ -22,6 +22,7 @@ integrator.cpp
 boundary.cpp
 mesh.cpp
 phd/gravity/*.cpp
+phd/load_balance/*.cpp
 build/
 .DS_Store
 phd.egg-info/
