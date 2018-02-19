@@ -13,15 +13,14 @@ if phd._rank == 0:
     nx = 101   # particles per dim
     n = nx*nx  # number of particles
 
-    dx = Lx/nx # spacing between particles
-
     # create particle container
     particles_root = phd.HydroParticleCreator(n)
     part = 0
+    np.random.seed(0)
     for i in range(nx):
         for j in range(nx):
-            particles_root["position-x"][part] = (i+0.5)*dx
-            particles_root["position-y"][part] = (j+0.5)*dx
+            particles_root["position-x"][part] = np.random.rand()
+            particles_root["position-y"][part] = np.random.rand()
             particles_root["ids"][part] = part
             part += 1
 
@@ -30,9 +29,9 @@ if phd._rank == 0:
     particles_root["pressure"][:] = 1.0E-5*(gamma-1)  # total energy
 
     # put all enegery in center particle
-    r = dx * 0.51
+    r = 0.1
     cells = ((particles_root["position-x"]-.5)**2 + (particles_root["position-y"]-.5)**2) <= r**2
-    particles_root["pressure"][cells] = 1.0/(dx*dx)*(gamma-1)
+    particles_root["pressure"][cells] = 1.0/(np.pi*r**2)*(gamma-1)
 
     # how many particles to each process
     nsect, extra = divmod(n, phd._size)
@@ -59,7 +58,7 @@ else:
 send = phd._comm.scatter(send, root=0)
 
 # allocate local particle container
-particles = phd.HydroParticleCreator(send, parallel=True)
+particles = phd.HydroParticleCreator(send)
 
 # import particles from root
 fields = ["position-x", "position-y", "density", "pressure", "ids"]
@@ -68,6 +67,8 @@ for field in fields:
 
 particles["velocity-x"][:] = 0.0
 particles["velocity-y"][:] = 0.0
+particles["momentum-x"][:] = 0.0
+particles["momentum-y"][:] = 0.0
 particles["tag"][:] = phd.ParticleTAGS.Real
 particles["type"][:] = phd.ParticleTAGS.Undefined
 
@@ -77,7 +78,7 @@ domain_manager = phd.DomainManager(
         initial_radius=0.1, search_radius_factor=2)
 
 # create voronoi mesh
-mesh = phd.Mesh(regularize=False, relax_iterations=0)
+mesh = phd.Mesh(regularize=True, relax_iterations=8, max_iterations=10)
 
 # computation
 integrator = phd.MovingMeshMUSCLHancock()
@@ -88,7 +89,7 @@ integrator.set_equation_state(phd.IdealGas())
 integrator.set_domain_manager(domain_manager)
 integrator.set_load_balance(phd.LoadBalance())
 integrator.set_boundary_condition(phd.Reflective())
-integrator.set_reconstruction(phd.PieceWiseLinear(limiter=0))
+integrator.set_reconstruction(phd.PieceWiseConstant())
 
 # add finish criteria
 simulation_time_manager = phd.SimulationTimeManager()
