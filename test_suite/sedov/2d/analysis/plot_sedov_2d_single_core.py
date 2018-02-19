@@ -1,54 +1,65 @@
 import phd
-import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mat_colors
+from matplotlib.collections import PatchCollection
 
+# single-core solution
+file_name="../single_core/random/sedov_output/final_output/final_output0000/final_output0000.hdf5"
+reader = phd.Hdf5()
+sedov = reader.read(file_name)
 
-# plot cartesian or uniform run
-#file_name ='../single_core/cartesian/sedov_2d_cartesian_output/sedov_2d_cartesian_0139.hdf5'
-file_name ='../single_core/uniform/sedov_2d_uniform_output/sedov_2d_uniform_0105.hdf5'
+# exact sedov solution
+exact  = np.loadtxt("exact_sedov_2d.dat")
+rad_ex = exact[:,1]
+rho_ex = exact[:,2]
+pre_ex = exact[:,4]
+vel_ex = exact[:,5]
 
-f = h5py.File(file_name, 'r')
-indices = f['/tag'][:] == phd.ParticleTAGS.Real
-x = f['/position-x'][indices]
-y = f['/position-y'][indices]
-r = np.sqrt((x-0.5)**2 + (y-0.5)**2)
+fig, axes = plt.subplots(2,2, figsize=(12,12))
+plt.suptitle("Sedov Simulation")
 
-# get the exact solution
-exact = np.loadtxt('exact_sedov_2d.dat')
+patch, colors = phd.vor_collection(sedov, "density")
+sedov.remove_tagged_particles(phd.ParticleTAGS.Ghost)
 
-# get the exact solution
-x_ex = exact[:,1]   # radius
-r_ex = exact[:,2]   # density
-p_ex = exact[:,4]   # pressure
-u_ex = exact[:,5]   # velocity
+p = PatchCollection(patch, alpha=0.4)
+p.set_array(np.array(colors))
+p.set_clim([0, 4.0])
+ax = axes[0,0]
+ax.set_xlabel("X")
+ax.set_ylabel("Y")
+ax.set_xlim(0,1)
+ax.set_ylim(0,1)
+ax.add_collection(p)
 
-plt.figure(figsize=(8,8))
-plt.subplot(3,1,1)
-plt.scatter(r, f['/density'][indices], color='lightsteelblue', label='phd')
-plt.plot(x_ex, r_ex, 'k', label='exact')
-plt.xlim(0,0.5)
-plt.ylim(-1,7)
-plt.ylabel('Density')
-plt.title('Constant Reconstruction, Time=%0.2f, N=%d' % (f.attrs['time'], np.sum(indices)), fontsize=12)
-l = plt.legend(loc='upper left', prop={'size':12})
-l.draw_frame(False)
+# put position and velocity in radial coordinates
+rad = np.sqrt((sedov["position-x"]-0.5)**2 + (sedov["position-y"]-0.5)**2)
+vel = np.sqrt(sedov["velocity-x"]**2 + sedov["velocity-y"]**2)
 
-plt.subplot(3,1,2)
-plt.scatter(r, np.sqrt(f['/velocity-x'][indices]**2 + f['/velocity-y'][indices]**2), color='lightsteelblue')
-plt.plot(x_ex, u_ex, 'k')
-plt.xlim(0,0.5)
-plt.ylim(-0.5,2.0)
-plt.ylabel('Velocity')
+ax = axes[0,1]
+ax.scatter(rad, sedov["density"], color="steelblue", label="simulation")
+ax.plot(rad_ex, rho_ex, "k", label="exact")
+ax.set_xlim(0,0.5)
+ax.set_ylim(-1,7)
+ax.set_xlabel("Radius")
+ax.set_ylabel("Density")
+ax.legend(loc="upper left")
 
-plt.subplot(3,1,3)
-plt.scatter(r, f['/pressure'][indices], color='lightsteelblue')
-plt.plot(x_ex, p_ex, 'k')
-plt.xlim(0,0.5)
-plt.ylim(-0.5,3.0)
-plt.xlabel('Position')
-plt.ylabel('Pressure')
+ax = axes[1,0]
+ax.scatter(rad, vel, color="steelblue")
+ax.plot(rad_ex, vel_ex, "k")
+ax.set_xlim(0,0.5)
+ax.set_ylim(-0.5,2)
+ax.set_xlabel("Radius")
+ax.set_ylabel("Velocity")
 
-plt.tight_layout()
-plt.savefig('sedov_2d_uniform_single_core.pdf')
+ax = axes[1,1]
+ax.scatter(rad, sedov["pressure"], color="steelblue")
+ax.plot(rad_ex, pre_ex, "k")
+ax.set_xlim(0,0.5)
+ax.set_ylim(-0.5,2.5)
+ax.set_xlabel("Radius")
+ax.set_ylabel("Pressure")
+
+plt.savefig("sedov_2d_single_core_random.pdf")
 plt.show()
