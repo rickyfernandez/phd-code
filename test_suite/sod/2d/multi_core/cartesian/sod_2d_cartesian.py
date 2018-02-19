@@ -70,15 +70,10 @@ particles["velocity-y"][:] = 0.0
 particles["tag"][:] = phd.ParticleTAGS.Real
 particles["type"][:] = phd.ParticleTAGS.Undefined
 
-
-# unit square domain
-minx = np.array([0., 0.])
-maxx = np.array([1., 1.])
-domain = phd.DomainLimits(minx, maxx)
-
 # computation related to boundaries
-domain_manager = phd.DomainManager(initial_radius=0.1,
-        search_radius_factor=2)
+domain_manager = phd.DomainManager(
+        xmin=[0., 0.], xmax=[1., 1.],
+        initial_radius=0.1, search_radius_factor=2)
 
 # create voronoi mesh
 mesh = phd.Mesh(regularize=False, relax_iterations=0)
@@ -86,9 +81,8 @@ mesh = phd.Mesh(regularize=False, relax_iterations=0)
 # computation
 integrator = phd.MovingMeshMUSCLHancock()
 integrator.set_mesh(mesh)
-integrator.set_riemann(phd.HLLC(boost=True))
-integrator.set_domain_limits(domain)
 integrator.set_particles(particles)
+integrator.set_riemann(phd.HLLC(boost=True))
 integrator.set_equation_state(phd.IdealGas())
 integrator.set_domain_manager(domain_manager)
 integrator.set_load_balance(phd.LoadBalance())
