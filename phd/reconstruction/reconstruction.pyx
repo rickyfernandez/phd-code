@@ -253,7 +253,7 @@ cdef class PieceWiseConstant(ReconstructionBase):
 
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
                          double gamma, DomainManager domain_manager,
-                         double dt, bint boost, bint add_temporal=True):
+                         double dt, bint boost):
         """Perform reconstruction from cell center to face center.
 
         Parameters
@@ -988,7 +988,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
                 # pressure, add spatial derivative
                 pl.data[m] -= dt*(gamma*p.data[i]*dv[(dim+1)*k][i] + vi[k]*dp[k][i])
-                pr.data[m] -= dt*(gamma*p.data[j]*dv[(dim+1)*k][j] + vj[i]*dp[k][j])
+                pr.data[m] -= dt*(gamma*p.data[j]*dv[(dim+1)*k][j] + vj[k]*dp[k][j])
 
                 # velocity, add spatial derivative
                 for n in range(dim): # over velocity components
