@@ -26,9 +26,17 @@ cdef class ReconstructionBase:
     cpdef compute_gradients(self, CarrayContainer particles, Mesh mesh,
                             DomainManager domain_manager)
 
+    cpdef add_spatial(self, CarrayContainer particles, Mesh mesh,
+                         double gamma, DomainManager domain_manager,
+                         double dt, bint boost)
+
+    cpdef add_temporal(self, CarrayContainer particles, Mesh mesh,
+                         double gamma, DomainManager domain_manager,
+                         double dt, bint boost)
+
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
                          double gamma, DomainManager domain_manager,
-                         double dt, bint boost, bint add_temporal=*)
+                         double dt, bint boost)
 
 cdef class PieceWiseConstant(ReconstructionBase):
     pass

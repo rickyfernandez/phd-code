@@ -56,9 +56,49 @@ cdef class ReconstructionBase:
         msg = "Reconstruction::_compute_gradients called!"
         raise NotImplementedError(msg)
 
+    cpdef add_spatial(self, CarrayContainer particles, Mesh mesh,
+                         double gamma, DomainManager domain_manager,
+                         double dt, bint boost):
+        """Create spatial derivatives for reconstruction.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        msg = "Reconstruction::add_spatial called!"
+        raise NotImplementedError(msg)
+
+    cpdef add_temporal(self, CarrayContainer particles, Mesh mesh,
+                         double gamma, DomainManager domain_manager,
+                         double dt, bint boost):
+        """Create spatial derivatives for reconstruction.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        """
+        msg = "Reconstruction::add_temporal called!"
+        raise NotImplementedError(msg)
+
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
                          double gamma, DomainManager domain_manager,
-                         double dt, bint boost, bint add_temporal=True):
+                         double dt, bint boost):
         """Perform reconstruction from cell center to face center.
 
         Parameters
@@ -677,14 +717,12 @@ cdef class PieceWiseLinear(ReconstructionBase):
         # transfer gradients to ghost particles
         domain_manager.update_ghost_gradients(particles, self.grad)
 
-    cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
+    cpdef add_spatial(self, CarrayContainer particles, Mesh mesh,
                          double gamma, DomainManager domain_manager,
-                         double dt, bint boost, bint add_temporal=True):
+                         double dt, bint boost):
         """Perform reconstruction from cell center to face center.
-
         This follows the method outlined by Springel (2009) and all equations
-        referenced are from that paper. The method performs a linear reconstruction
-        of the primitive variables by adding a spatial and time derivative.
+        referenced are from that paper.
 
         Parameters
         ----------
@@ -702,17 +740,13 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
         dt : float
             Time to extrapolate reconstructed fields to.
-
-        add_temporal : bool
-            If true add time derivatives in the reconstruction.
-
         """
         cdef double sepi, sepj
         cdef int i, j, k, m, n, dim, num_passive
 
         cdef np.float64_t vi[3], vj[3]
-        cdef np.float64_t *fij[3], *wx[3]
         cdef np.float64_t *vl[3], *vr[3]
+        cdef np.float64_t *fij[3], *wx[3]
         cdef np.float64_t *x[3], *v[3], *dcx[3]
         cdef np.float64_t *dd[3], *dv[9], *dp[3]
 
@@ -731,7 +765,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         cdef DoubleArray dr = self.right_states.get_carray("density")
         cdef DoubleArray pr = self.right_states.get_carray("pressure")
 
-        phdLogger.info("PieceWiseLinear: Starting reconstruction")
+        phdLogger.info("PieceWiseLinear: Starting spatial reconstruction")
         dim = len(particles.carray_named_groups["position"])
 
         # resize states to hold values at each face
@@ -744,12 +778,12 @@ cdef class PieceWiseLinear(ReconstructionBase):
         particles.pointer_groups(v, particles.carray_named_groups["velocity"])
 
         # pointers to velocity states
-        self.left_states.pointer_groups(vl,  self.left_states.carray_named_groups["velocity"])
+        self.left_states.pointer_groups(vl, self.left_states.carray_named_groups["velocity"])
         self.right_states.pointer_groups(vr, self.right_states.carray_named_groups["velocity"])
 
         # pointers to face velocity and center of mass 
         mesh.faces.pointer_groups(fij, mesh.faces.carray_named_groups["com"])
-        mesh.faces.pointer_groups(wx,  mesh.faces.carray_named_groups["velocity"])
+        mesh.faces.pointer_groups(wx, mesh.faces.carray_named_groups["velocity"])
 
         # pointers to gradients
         self.grad.pointer_groups(dd, self.grad.carray_named_groups["density"])
@@ -781,14 +815,143 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
             if self.has_passive_scalars:
                 for k in range(num_passive):
-
-                    # passive-scalars
                     self.passive_l[k][m] = self.passive[k][i]
                     self.passive_r[k][m] = self.passive[k][j]
 
             # pressure
             pl.data[m] = p.data[i]
             pr.data[m] = p.data[j]
+
+            # velocity
+            for k in range(dim):
+
+                # copy velocities
+                if boost:
+                    vi[k] = v[k][i] - wx[k][m]
+                    vj[k] = v[k][j] - wx[k][m]
+                else:
+                    vi[k] = v[k][i]
+                    vj[k] = v[k][j]
+
+                vl[k][m] = vi[k]
+                vr[k][m] = vj[k]
+
+            # add spatial derivatives Eq. 27
+            for k in range(dim): # dot products
+
+                # distance from particle to com of face
+                sepi = fij[k][m] - (x[k][i] + dcx[k][i])
+                sepj = fij[k][m] - (x[k][j] + dcx[k][j])
+
+                # density
+                dl.data[m] += dd[k][i]*sepi
+                dr.data[m] += dd[k][j]*sepj
+
+                if self.has_passive_scalars:
+                    for n in range(num_passive):
+                        self.passive_l[n][m] += self.dpassive[n*dim+k][i]*sepi
+                        self.passive_r[n][m] += self.dpassive[n*dim+k][j]*sepj
+
+                # pressure
+                pl.data[m] += dp[k][i]*sepi
+                pr.data[m] += dp[k][j]*sepj
+
+                # velocity
+                for n in range(dim):
+                    vl[n][m] += dv[n*dim+k][i]*sepi
+                    vr[n][m] += dv[n*dim+k][j]*sepj
+
+            if dl.data[m] < 0.0 or dr.data[m] < 0.0:
+                raise RuntimeError("Density less than zero in spatial reconstruction")
+            if pl.data[m] < 0.0 or pr.data[m] < 0.0:
+                raise RuntimeError("Pressure less than zero in spartial reconstruction")
+
+    cpdef add_temporal(self, CarrayContainer particles, Mesh mesh,
+                         double gamma, DomainManager domain_manager,
+                         double dt, bint boost):
+        """Perform temporal reconstruction from cell center to face center.
+        This follows the method outlined by Springel (2009) and all equations
+        referenced are from that paper.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Class that holds all information pertaining to the particles.
+
+        mesh : Mesh
+            Class that builds the domain mesh.
+
+        boost : bool
+            Solve equations in moving reference frame.
+
+        domain_manager : DomainManager
+            Class that handels all things related with the domain.
+
+        dt : float
+            Time to extrapolate reconstructed fields to.
+        """
+        cdef int i, j, k, m, n, dim, num_passive
+
+        cdef np.float64_t vi[3], vj[3]
+        cdef np.float64_t *v[3], *wx[3]
+        cdef np.float64_t *vl[3], *vr[3]
+        cdef np.float64_t *dd[3], *dv[9], *dp[3]
+
+        cdef LongArray pair_i = mesh.faces.get_carray("pair-i")
+        cdef LongArray pair_j = mesh.faces.get_carray("pair-j")
+
+        # particle primitive variables
+        cdef DoubleArray d = particles.get_carray("density")
+        cdef DoubleArray p = particles.get_carray("pressure")
+
+        # left state primitive variables
+        cdef DoubleArray dl = self.left_states.get_carray("density")
+        cdef DoubleArray pl = self.left_states.get_carray("pressure")
+
+        # right state primitive variables
+        cdef DoubleArray dr = self.right_states.get_carray("density")
+        cdef DoubleArray pr = self.right_states.get_carray("pressure")
+
+        phdLogger.info("PieceWiseLinear: Starting temporal reconstruction")
+        dim = len(particles.carray_named_groups["position"])
+
+        # resize states to hold values at each face
+        self.left_states.resize(mesh.faces.get_carray_size())
+        self.right_states.resize(mesh.faces.get_carray_size())
+
+        # extract pointers
+        particles.pointer_groups(v, particles.carray_named_groups["velocity"])
+
+        # pointers to velocity states
+        self.left_states.pointer_groups(vl, self.left_states.carray_named_groups["velocity"])
+        self.right_states.pointer_groups(vr, self.right_states.carray_named_groups["velocity"])
+
+        # pointers to face velocity and center of mass 
+        mesh.faces.pointer_groups(wx, mesh.faces.carray_named_groups["velocity"])
+
+        # pointers to gradients
+        self.grad.pointer_groups(dd, self.grad.carray_named_groups["density"])
+        self.grad.pointer_groups(dv, self.grad.carray_named_groups["velocity"])
+        self.grad.pointer_groups(dp, self.grad.carray_named_groups["pressure"])
+
+        if self.has_passive_scalars:
+
+            num_passive = self.num_passive
+            particles.pointer_groups(self.passive, particles.carray_named_groups["passive-scalars"])
+
+            # pointer to passive left/right states
+            self.left_states.pointer_groups(self.passive_l, self.carray_named_groups["passive-scalars"])
+            self.right_states.pointer_groups(self.passive_r, self.carray_named_groups["passive-scalars"])
+
+            # pointer to gradients of passive scalars
+            self.grad.pointer_groups(self.dpassive, self.reconstruct_grad_groups["passive-scalars"])
+
+        # create left/right states for each face
+        for m in range(mesh.faces.get_carray_size()):
+
+            # particles that make up the face
+            i = pair_i.data[m]
+            j = pair_j.data[m]
 
             # velocity
             for k in range(dim):
@@ -801,64 +964,45 @@ cdef class PieceWiseLinear(ReconstructionBase):
                     vi[k] = v[k][i]
                     vj[k] = v[k][j]
 
-                if add_temporal:
-                    # velocity, add time derivative
-                    vl[k][m] = vi[k] - dt*dp[k][i]/d.data[i]
-                    vr[k][m] = vj[k] - dt*dp[k][j]/d.data[j]
-                else:
-                    vl[k][m] = vi[k]
-                    vr[k][m] = vj[k]
+                vl[k][m] -= dt*dp[k][i]/d.data[i]
+                vr[k][m] -= dt*dp[k][j]/d.data[j]
 
             # add derivatives to primitive 
             for k in range(dim): # dot products
 
-                # distance from particle to com of face
-                sepi = fij[k][m] - (x[k][i] + dcx[k][i])
-                sepj = fij[k][m] - (x[k][j] + dcx[k][j])
-
                 # add gradient (Eq. 21) and time Extrapolation (eq. 37)
                 # the trace of dv is div of velocity
 
-                # density, add spatial derivative
-                dl.data[m] += dd[k][i]*(sepi - dt*vi[k])
-                dr.data[m] += dd[k][j]*(sepj - dt*vj[k])
-
-                if add_temporal:
-                    # density, add time derivative
-                    dl.data[m] -= dt*d.data[i]*dv[(dim+1)*k][i]
-                    dr.data[m] -= dt*d.data[j]*dv[(dim+1)*k][j]
+                # density, add temporal derivative
+                dl.data[m] -= dt*(d.data[i]*dv[(dim+1)*k][i] + vi[k]*dd[k][i])
+                dr.data[m] -= dt*(d.data[j]*dv[(dim+1)*k][j] + vj[k]*dd[k][j])
 
                 if self.has_passive_scalars:
                     for n in range(num_passive):
 
                         # passive scalars, add spatial derivative
-                        self.passive_l[n][m] += self.dpassive[n*num_passive + k][m]*(sepi - dt*vi[k])
-                        self.passive_r[n][m] += self.dpassive[n*num_passive + k][m]*(sepj - dt*vj[k])
-
-                        if add_temporal:
-                            # passive scalars, add time derivative
-                            self.passive_l[n][m] -= dt*self.passive[n][i]*dv[(dim+1)*k][i]
-                            self.passive_r[n][m] -= dt*self.passive[n][j]*dv[(dim+1)*k][j]
+                        self.passive_l[n][m] -= dt*(self.passive[n][i]*dv[(dim+1)*k][i]\
+                                - vi[k]*self.dpassive[n*dim+k][i])
+                        self.passive_r[n][m] -= dt*(self.passive[n][j]*dv[(dim+1)*k][j]\
+                                - vj[k]*self.dpassive[n*dim+k][j])
 
                 # pressure, add spatial derivative
-                pl.data[m] += dp[k][i]*(sepi - dt*vi[k])
-                pr.data[m] += dp[k][j]*(sepj - dt*vj[k])
-
-                if add_temporal:
-                    # pressure, add time derivative
-                    pl.data[m] -= dt*gamma*p.data[i]*dv[(dim+1)*k][i]
-                    pr.data[m] -= dt*gamma*p.data[j]*dv[(dim+1)*k][j]
+                pl.data[m] -= dt*(gamma*p.data[i]*dv[(dim+1)*k][i] + vi[k]*dp[k][i])
+                pr.data[m] -= dt*(gamma*p.data[j]*dv[(dim+1)*k][j] + vj[i]*dp[k][j])
 
                 # velocity, add spatial derivative
                 for n in range(dim): # over velocity components
-                    vl[n][m] += dv[n*dim+k][i]*(sepi - dt*vi[k])
-                    vr[n][m] += dv[n*dim+k][j]*(sepj - dt*vj[k])
+                    vl[n][m] -= dt*vi[k]*dv[n*dim+k][i]
+                    vr[n][m] -= dt*vj[k]*dv[n*dim+k][j]
 
-            if dl.data[m] <= 0.0:
-                raise RuntimeError('left density less than zero...... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
-            if dr.data[m] <= 0.0:
-                raise RuntimeError('right density less than zero..... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))
-            if pl.data[m] <= 0.0:
-                raise RuntimeError('left pressure less than zero..... id: %d (%f, %f)' %(i, x[0][i], x[1][i]))
-            if pr.data[m] <= 0.0:
-                raise RuntimeError('right pressure less than zero.... id: %d (%f, %f)' %(j, x[0][j], x[1][j]))
+            if dl.data[m] < 0.0 or dr.data[m] < 0.0:
+                raise RuntimeError("Density less than zero in spatial reconstruction")
+            if pl.data[m] < 0.0 or pr.data[m] < 0.0:
+                raise RuntimeError("Pressure less than zero in spartial reconstruction")
+
+    cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
+                         double gamma, DomainManager domain_manager,
+                         double dt, bint boost):
+
+        self.add_spatial(particles, mesh, gamma, domain_manager, dt, boost)
+        self.add_temporal(particles, mesh, gamma, domain_manager, dt, boost)

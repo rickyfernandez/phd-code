@@ -1,5 +1,5 @@
 
-cdef class ConstantGravity:
+cdef class ConstantGravity(MUSCLHancockSourceTerm):
     """
     Constant gravity source term. Gravity is applied in only
     direction.
@@ -19,19 +19,32 @@ cdef class ConstantGravity:
     def initialize(self):
         pass
 
-    def update_reconstruction(self, object integrator):
+    def compute_primitive(self, object integrator):
         """
         Add gravity half time step update to primitive variables
-        at faces for riemann solver.
+        at faces for riemann solver and add half update to
+        conservative variables.
         """
         cdef int i, j, m
+
+        cdef double g = self.g
+        cdef int axis = self.axis
         cdef double dt = integrator.dt
-        cdef np.float64_t *vl[3], *vr[3]
+
+        cdef np.float64_t *vl[3], *vr[3], *mv[3]
+
+        cdef IntArray tags    = integrate.particles.get_carray("tag")
+        cdef DoubleArray mass = integrator.particles.get_carray("mass")
+        cdef DoubleArray e    = integrator.particles.get_carray("energy")
+
         cdef CarrayContainer left_states = integrator.reconstruction.left_states
         cdef CarrayContainer right_states = integrator.reconstruction.right_states
 
         left_state.pointer_groups(vl,  left_state.named_groups["velocity"])
         right_state.pointer_groups(vr, left_state.named_groups["velocity"])
+
+        integrator.particles.pointer_groups(mv,
+                integrator.particles.named_groups["momentum"])
 
         # loop over each face in the mesh 
         for m in range(integrator.mesh.faces.get_carray_size()):
@@ -41,35 +54,29 @@ cdef class ConstantGravity:
             j = pair_j.data[m]
 
             # add gravity to velocity
-            vl[self.axis][m] += 0.5*dt*self.g
-            vr[self.axis][m] += 0.5*dt*self.g
-
-    def update_conserved(self, object integrator):
-        """
-        Update conservative variables before integrate.
-        """
-        cdef int i
-        cdef np.float64_t *mv[3]
-
-        cdef IntArray tags    = integrate.particles.get_carray("tag")
-        cdef DoubleArray mass = integrator.particles.get_carray("mass")
-        cdef DoubleArray e    = integrator.particles.get_carray("energy")
-
-        integrator.particles.pointer_groups(mv,
-                integrator.particles.named_groups["momentum"])
+            vl[axis][m] += 0.5*dt*g
+            vr[axis][m] += 0.5*dt*g
 
         # add gravity acceleration from particle
         for i in range(integrator.particles.get_carray_size()):
             if tags.data[i] == REAL:
-                e.data[i] += 0.5*dt*mv[self.axis][i]*g  # energy
-                mv[self.axis][i] += 0.5*dt*m.data[i]*g  # momentum
+                e.data[i] += 0.5*dt*mv[axis][i]*g  # energy
+                mv[axis][i] += 0.5*dt*m.data[i]*g  # momentum
 
-    def update_conserved(self, object integrator):
+    def compute_force(self, object integrator):
+        pass
+
+    def computer_flux(self, object integrator):
+        pass
+
+    def compute_conservative(self, object integrator):
         """
         Update conservative variables before integrate.
         """
         cdef int i
+        cdef double g = self.g
         cdef np.float64_t *mv[3]
+        cdef int axis = self.axis
 
         cdef IntArray tags    = integrate.particles.get_carray("tag")
         cdef DoubleArray mass = integrator.particles.get_carray("mass")

@@ -319,6 +319,11 @@ class StaticMeshMUSCLHancock(IntegrateBase):
         # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
 
+        self.domain_manager.update_ghost_fields(self.particles,
+                self.mesh.update_ghost_fields)
+        self.domain_manager.boundary_condition.update_fields(
+                self.particles, self.domain_manager)
+
         # convert updated conservative to primitive
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
