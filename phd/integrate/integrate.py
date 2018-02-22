@@ -110,6 +110,8 @@ class IntegrateBase(object):
         self.domain_manager = None
         self.boundary_condition = None
 
+        self.source_terms = {}
+
         if phd._in_parallel:
 
             self.load_balance = None
@@ -159,8 +161,8 @@ class IntegrateBase(object):
         self.riemann = riemann
 
 #    @check_class(SourceTermBase)
-#    def add_source_term(self, source_term):
-#        self.sources[source_term.__class__.__name__] = source_term
+    def add_source_term(self, source_term):
+        self.source_terms[source_term.__class__.__name__] = source_term
 
     def initialize(self):
         """Setup all connections for computation classes."""
@@ -300,6 +302,27 @@ class StaticMeshMUSCLHancock(IntegrateBase):
         self.riemann.add_fields(self.particles)
         self.riemann.initialize()
 
+    def before_loop(self, simulation):
+        super(StaticMeshMUSCLHancock, self).before_loop(simulation)
+
+        # zero out mesh moition for static
+        dim = len(self.particles.carray_named_groups["position"])
+        for i in "xyz"[:dim]:
+            self.particles["w-"+i][:] = 0.
+            self.mesh.faces["velocity-"+i][:] = 0.
+
+    def add_source(self, term):
+        if self.source_terms:
+            for source in self.source_terms:
+                if term = "primitive":
+                    source.compute_primitive(self)
+                elif term = "flux":
+                    source.compute_flux(self)
+                elif term = "conservative":
+                    source.compute_flux(self)
+                else:
+                    raise RuntimeError("ERROR: Unknown source term method")
+
     def evolve_timestep(self):
         """Solve the compressible gas equations."""
 
@@ -310,19 +333,21 @@ class StaticMeshMUSCLHancock(IntegrateBase):
                 self.domain_manager)
         self.reconstruction.compute_states(self.particles, self.mesh,
                 self.equation_state.get_gamma(), self.domain_manager, 0.5*self.dt,
-                False)
+                self.riemann.boost)
+        self.add_source("primitive", self)
 
         # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
+        self.add_source("flux", self)
 
         # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
 
+        self.add_source("conservative", self)
         self.domain_manager.update_ghost_fields(self.particles,
-                self.mesh.update_ghost_fields)
-        self.domain_manager.boundary_condition.update_fields(
-                self.particles, self.domain_manager)
+                self.particles.carray_named_groups["conservative"],
+                True)
 
         # convert updated conservative to primitive
         self.equation_state.primitive_from_conservative(self.particles)
@@ -330,6 +355,9 @@ class StaticMeshMUSCLHancock(IntegrateBase):
 
 class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
     """Moving mesh integrator."""
+    def before_loop(self, simulation):
+        super(MovingMeshMUSCLHancock, self).before_loop(simulation)
+
     def evolve_timestep(self):
         """Evolve the simulation for one time step."""
 
@@ -345,10 +373,12 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         self.reconstruction.compute_states(self.particles, self.mesh,
                 self.equation_state.get_gamma(), self.domain_manager, 0.5*self.dt,
                 self.riemann.boost)
+        self.add_source("primitive", self)
 
         # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
+        self.add_source("flux", self)
 
         # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
@@ -366,6 +396,7 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
                 self.particles, self.domain_manager)
 
         # convert updated conservative to primitive
+        self.add_source("conservative", self)
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
 
