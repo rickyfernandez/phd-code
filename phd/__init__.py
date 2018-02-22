@@ -52,6 +52,9 @@ from phd.riemann.riemann import \
         HLLC
         #Exact
 
+from phd.gravity.gravity_force import \
+        ConstantGravity
+
 # input and output
 from phd.io.simulation_time_manager import \
         SimulationTimeManager

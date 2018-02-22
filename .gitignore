@@ -23,6 +23,7 @@ boundary.cpp
 mesh.cpp
 phd/gravity/*.cpp
 phd/load_balance/*.cpp
+phd/source_term/*.cpp
 build/
 .DS_Store
 phd.egg-info/

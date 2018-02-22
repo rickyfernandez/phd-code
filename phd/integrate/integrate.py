@@ -169,6 +169,20 @@ class IntegrateBase(object):
         msg = "IntegrateBase::initialize called!"
         raise NotImplementedError(msg)
 
+    def compute_source(self, term):
+        if self.source_terms:
+            for source in self.source_terms.itervalues():
+                if term == "primitive":
+                    source.apply_primitive(self)
+                elif term == "conservative":
+                    source.apply_conservative(self)
+                elif term == "flux":
+                    source.apply_flux(self)
+                elif term == "compute":
+                    source.compute_source(self)
+                else:
+                    raise RuntimeError("ERROR: Unknown source term method")
+
     def compute_time_step(self):
         """Compute time step for current state of the simulation."""
         msg = "IntegrateBase::compute_time_step called!"
@@ -311,18 +325,6 @@ class StaticMeshMUSCLHancock(IntegrateBase):
             self.particles["w-"+i][:] = 0.
             self.mesh.faces["velocity-"+i][:] = 0.
 
-    def add_source(self, term):
-        if self.source_terms:
-            for source in self.source_terms:
-                if term = "primitive":
-                    source.compute_primitive(self)
-                elif term = "flux":
-                    source.compute_flux(self)
-                elif term = "conservative":
-                    source.compute_flux(self)
-                else:
-                    raise RuntimeError("ERROR: Unknown source term method")
-
     def evolve_timestep(self):
         """Solve the compressible gas equations."""
 
@@ -334,17 +336,18 @@ class StaticMeshMUSCLHancock(IntegrateBase):
         self.reconstruction.compute_states(self.particles, self.mesh,
                 self.equation_state.get_gamma(), self.domain_manager, 0.5*self.dt,
                 self.riemann.boost)
-        self.add_source("primitive", self)
+        self.compute_source("primitive")
 
         # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
-        self.add_source("flux", self)
+        self.compute_source("flux")
 
         # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+        self.compute_source("compute")
 
-        self.add_source("conservative", self)
+        self.compute_source("conservative")
         self.domain_manager.update_ghost_fields(self.particles,
                 self.particles.carray_named_groups["conservative"],
                 True)
@@ -373,12 +376,12 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         self.reconstruction.compute_states(self.particles, self.mesh,
                 self.equation_state.get_gamma(), self.domain_manager, 0.5*self.dt,
                 self.riemann.boost)
-        self.add_source("primitive", self)
+        self.compute_source("primitive")
 
         # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
-        self.add_source("flux", self)
+        self.compute_source("flux")
 
         # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
@@ -395,8 +398,10 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         self.domain_manager.boundary_condition.update_fields(
                 self.particles, self.domain_manager)
 
+        self.compute_source("compute")
+
         # convert updated conservative to primitive
-        self.add_source("conservative", self)
+        self.compute_source("conservative")
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
 
