@@ -43,7 +43,7 @@ cdef class ConstantGravity(MUSCLHancockSourceTerm):
         cdef int axis = self.axis
         cdef double dt = integrator.dt
 
-        cdef np.float64_t *vl[3], *vr[3], *mv[3]
+        cdef np.float64_t *vl[3], *vr[3], *wx[3] #*mv[3]
 
         cdef IntArray tags    = integrator.particles.get_carray("tag")
         cdef DoubleArray mass = integrator.particles.get_carray("mass")
@@ -62,9 +62,8 @@ cdef class ConstantGravity(MUSCLHancockSourceTerm):
         left_states.pointer_groups(vl,  left_states.carray_named_groups["velocity"])
         right_states.pointer_groups(vr, left_states.carray_named_groups["velocity"])
 
-        #integrator.particles.pointer_groups(mv,
-        #        integrator.particles.named_groups["momentum"])
-        particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
+        #particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
+        particles.pointer_groups(mv, particles.carray_named_groups["w"])
 
         # loop over each face in the mesh 
         for m in range(integrator.mesh.faces.get_carray_size()):
@@ -80,19 +79,48 @@ cdef class ConstantGravity(MUSCLHancockSourceTerm):
         # add gravity acceleration from particle
         for i in range(integrator.particles.get_carray_size()):
             if tags.data[i] == REAL:
-                e.data[i] += 0.5*dt*mv[axis][i]*g     # energy
                 mv[axis][i] += 0.5*dt*mass.data[i]*g  # momentum
+                e.data[i] += 0.5*dt*wx[axis][i]*g     # energy
+                #e.data[i] += 0.5*dt*mv[axis][i]*g     # energy
 
     cpdef compute_source(self, object integrator):
         pass
 
     cpdef apply_flux(self, object integrator):
-        pass
+
+        cdef int i, j, n
+        cdef double *x[3]
+        cdef double a, dt = integrator.dt
+
+        # particle indices that make up face
+        cdef LongArray pair_i = integrator.mesh.faces.get_carray("pair-i")
+        cdef LongArray pair_j = integrator.mesh.faces.get_carray("pair-j")
+
+        cdef DoubleArray area = integrator.faces.get_carray("area")
+        cdef DoubleArray fm = integrator.riemann.fluxes.get_carray("mass")
+
+        particles.pointer_groups(x, particles.carray_named_groups["position"])
+
+        for n in range(integrator.riemann.faces.get_carray_size()):
+
+            # particles that make up the face
+            i = pair_i.data[n]
+            j = pair_j.data[n]
+
+            # area of the face
+            a = area.data[n]
+
+            if(tags.data[i] == REAL):
+                e.data[i] += 0.5*dt*a*fm.data[n]*(x[axis][i] - x[axis][j])*g
+
+            if(tags.data[j] == REAL):
+                e.data[i] += 0.5*dt*a*fm.data[n]*(x[axis][j] - x[axis][i])*g
 
     cpdef apply_conservative(self, object integrator):
         """Update conservative variables after flux update."""
         cdef int i
-        cdef np.float64_t *mv[3]
+        #cdef np.float64_t *mv[3]
+        cdef np.float64_t *wx[3]
 
         cdef double g = self.g
         cdef int axis = self.axis
@@ -106,15 +134,15 @@ cdef class ConstantGravity(MUSCLHancockSourceTerm):
 
         phdLogger.info("ConstantGravity: Applying gravity to conservative")
 
-        #integrator.particles.pointer_groups(mv,
-        #        integrator.particles.named_groups["momentum"])
-        particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
+        #particles.pointer_groups(mv, particles.carray_named_groups["momentum"])
+        particles.pointer_groups(mv, particles.carray_named_groups["wx"])
 
         # add gravity acceleration from particle
         for i in range(integrator.particles.get_carray_size()):
             if tags.data[i] == REAL:
                 mv[axis][i] += 0.5*dt*mass.data[i]*g  # momentum
-                e.data[i] += 0.5*dt*mv[axis][i]*g  # energy
+                e.data[i] += 0.5*dt*wx[axis][i]*g  # energy
+                #e.data[i] += 0.5*dt*mv[axis][i]*g  # energy
 
 #cdef class GravityForce(SourceTermBase):
 #
