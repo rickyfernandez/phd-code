@@ -295,14 +295,16 @@ cdef class Reflective(BoundaryConditionBase):
                 for j in range(dim):
 
                     if x[j][i] < domain_manager.bounds[0][j]:
-                        for k in range(dim):
+                        #for k in range(dim):
                             # flip gradient component
-                            dv[dim*k + j][i] *= -1
+                            #dv[dim*k + j][i] *= -1
+                        dv[dim*j + j][i] *= -1
 
                     if x[j][i] > domain_manager.bounds[1][j]:
-                        for k in range(dim):
+                        #for k in range(dim):
                             # flip gradient component
-                            dv[dim*k + j][i] *= -1
+                            #dv[dim*k + j][i] *= -1
+                        dv[dim*j + j][i] *= -1
 
     cpdef update_fields(self, CarrayContainer particles, DomainManager domain_manager):
         """Transfer gradient from image particle to ghost particle with reflective
