@@ -341,10 +341,10 @@ class StaticMeshMUSCLHancock(IntegrateBase):
         # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
-        self.compute_source("flux")
 
         # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+        self.compute_source("flux")
         self.compute_source("compute")
 
         self.compute_source("conservative")
@@ -381,10 +381,10 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         # solve riemann problem, generate flux
         self.riemann.compute_fluxes(self.particles, self.mesh, self.reconstruction,
                 self.equation_state)
-        self.compute_source("flux")
 
         # update conservative from fluxes
         self.mesh.update_from_fluxes(self.particles, self.riemann, self.dt)
+        self.compute_source("flux")
 
         # update mesh generator positions
         self.domain_manager.move_generators(self.particles, self.dt)
