@@ -1,3 +1,5 @@
+import phd
+import numpy as np
 from libc.math cimport sqrt
 
 from .gravity_tree cimport Node, LEAF, ROOT
@@ -6,69 +8,33 @@ from ..utils.particle_tags import ParticleTAGS
 from ..load_balance.tree cimport TreeMemoryPool as Pool
 
 
-cdef int Ghost = ParticleTAGS.Ghost
+cdef int GHOST = ParticleTAGS.Ghost
+
 
 cdef class Interaction:
-    """
-    Base class for particle node computation
-    """
-    def __init__(self, CarrayContainer pc, Splitter splitter, int add_fields=0):
-        self.dim = len(pc.carray_named_groups["position"])
-        self.splitter = splitter
-
-    def add_fields_to_container(self, CarrayContainer pc):
-        """
-        Add needed fields for interaction computation to particle
-        container. Note if fields already present this function
-        does nothing.
-
-        Parameters
-        ----------
-        pc : CarrayContainer
-            Container holding particle data
-        """
-        cdef str field, group
-        cdef long num_particles
-
-        num_particles = pc.get_carray_size()
-
-        # add needed fields for computation
-        for field in self.fields.iterkeys():
-            if field not in pc.carrays:
-                pc.register_carray(num_particles, field,
-                        self.fields[field])
-
-        # add needed groups as well
-        for group in self.carray_named_groups.iterkeys():
-            if group in pc.carray_named_groups:
-                for field in group:
-                    if field not in pc.carray_named_groups[group]:
-                        pc.carray_named_groups[group] = list(self.carray_named_groups[group])
-                        break
-            else:
-                pc.carray_named_groups[group] = list(self.carray_named_groups[group])
+    """Base class for particle node computation."""
 
     cdef void particle_not_finished(self, long node_index):
-        """
-        Flag current particle as not finished in walk and save next
-        node index to restart walk.
+        """Flag current particle as not finished in walk and save
+        next node index to restart walk.
 
         Parameters
         ---------
         node_index : long
-            index of node to restart tree walk
+            Index of node to restart tree walk.
+
         """
         self.particle_done = False
         self.current_node = node_index
 
     cdef bint done_processing(self):
-        """
-        Signal if all particles have partcipatd in walk
+        """Signal if all particles have partcipatd in walk.
 
         Returns
         -------
         bint
-            Boolean to signal if all particles have been walked
+            Boolean to signal if all particles have been walked.
+
         """
         if self.current < self.num_particles:
             return False
@@ -76,20 +42,19 @@ cdef class Interaction:
             return True
 
     cdef void particle_finished(self):
-        """
-        Flag current particle as finished in walk
-        """
+        """Flag current particle as finished in walk."""
         self.particle_done = True
 
     cdef long start_node_index(self):
-        """
-        Return the starting node index for walk. If particle is starting walk
-        root is returned otherwise next node is returned to restart walk.
+        """Return the starting node index for walk. If particle is
+        starting walk root is returned otherwise last node is
+        returned to continue walk.
 
         Returns
         -------
         long
-            Index of node to start walk
+            Index of node to start walk.
+
         """
         if self.particle_done:
             return ROOT
@@ -100,7 +65,8 @@ cdef class Interaction:
         msg = "InteractionBase::interact called!"
         raise NotImplementedError(msg)
 
-    cdef void initialize_particles(self, CarrayContainer pc, bint local_particles=True):
+    cdef void initialize_particles(self, CarrayContainer particles,
+                                   bint local_particles=True):
         msg = "InteractionBase::initialize_particles called!"
         raise NotImplementedError(msg)
 
@@ -109,71 +75,114 @@ cdef class Interaction:
         raise NotImplementedError(msg)
 
 cdef class GravityAcceleration(Interaction):
+    """Class to compute acceleration due to gravity between particle
+    and gravity node.
     """
-    Compute acceleration due to gravity between particle and
-    gravity node
-    """
-    def __init__(self, CarrayContainer pc, Splitter splitter,
-            int add_fields=0, int calculate_potential=0, double smoothing_length=0.0):
-        """
-        Initialize gravity interaction
+    def __init__(self, int calculate_potential=0,
+                 double smoothing_length=0.0):
+        """Initialize interaction class.
 
         Parameters
         ----------
         potential : int
-            Flag to calculate potential
-        """
-        cdef str axis
+            Flag if potential calculation is needed.
 
-        self.dim = len(pc.carray_named_groups["position"])
-        self.splitter = splitter
+        smoothing_length : int
+            Gravitational smoothing length.
+
+        """
+        self.splitter = None
+        self.particle_fields_registered = False
         self.smoothing_length = smoothing_length
-        self.calc_potential = calculate_potential
+        self.calculate_potential = calculate_potential
+        
+        if phd._in_parallel:
+            self.flag_pid = np.zeros(phd._size, dtype=np.int32)
 
-        self.fields = {}
-        self.carray_named_groups = {}
+    def set_splitter(self, Splitter splitter):
+        """Set criteria to open node."""
+        self.splitter = splitter
 
-        self.fields['mass'] = 'double'
-        self.carray_named_groups['position'] = []
-        self.carray_named_groups['acceleration'] = []
-
-        for axis in 'xyz'[:self.dim]:
-            self.fields['position-' + axis] = 'double'
-            self.fields['acceleration-' + axis] = 'double'
-            self.carray_named_groups['position'].append('position-' + axis)
-            self.carray_named_groups['acceleration'].append('acceleration-' + axis)
-
-        self.carray_named_groups['gravity'] = ['mass'] + self.carray_named_groups['position'] +\
-                self.carray_named_groups['acceleration']
-        self.carray_named_groups['gravity-walk-export'] = ['mass'] + pc.carray_named_groups['position']
-        self.carray_named_groups['gravity-walk-import'] = list(self.carray_named_groups['acceleration'])
-
-        if self.calc_potential:
-            self.fields['potential'] = 'double'
-            self.carray_named_groups['gravity-walk-import'] = self.carray_named_groups['gravity-walk-import']\
-                    + ['potential']
-
-        # if splitter has fields add as well 
-        self.splitter.add_fields_to_interaction(self.fields, self.carray_named_groups)
-
-        # add new fields to container
-        if add_fields:
-            self.add_fields_to_container(pc)
-
-    cdef void initialize_particles(self, CarrayContainer pc, bint local_particles=True):
-        """
-        Set referecne to particles for walk
+    def register_fields(self, CarrayContainer particles):
+        """Add needed fields for interaction computation to particle
+        container.
 
         Parameters
         ----------
-        pc : CarrayContainer
-            Container of particles that are going to walk the tree
+        particles : CarrayContainer
+            Container holding particle data.
+
+        """
+        cdef str axis
+        cdef int num_particles
+
+        dim = len(particles.carray_named_groups["position"])
+        num_particles = particles.get_carray_size()
+
+        particles.carray_named_groups["acceleration"] = []
+
+        # add acceleration fields
+        for axis in "xyz"[:dim]:
+            particles.register_carray(num_particles,
+                    "acceleration-"+axis, "double")
+            particles.carray_named_groups["acceleration"].append(
+                    "acceleration-"+axis)
+
+        if self.calculate_potential:
+            particles.register_carray(num_particles,
+                    "potential", "double")
+
+        # gravity group
+        particles.carray_named_groups["gravity"] = ["mass"] +\
+                particles.carray_named_groups["position"] +\
+                particles.carray_named_groups["acceleration"]
+
+        if phd._in_parallel:
+
+            # we export mass and position for tree walk on other processors 
+            particles.carray_named_groups["gravity-walk-export"] = ["mass"] +\
+                    particles.carray_named_groups["position"]
+
+            # we only import acceleration of tree walk on onther processors
+            particles.carray_named_groups["gravity-walk-import"] =\
+                    list(particles.carray_named_groups["acceleration"])
+
+            if self.calculate_potential:
+                particles.carray_named_groups["gravity-walk-import"] +=\
+                        ["potential"]
+
+        self.dim = dim
+        self.particle_fields_registered = True
+
+    def initialize(self):
+        """Initialze class making sure all initial routines
+        have been called.
+        """
+        if not self.particle_fields_registered:
+            raise RuntimeError("ERROR:Fields not registered in\
+                                particles by Splitter!")
+
+        if not self.splitter:
+            raise RuntimeError("ERROR:Splitter not defined")
+
+    cdef void initialize_particles(self, CarrayContainer particles,
+                                   bint local_particles=True):
+        """Setup parameters for tree walk with  reference to particle
+        acceleration and position.
+
+        Parameters
+        ----------
+        particles : CarrayContainer
+            Container of particles that are going to walk the tree.
+
         local_particles : bint
-            Flag indicating if we are using particles local to our processor
+            Flag indicating if we are using particles local to our
+            processor.
+
         """
         cdef DoubleArray doub_array
 
-        self.num_particles = pc.get_carray_size()
+        self.num_particles = particles.get_carray_size()
 
         self.current = -1
         self.particle_done = 1
@@ -182,27 +191,30 @@ cdef class GravityAcceleration(Interaction):
 
         # set reference for acceleration calculation
         if self.local_particles:
-            self.tags = pc.get_carray('tag')
-        pc.pointer_groups(self.a, pc.carray_named_groups['acceleration'])
-        pc.pointer_groups(self.x, pc.carray_named_groups['position'])
+            self.tags = particles.get_carray("tag")
+
+        particles.pointer_groups(self.a,
+                particles.carray_named_groups["acceleration"])
+        particles.pointer_groups(self.x,
+                particles.carray_named_groups["position"])
 
         # reference for potential calculation
-        if self.calc_potential:
-            doub_array = pc.get_carray('potential')
+        if self.calculate_potential:
+            doub_array = particles.get_carray("potential")
             self.pot   = doub_array.get_data_ptr()
 
         # setup information for opening nodes and
         # first particle to process
-        self.splitter.initialize_particles(pc)
+        self.splitter.initialize_particles(particles)
 
     cdef void interact(self, Node* node):
-        """
-        Calculate acceleration of particle due to node
+        """Calculate acceleration of particle due to node.
 
         Parameters
         ----------
         node : *Node
-            Gravity node from gravity tree
+            Gravity node from gravity tree.
+
         """
         cdef int i, inside
         cdef double fac, r2, dr[3]
@@ -229,19 +241,20 @@ cdef class GravityAcceleration(Interaction):
             self.a[i][self.current] += fac * dr[i]
 
         # particle potential per mass
-        if self.calc_potential:
+        if self.calculate_potential:
             self.pot[self.current] -= node.group.data.mass / sqrt(r2)
 
     cdef bint process_particle(self):
-        """
-        Iterator for particles. Each time this is called it moves
-        on to the next particle, skipping ghost particles, for calculation.
-        Assumes initialize_particles was called before processing particles.
+        """Iterator for particles. Each time this is called it moves
+        to the next particle, skipping ghost particles, unless previous
+        particle calculation not finished. Assumes initialize_particles
+        was called before processing particles.
 
         Returns
         -------
         bint
-           True if all particels have walked otherwise False
+           True if all particles have walked otherwise False.
+
         """
         # continue to next particle if done walking previous particle
         if self.particle_done:
@@ -253,7 +266,7 @@ cdef class GravityAcceleration(Interaction):
                 if self.current < self.num_particles:
 
                     # skip ghost particles
-                    while(self.tags[self.current] == Ghost):
+                    while(self.tags[self.current] == GHOST):
                         if self.current + 1 < self.num_particles:
                             self.current += 1
                         else:
@@ -261,11 +274,17 @@ cdef class GravityAcceleration(Interaction):
                             return False
 
             if self.current < self.num_particles:
-                # setup particle for walk
+
+                # clear out acceleration for walk
                 for i in range(self.dim):
                     self.a[i][self.current] = 0.
-                if self.calc_potential:
+                if self.calculate_potential:
                     self.pot[self.current] = 0.
+
+                if phd._in_parallel:
+                    # clear our export flag
+                    for i in range(phd._size):
+                        self.flag_pid[i] = 0
 
                 # set splitter to next particle
                 self.splitter.process_particle(self.current)
@@ -276,4 +295,5 @@ cdef class GravityAcceleration(Interaction):
                 return False
         else:
             # particle ready to restart walk
+            self.splitter.process_particle(self.current)
             return True

@@ -12,11 +12,11 @@ cdef class Interaction:
     cdef long current               # index of particle to compute on
     cdef long current_node          # current node in tree walk for particle
     cdef long num_particles         # total number of particles
-    cdef bint particle_done         # flag to know particle is done walking
-    cdef bint local_particles       # flag indicating local or imported particles
 
-    cdef public dict fields         # fields to use in computation
-    cdef public dict carray_named_groups   # vector of fields for ease
+    cdef bint particle_done               # flag to know particle is done walking
+    cdef bint local_particles             # flag indicating local or imported particles
+    cdef np.ndarray flag_pid              # flag if particle has been exported to processor
+    cdef bint particle_fields_registered  # flag for fields registered in particles
 
     cdef IntArray tags              # reference to particle tags
     cdef Splitter splitter          # criteria to open node
@@ -35,7 +35,7 @@ cdef class Interaction:
     cdef long start_node_index(self)
 
 cdef class GravityAcceleration(Interaction):
-    cdef int calc_potential         # flag to include gravity potential
+    cdef int calculate_potential    # flag to include gravity potential
     cdef double smoothing_length    # gravitational smoothing length
 
     # pointer to particle data

@@ -9,6 +9,8 @@ from ..containers.containers cimport CarrayContainer
 from ..load_balance.load_balance cimport LoadBalance
 from ..domain.domain_manager cimport DomainManager
 
+from .splitter cimport Splitter
+
 cdef extern from "stdlib.h":
     void qsort(void *array, size_t count, size_t size,
             int (*compare)(const void *, const void *))
@@ -33,7 +35,6 @@ cdef int proc_compare(const void *a, const void *b)
 
 cdef class GravityTree:
 
-    cdef public CarrayContainer pc              # referecne to particles
     cdef public int number_nodes                # max number of children nodes
     cdef public int dim, rank, size
     cdef public DomainManager domain_manager
@@ -44,6 +45,12 @@ cdef class GravityTree:
     cdef public double barnes_angle             # angle to open node in barnes hut
     cdef public Interaction export_interaction  # acceleration calculator
 
+    #cdef public Splitter splitter
+    cdef public Splitter export_splitter
+    cdef public Splitter import_splitter
+
+    cdef public int calculate_potential
+
     # pointers for particle position and mass
     cdef np.float64_t *x[3], *m
 
@@ -52,14 +59,17 @@ cdef class GravityTree:
 
     cdef map[int, int] toptree_leaf_map         # map node index to leaf container
 
-    cdef public LoadBalance load_bal            # reference to load balance
+    cdef public LoadBalance load_balance        # reference to load balance
     cdef public Interaction import_interaction  # acceleration calculator
     cdef public CarrayContainer toptree_leafs   # container of top tree leafs
 
-    cdef public np.ndarray flag_pid             # flag if particle is export to processor
+    #cdef public np.ndarray flag_pid             # flag if particle is export to processor
     cdef public int max_buffer_size             # max number of particles in buffer
     cdef public int buffer_size
     cdef PairId* buffer_ids
+
+    cdef dict toptree_carray_to_register
+    cdef dict toptree_carray_named_groups
 
     cdef public LongArray indices
 
@@ -90,7 +100,7 @@ cdef class GravityTree:
     cdef void _update_toptree_moments(self, int current)
 
     # tree walk functions
-    cdef void _serial_walk(self, Interaction interaction)
-    cdef void _parallel_walk(self, Interaction interaction)
+    cdef void _serial_walk(self, Interaction interaction, CarrayContainer particles)
+    cdef void _parallel_walk(self, Interaction interaction, CarrayContainer particles)
     cdef void _import_walk(self, Interaction interaction)
     cdef void _export_walk(self, Interaction interaction)

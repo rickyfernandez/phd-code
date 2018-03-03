@@ -6,10 +6,10 @@ from .gravity_pool cimport Node
 
 cdef class Splitter:
 
-    cdef int dim
-    cdef long idp
+    cdef int dim  # dimension of simulation
+    cdef long idp # particle id to process
 
-    cdef void initialize_particles(self, CarrayContainer pc)
+    cdef void initialize_particles(self, CarrayContainer particles)
     cdef void process_particle(self, long idp)
     cdef int split(self, Node* node)
 
