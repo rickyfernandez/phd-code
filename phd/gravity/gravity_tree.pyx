@@ -465,9 +465,9 @@ cdef class GravityTree:
         parallel tree builds because the top tree will have leafs
         without any particles.
         """
+        cdef LongLongArray keys
         cdef IntArray tags = particles.get_carray("tag")
         cdef DoubleArray mass = particles.get_carray("mass")
-        cdef LongLongArray keys = particles.get_carray("key")
 
         cdef double width
         cdef int index, current
@@ -483,6 +483,7 @@ cdef class GravityTree:
         self._create_root()
 
         if phd._in_parallel:
+            keys = particles.get_carray("key")
             self._build_toptree()
 
         # add real particles to tree
