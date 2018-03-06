@@ -183,11 +183,6 @@ class IntegrateBase(object):
                 else:
                     raise RuntimeError("ERROR: Unknown source term method")
 
-    def compute_time_step(self):
-        """Compute time step for current state of the simulation."""
-        msg = "IntegrateBase::compute_time_step called!"
-        raise NotImplementedError(msg)
-
     def before_loop(self, simulation):
         """Perform any operations before the main loop of the simulation.
 
@@ -404,6 +399,143 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
         self.compute_source("conservative")
         self.equation_state.primitive_from_conservative(self.particles)
         self.iteration += 1; self.time += self.dt
+
+
+class Nbody(IntegrateBase):
+    """Class that solves nbody problem.
+
+    Nbody solver for collisionless particles without 
+    hydrodynamics.
+
+    Attributes
+    ----------
+    domain_manager : DomainManager
+        Class that handels all things related with the domain.
+
+    dt : float
+        Time step of the simulation.
+
+    particles : CarrayContainer
+        Class that holds all information pertaining to the particles
+        in the simulation.
+
+    time : float
+        Current time of the simulation.
+
+    iteration : int
+        Current iteration of the simulation.
+
+    """
+    def __init__(self, dt=0., time=0., iteration=0, restart=False, **kwargs):
+        """Constructor for Nbody integrator.
+
+        Parameters
+        ----------
+        dt : float
+            Time step of the simulation.
+
+        time : float
+            Current time of the simulation.
+
+        iteration : int
+            Current iteration of the simulation.
+
+        restart : bool
+            Flag to signal if the simulation is a restart.
+
+        """
+        super(Nbody, self).__init__(dt=dt, time=time, iteration=iteration,
+                restart=restart)
+
+    def set_gravity_tree(self, gravity_tree):
+        """Set equation of state for gas."""
+        self.gravity_tree = gravity_tree
+
+    def initialize(self):
+        """Setup all connections for computation classes."""
+
+        if not self.particles or\
+                not self.domain_manager or\
+                not self.gravity_tree:
+            raise RuntimeError("ERROR: Not all setters defined in %s!" %\
+                    self.__class__.__name__)
+
+        if phd._in_parallel:
+            if not self.load_balance:
+                raise RuntimeError("ERROR: Load Balance setter not defined")
+
+            self.load_balance.add_domain_info(self.domain_manager)
+            self.load_balance.initialize()
+
+            self.domain_manager.set_load_balance(
+                    self.load_balance)
+
+        # initialize domain manager
+        self.domain_manager.register_fields(self.particles)
+        # hack, we don't initialize, create Null Boundary condition
+        #self.domain_manager.initialize()
+
+        self.gravity_tree.register_fields(self.particles)
+        self.gravity_tree.add_fields(self.particles)
+        self.gravity_tree.set_domain_manager(self.domain_manager)
+        self.gravity_tree.initialize()
+
+        dim = len(self.particles.carray_named_groups["position"])
+        self.axis = "xyz"[:dim]
+
+    def before_loop(self, simulation):
+        """Perform any operations before the main loop of the simulation.
+
+        Parameters
+        ----------
+        simulation : Simulation
+           Class that marshalls the simulation of the fluid equations.
+
+        """
+        if phd._in_parallel:
+            self.load_balance.decomposition(self.particles)
+
+        # calculate initial accelerations
+        self.gravity_tree._build_tree(self.particles)
+        self.gravity_tree.walk(self.particles)
+
+        # output if needed
+        simulation.simulation_time_manager.output(simulation)
+
+    def compute_time_step(self):
+        """Compute time step for current state of simulation.
+
+        Calculate the time step is then constrain by outputters
+        and simulation.
+        """
+        return self.dt
+
+    def evolve_timestep(self):
+        """Evolve the simulation for one time step."""
+
+        # kick
+        for ax in self.axis:
+            self.particles["velocity-"+ax][:] += 0.5*self.dt*self.particles["acceleration-"+ax][:]
+
+        # drift
+        for ax in self.axis:
+            self.particles["position-"+ax][:] += self.dt*self.particles["velocity-"+ax][:]
+
+        if phd._in_parallel:
+            self.load_balance.decomposition(self.particles)
+
+        # compute new acceleration
+        self.gravity_tree._build_tree(self.particles)
+        self.gravity_tree.walk(self.particles)
+
+        # kick
+        for ax in self.axis:
+            self.particles["velocity-"+ax][:] += 0.5*self.dt*self.particles["acceleration-"+ax][:]
+
+        self.iteration += 1; self.time += self.dt
+
+    def after_loop(self, simulation):
+        pass
 
 #class MovingMeshPakmor(StaticMeshMUSCLHancock):
 #    """Moving mesh integrator."""

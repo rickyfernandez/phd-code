@@ -38,7 +38,8 @@ from phd.simulation.simulation import \
 from phd.integrate.integrate import \
         IntegrateBase, \
         StaticMeshMUSCLHancock, \
-        MovingMeshMUSCLHancock
+        MovingMeshMUSCLHancock, \
+        Nbody
         #MovingMeshPakmor
 
 from phd.reconstruction.reconstruction import \
