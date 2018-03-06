@@ -859,7 +859,7 @@ cdef class GravityTree:
 
             # start at root or next node from previous walk
             index = interaction.start_node_index()
-            while(index != -1):
+            while(index != ROOT_SIBLING):
 
                 node = &self.nodes.array[index]
                 if(node.flags & LEAF):
@@ -937,7 +937,6 @@ cdef class GravityTree:
         self.buffer_size = 0
 
         # setup local particles for walk
-        self.export_interaction.initialize_particles(particles)
         while True:
 
             # reset buffers

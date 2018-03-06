@@ -2,7 +2,7 @@ import phd
 import numpy as np
 from libc.math cimport sqrt
 
-from .gravity_tree cimport Node, LEAF, ROOT
+from .gravity_tree cimport Node, LEAF, ROOT, TOP_TREE_LEAF
 from ..utils.carray cimport DoubleArray
 from ..utils.particle_tags import ParticleTAGS
 from ..load_balance.tree cimport TreeMemoryPool as Pool
@@ -95,7 +95,7 @@ cdef class GravityAcceleration(Interaction):
         self.particle_fields_registered = False
         self.smoothing_length = smoothing_length
         self.calculate_potential = calculate_potential
-        
+
         if phd._in_parallel:
             self.flag_pid = np.zeros(phd._size, dtype=np.int32)
 
@@ -185,7 +185,7 @@ cdef class GravityAcceleration(Interaction):
         self.num_particles = particles.get_carray_size()
 
         self.current = -1
-        self.particle_done = 1
+        self.particle_done = True
         self.current_node = ROOT
         self.local_particles = local_particles
 
@@ -221,10 +221,11 @@ cdef class GravityAcceleration(Interaction):
 
         # ignore self interaction
         # happens only on local processor
-        if(node.flags & LEAF):
-            if(self.local_particles):
-                if(node.group.data.pid == self.current):
-                    return
+        if(self.local_particles):
+            if(node.flags & LEAF):
+                if((node.flags & TOP_TREE_LEAF) != TOP_TREE_LEAF):
+                    if(node.group.data.pid == self.current):
+                        return
 
         r2 = 0.
         # distance between particle and center of mass
