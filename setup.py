@@ -22,11 +22,12 @@ subdirs = [
         "phd/riemann/",
         "phd/mesh/",
         "phd/reconstruction/",
+        "phd/source_term/",
         #"phd/integrate/",
 ]
 
 #cpp = ("mesh", "boundary", "reconstruction", "riemann", "integrate", "gravity")
-cpp = ("mesh", "domain", "reconstruction", "riemann", "gravity", "load_balance")
+cpp = ("mesh", "domain", "reconstruction", "riemann", "gravity", "load_balance", "source_term")
 
 extensions = []
 for subdir in subdirs:
