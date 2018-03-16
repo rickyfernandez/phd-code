@@ -500,6 +500,7 @@ cdef class Mesh:
         cdef DoubleArray m = particles.get_carray("mass")
         cdef DoubleArray e = particles.get_carray("energy")
         cdef IntArray tags = particles.get_carray("tag")
+        cdef LongArray ids = particles.get_carray("ids")
 
         # flux values
         cdef DoubleArray fm = riemann.fluxes.get_carray("mass")
@@ -541,3 +542,10 @@ cdef class Mesh:
                 # momentum
                 for k in range(dim):
                     mv[k][j] += dt*a*fmv[k][n]
+
+            if m.data[i] <= 0.0 or m.data[j] <=0.0:
+                print "mass", m.data[i], m.data[j], ids.data[i], ids.data[j], i, j
+                raise RuntimeError("Mass less than zero in flux update")
+            if e.data[i] <=0.0 or e.data[j] <=0.0:
+                print "energy", e.data[i], e.data[j], ids.data[i], ids.data[j], i, j
+                raise RuntimeError("Energy less than zero in flux update")
