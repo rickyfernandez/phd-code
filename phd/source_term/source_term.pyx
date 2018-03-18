@@ -20,3 +20,8 @@ cdef class MUSCLHancockSourceTerm:
         """Compute soure term."""
         msg = "MUSCLHancockSourceTerm::compute_source called!"
         raise NotImplementedError(msg)
+
+    cpdef compute_time_step(self, object integrator):
+        """Compute time step."""
+        msg = "MUSCLHancockSourceTerm::compute_time_step called!"
+        raise NotImplementedError(msg)
