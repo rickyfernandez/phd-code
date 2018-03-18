@@ -296,28 +296,22 @@ class TimeInterval(SimulationOutputterBase):
     """
     def __init__(self, time_interval, initial_time=0,
                  base_name="time_interval", counter=0, pad=4, **kwargs):
-        super(InitialOutput, self).__init__(base_name, counter, pad, **kwargs)
+        super(TimeInterval, self).__init__(base_name, counter, pad, **kwargs)
 
         self.time_interval = time_interval
-        self.time_last_output = initail_time
-        self._next_time_output = time_last_output + time_interval
-
-    def initialize(self):
-        if not self.read_write:
-            raise RuntimeError("ERROR: Data writer not defined!")
+        self.time_last_output = initial_time
+        self._next_time_output = self.time_last_output + time_interval
 
     def check_for_output(self, simulation):
         """Return True to signal the simulation has reached
         multiple of time_interval to ouput data.
         """
         integrator = simulation.integrator
-        return (integrator.iteration % self.iteration_interval == 0)
-
-        integrator = simulation.integrator
         if integrator.time >= self._next_time_output:
             self.time_last_output = integrator.time
             self._next_time_output = self.time_last_output + self.time_interval
             return True
+        return False
 
     def modify_timestep(self, simulation):
         """Return time step for next time interval output."""
