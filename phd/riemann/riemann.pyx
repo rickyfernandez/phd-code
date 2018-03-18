@@ -693,6 +693,7 @@ cdef class Exact(RiemannBase):
 
     """
     def __init__(self, double cfl=0.5, **kwargs):
+        self.boost = True
         self.cfl = 0.5
         self.fields_registered = False
 
@@ -788,40 +789,6 @@ cdef class Exact(RiemannBase):
                 # left/right velocity square
                 vl_sq += _vl[k]*_vl[k]
                 vr_sq += _vr[k]*_vr[k]
-
-#            # hack - delete later >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-#            if _dl < 0. or _dr < 0.:
-#
-#                print 'vacuum left/right'
-#
-#                self.vacuum(_dl, _vl, _pl, vnl, cl,\
-#                       _dr, _vr, _pr, vnr, cr,\
-#                       &_d,  v, &_p, &vn, &v_sq,\
-#                       gamma, n, dim)
-#
-#                fm.data[i] = _d*vn
-#                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#                for k in range(dim):
-#                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                continue
-#
-#            if (2.*cl/(gamma-1.) + 2.*cr/(gamma-1.)) <= (vnr - vnl):
-#
-#                print 'vacuum generation'
-#
-#                self.vacuum(_dl, _vl, _pl, vnl, cl,\
-#                       _dr, _vr, _pr, vnr, cr,\
-#                       &_d,  v, &_p, &vn, &v_sq,\
-#                       gamma, n, dim)
-#
-#                fm.data[i] = _d*vn
-#                fe.data[i] = (0.5*_d*v_sq + gamma*_p/(gamma - 1.0))*vn
-#                for k in range(dim):
-#                    fmv[k][i] = _d*v[k]*vn + _p*nx[k][i]
-#
-#                continue
-#            # hack - delete later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 
 
             # newton rhapson 
             p_star = self.get_pstar(_dl, vnl, _pl, cl,
@@ -1122,22 +1089,97 @@ cdef class Exact(RiemannBase):
         with gil:
             raise RuntimeError('No convergence in Exact Riemann Solver')
 
-    cdef inline void vacuum(self,
-            double dl, double vl[3], double pl, double vnl, double cl,
-            double dr, double vr[3], double pr, double vnr, double cr,
-            double *d, double  v[3], double *p, double *vn, double *vsq,
-            double gamma, double n[3], int dim) nogil:
-        """Calculate vacuum solution. This was taken from Toro Riemann
-        Solvers and Numerical Methods for Fluid Dynamics chapter 4.
-        """
-        cdef int i
-        cdef double c, u_tmp
+cdef inline void vacuum(
+        double dl, double vl[3], double pl, double vnl, double cl,
+        double dr, double vr[3], double pr, double vnr, double cr,
+        double *d, double  v[3], double *p, double *vn, double *vsq,
+        double gamma, double n[3], int dim) nogil:
+    """Calculate vacuum solution. This was taken from Toro Riemann
+    Solvers and Numerical Methods for Fluid Dynamics chapter 4.
+    """
+    cdef int i
+    cdef double c, u_tmp
 
-        cdef double sl = vnl + 2.*cl/(gamma-1.)
-        cdef double sr = vnr - 2.*cr/(gamma-1.)
+    cdef double sl = vnl + 2.*cl/(gamma-1.)
+    cdef double sr = vnr - 2.*cr/(gamma-1.)
 
-        if(dr < 0): # right vacuum Eq 4.77
-            if(0. <= vnl - cl): # left state 
+    # one of the states are zero
+
+    if(dr == 0): # right vacuum Eq 4.77
+        if(0. <= vnl - cl): # left state 
+            d[0] = dl
+            p[0] = pl
+
+            vn[0] = vsq[0] = 0.
+            for i in range(dim):
+                v[i]    = vl[i]
+                vn[0]  += v[i]*n[i]
+                vsq[0] += v[i]*v[i]
+
+        elif(0. < sl): # left fan
+            c    = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl)
+            d[0] = dl*pow(c/cl, 2./(gamma - 1.))
+            p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
+
+            vn[0] = vsq[0] = 0.
+            for i in range(dim):
+                v[i]    = vl[i] + (c - vnl)*n[i]
+                vn[0]  += v[i]*n[i]
+                vsq[0] += v[i]*v[i]
+
+        else: # right vacuum
+            d[0] = 0.
+            p[0] = 0.
+
+            vn[0] = vsq[0] = 0
+            for i in range(dim):
+                v[i] = 0.
+
+    elif(dl == 0): # left vacuum
+        if 0. <= sr: # left vacuum
+            d[0] = 0.
+            p[0] = 0.
+
+            vn[0] = vsq[0] = 0.
+            for i in range(dim):
+                v[i] = 0.
+
+        elif(0. < vnr + cr): # right fan
+            # sampled point is inside right fan
+            c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*vnr)
+            u_tmp = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr)
+
+            d[0] = dr*pow(c/cr, 2./(gamma - 1.))
+            p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
+
+            vn[0] = vsq[0] = 0
+            for i in range(dim):
+                v[i]    = vr[i] + (u_tmp - vnr)*n[i]
+                vn[0]  += v[i]*n[i]
+                vsq[0] += v[i]*v[i]
+
+        else: # right state
+            d[0] = dr
+            p[0] = pr
+
+            vn[0] = vsq[0] = 0
+            for i in range(dim):
+                v[i]    = vr[i]
+                vn[0]  += v[i]*n[i]
+                vsq[0] += v[i]*v[i]
+
+    else: # vacuum generation
+
+        if(sl < 0.) and (0. < sr): # vacuum
+            d[0] = 0.
+            p[0] = 0.
+
+            vn[0] = vsq[0] = 0
+            for i in range(dim):
+                v[i] = 0.
+
+        elif(0. <= sl):
+            if 0. <= vnl - cl: # left state 
                 d[0] = dl
                 p[0] = pl
 
@@ -1147,7 +1189,7 @@ cdef class Exact(RiemannBase):
                     vn[0]  += v[i]*n[i]
                     vsq[0] += v[i]*v[i]
 
-            elif(0. < sl): # left fan
+            else: # left fan
                 c    = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl)
                 d[0] = dl*pow(c/cl, 2./(gamma - 1.))
                 p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
@@ -1158,32 +1200,16 @@ cdef class Exact(RiemannBase):
                     vn[0]  += v[i]*n[i]
                     vsq[0] += v[i]*v[i]
 
-            else: # right vacuum
-                d[0] = 0.
-                p[0] = 0.
-
-                vn[0] = vsq[0] = 0
-                for i in range(dim):
-                    v[i] = 0.
-
-        elif(dl < 0): # left vacuum
-            if 0. <= sr: # left vacuum
-                d[0] = 0.
-                p[0] = 0.
-
-                vn[0] = vsq[0] = 0.
-                for i in range(dim):
-                    v[i] = 0.
-
-            elif(0. < vnr + cr): # right fan
-                # sampled point is inside right fan
+        else:
+            if(0. < vnr + cr): # right fan
+                # sample inside right fan
                 c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*vnr)
                 u_tmp = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr)
 
                 d[0] = dr*pow(c/cr, 2./(gamma - 1.))
                 p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
 
-                vn[0] = vsq[0] = 0
+                vn[0] = vsq[0] = 0.
                 for i in range(dim):
                     v[i]    = vr[i] + (u_tmp - vnr)*n[i]
                     vn[0]  += v[i]*n[i]
@@ -1193,65 +1219,143 @@ cdef class Exact(RiemannBase):
                 d[0] = dr
                 p[0] = pr
 
-                vn[0] = vsq[0] = 0
+                vn[0] = vsq[0] = 0.
                 for i in range(dim):
                     v[i]    = vr[i]
                     vn[0]  += v[i]*n[i]
                     vsq[0] += v[i]*v[i]
 
-        else: # vacuum generation
+cdef inline void vacuum_right(
+        double dl, double vl[3], double pl, double vnl, double cl,
+        double *d, double  v[3], double *p, double *vn, double *vsq,
+        double gamma, double wn, double n[3], int dim):
+    """Calculate vacuum solution. This was taken from Toro Riemann
+    Solvers and Numerical Methods for Fluid Dynamics chapter 4.
+    """
+    cdef int i
+    cdef double c, u
+    cdef double sl = vnl + 2.*cl/(gamma-1.)
 
-            if(sl < 0.) and (0. < sr): # vacuum
-                d[0] = 0.
-                p[0] = 0.
+    if(wn <= vnl - cl): # left state 
+        d[0] = dl
+        p[0] = pl
+        u = vnl
 
-                vn[0] = vsq[0] = 0
-                for i in range(dim):
-                    v[i] = 0.
+    elif(wn < sl): # left fan
+        c = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*(vnl - wn))
+        u = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl + wn)
+        d[0] = dl*pow(c/cl, 2./(gamma - 1.))
+        p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
 
-            elif(0. <= sl):
-                if 0. <= vnl - cl: # left state 
-                    d[0] = dl
-                    p[0] = pl
+    else: # right vacuum
+        d[0] = 0.
+        p[0] = 0.
+        u = sl
 
-                    vn[0] = vsq[0] = 0.
-                    for i in range(dim):
-                        v[i]    = vl[i]
-                        vn[0]  += v[i]*n[i]
-                        vsq[0] += v[i]*v[i]
+    vn[0] = vsq[0] = 0.
+    for i in range(dim):
+        v[i] = vl[i] + (u - vnl)*n[i]
+        vn[0] += v[i]*n[i]
+        vsq[0] += v[i]*v[i]
 
-                else: # left fan
-                    c    = (2./(gamma + 1.))*(cl + .5*(gamma - 1.)*vnl)
-                    d[0] = dl*pow(c/cl, 2./(gamma - 1.))
-                    p[0] = pl*pow(c/cl, 2.*gamma/(gamma - 1.))
+cdef inline void vacuum_left(
+        double dr, double vr[3], double pr, double vnr, double cr,
+        double *d, double  v[3], double *p, double *vn, double *vsq,
+        double gamma, double wn, double n[3], int dim):
+    """Calculate vacuum solution. This was taken from Toro Riemann
+    Solvers and Numerical Methods for Fluid Dynamics chapter 4.
+    """
+    cdef int i
+    cdef double c, u
+    cdef double sr = vnr - 2.*cr/(gamma-1.)
 
-                    vn[0] = vsq[0] = 0.
-                    for i in range(dim):
-                        v[i]    = vl[i] + (c - vnl)*n[i]
-                        vn[0]  += v[i]*n[i]
-                        vsq[0] += v[i]*v[i]
+    if wn <= sr: # left vacuum
+        d[0] = 0.
+        p[0] = 0.
+        u = sr
 
-            else:
-                if(0. < vnr + cr): # right fan
-                    # sample inside right fan
-                    c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*vnr)
-                    u_tmp = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr)
+    elif(wn < vnr + cr): # right fan
+        # sampled point is inside right fan
+        c = (2./(gamma + 1.))*(cr - .5*(gamma - 1.)*(vnr - wn))
+        u = (2./(gamma + 1.))*(-cr + .5*(gamma-1.)*vnr + wn)
+        d[0] = dr*pow(c/cr, 2./(gamma - 1.))
+        p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
 
-                    d[0] = dr*pow(c/cr, 2./(gamma - 1.))
-                    p[0] = pr*pow(c/cr, 2.*gamma/(gamma - 1.))
+    else: # right state
+        d[0] = dr
+        p[0] = pr
+        u = vnr
 
-                    vn[0] = vsq[0] = 0.
-                    for i in range(dim):
-                        v[i]    = vr[i] + (u_tmp - vnr)*n[i]
-                        vn[0]  += v[i]*n[i]
-                        vsq[0] += v[i]*v[i]
+    vn[0] = vsq[0] = 0.
+    for i in range(dim):
+        v[i] = vr[i] + (u - vnr)*n[i]
+        vn[0] += v[i]*n[i]
+        vsq[0] += v[i]*v[i]
 
-                else: # right state
-                    d[0] = dr
-                    p[0] = pr
+cdef inline void vacuum_generation(
+        double dl, double vl[3], double pl, double vnl, double cl,
+        double dr, double vr[3], double pr, double vnr, double cr,
+        double *d, double  v[3], double *p, double *vn, double *vsq,
+        double gamma, double wn, double n[3], int dim):
+    """Calculate vacuum solution. This was taken from Toro Riemann
+    Solvers and Numerical Methods for Fluid Dynamics chapter 4.
+    """
+    cdef int i
+    cdef double sl = vnl + 2.*cl/(gamma-1.)
+    cdef double sr = vnr - 2.*cr/(gamma-1.)
 
-                    vn[0] = vsq[0] = 0.
-                    for i in range(dim):
-                        v[i]    = vr[i]
-                        vn[0]  += v[i]*n[i]
-                        vsq[0] += v[i]*v[i]
+    # one of the states are zero
+    if(wn < sl):
+        vacuum_right(dl, vl, pl, vnl, cl,\
+                d, v, p, vn, vsq,\
+                gamma, wn, n, dim)
+        print 'right'
+
+    elif(wn > sr):
+        print 'left'
+        vacuum_left(dr, vr, pr, vnr, cr,\
+                d, v, p, vn, vsq,\
+                gamma, wn, n, dim)
+
+    else:
+        print 'zero'
+        d[0] = 0.
+        p[0] = 0.
+
+        vn[0] = vsq[0] = 0
+        for i in range(dim):
+            v[i] = 0.
+
+#            # hack - delete later >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+#            if _dl == 0. or _dr == 0.:
+#
+#                print 'vacuum left/right'
+#
+#                vacuum(_dl, _vl, _pl, Vnl, cl,\
+#                       _dr, _vr, _pr, Vnr, cr,\
+#                       &_d,  v, &_p, &vn, &v_sq,\
+#                       gamma, n, dim)
+#
+#                fm.data[i] = _d*(vn - wn)
+#                fe.data[i] = (0.5*_d*v_sq + _p/(gamma - 1.0))*(vn - wn) + _p*vn
+#                for k in range(dim):
+#                    fmv[k][i] = _d*v[k]*(vn-wn) + _p*nx[k][i]
+#
+#                continue
+#
+#            if (2.*cl/(gamma-1.) + 2.*cr/(gamma-1.)) <= (Vnr - Vnl):
+#
+#                print 'vacuum generation'
+#
+#                vacuum_generation(_dl, _vl, _pl, Vnl, cl,\
+#                       _dr, _vr, _pr, Vnr, cr,\
+#                       &_d,  v, &_p, &vn, &v_sq,\
+#                       gamma, wn, n, dim)
+#
+#                fm.data[i] = _d*vn
+#                fe.data[i] = (0.5*_d*v_sq + _p/(gamma - 1.0))*(vn - wn) + _p*vn
+#                for k in range(dim):
+#                    fmv[k][i] = _d*v[k]*(vn-wn) + _p*nx[k][i]
+#
+#                continue
+#            # hack - delete later <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 

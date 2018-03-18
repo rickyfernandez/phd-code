@@ -33,6 +33,7 @@ cdef class HLLC(HLL):
     pass
 
 cdef class Exact(RiemannBase):
+    cdef public bint boost
 
     cdef inline double p_guess(self, double dl, double ul, double pl, double cl,
             double dr, double ur, double pr, double cr, double gamma) nogil
@@ -46,8 +47,24 @@ cdef class Exact(RiemannBase):
     cdef inline double get_pstar(self, double dl, double ul, double pl, double cl,
             double dr, double ur, double pr, double cr, double gamma) nogil
 
-    cdef inline void vacuum(self,
-            double dl, double vl[3], double pl, double vnl, double cl,
-            double dr, double vr[3], double pr, double vnr, double cr,
-            double *d, double  v[3], double *p, double *vn, double *vsq,
-            double gamma, double n[3], int dim) nogil
+cdef inline void vacuum_right(
+        double dl, double vl[3], double pl, double vnl, double cl,
+        double *d, double  v[3], double *p, double *vn, double *vsq,
+        double gamma, double wn, double n[3], int dim)
+
+cdef inline void vacuum_left(
+        double dr, double vr[3], double pr, double vnr, double cr,
+        double *d, double  v[3], double *p, double *vn, double *vsq,
+        double gamma, double wn, double n[3], int dim)
+
+cdef inline void vacuum_generation(
+        double dl, double vl[3], double pl, double vnl, double cl,
+        double dr, double vr[3], double pr, double vnr, double cr,
+        double *d, double  v[3], double *p, double *vn, double *vsq,
+        double gamma, double wn, double n[3], int dim)
+
+#cdef inline void vacuum(
+#        double dl, double vl[3], double pl, double vnl, double cl,
+#        double dr, double vr[3], double pr, double vnr, double cr,
+#        double *d, double  v[3], double *p, double *vn, double *vsq,
+#        double gamma, double n[3], int dim) nogil
