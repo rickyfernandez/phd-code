@@ -50,11 +50,12 @@ from phd.reconstruction.reconstruction import \
 from phd.riemann.riemann import \
         RiemannBase, \
         HLL, \
-        HLLC
-        #Exact
+        HLLC, \
+        Exact
 
 from phd.gravity.gravity_force import \
-        ConstantGravity
+        ConstantGravity, \
+        SelfGravity
 
 # input and output
 from phd.io.simulation_time_manager import \
@@ -71,6 +72,7 @@ from phd.io.simulation_finish import \
 
 from phd.io.simulation_output import \
         IterationInterval, \
+        TimeInterval, \
         InitialOutput, \
         FinalOutput
 
