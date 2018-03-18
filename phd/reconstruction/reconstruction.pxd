@@ -44,11 +44,18 @@ cdef class PieceWiseConstant(ReconstructionBase):
 cdef class PieceWiseLinear(ReconstructionBase):
 
     cdef public int limiter
+    cdef public bint gizmo_limiter
 
     cdef public CarrayContainer grad
 
     cdef dict reconstruct_grads
     cdef dict reconstruct_grad_groups
+
+    cdef np.float64_t* state_l
+    cdef np.float64_t* state_r
+
+    cdef np.float64_t** priml_pointer
+    cdef np.float64_t** primr_pointer
 
     cdef np.float64_t** prim_pointer
     cdef np.float64_t** grad_pointer

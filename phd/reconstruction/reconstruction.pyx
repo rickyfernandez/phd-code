@@ -3,7 +3,7 @@ import numpy as np
 
 cimport numpy as np
 cimport libc.stdlib as stdlib
-from libc.math cimport sqrt, fmax, fmin
+from libc.math cimport sqrt, fmax, fmin, fabs
 
 from ..utils.particle_tags import ParticleTAGS
 from ..utils.carray cimport DoubleArray, IntArray, LongArray
@@ -370,7 +370,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
     right_states : CarrayContainer
         Left states primitive values for riemann problem.
 
-    limiter : int
+    limiter : str
         Value of 0 is AREPOs and 1 is TESS implementation of
         limiting the gradients.
 
@@ -400,14 +400,28 @@ cdef class PieceWiseLinear(ReconstructionBase):
         of subsetting of gradients.
 
     """
-    def __init__(self, int limiter = 0, **kwargs):
+    def __init__(self, str limiter = "arepo", bint gizmo_limiter=True, **kwargs):
         super(PieceWiseLinear, self).__init__(**kwargs)
-        self.limiter = limiter
+
+        if limiter == "arepo":
+            self.limiter = 0
+        elif limiter == "tess":
+            self.limiter = 1
+        else:
+            raise RuntimeError("ERROR: Unrecognized limiter")
+
+        self.gizmo_limiter = gizmo_limiter
 
     def __dealloc__(self):
         """Release pointers"""
 
         stdlib.free(self.prim_pointer)
+
+        stdlib.free(self.priml_pointer)
+        stdlib.free(self.primr_pointer)
+        stdlib.free(self.state_l)
+        stdlib.free(self.state_r)
+
         stdlib.free(self.grad_pointer)
 
         if self.has_passive_scalars:
@@ -529,6 +543,12 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
         # primitive values and gradient
         self.prim_pointer = <np.float64_t**> stdlib.malloc(num_fields*sizeof(void*))
+
+        self.state_l = <np.float64_t*> stdlib.malloc(num_fields*sizeof(void*))
+        self.state_r = <np.float64_t*> stdlib.malloc(num_fields*sizeof(void*))
+        self.priml_pointer = <np.float64_t**> stdlib.malloc(num_fields*sizeof(void*))
+        self.primr_pointer = <np.float64_t**> stdlib.malloc(num_fields*sizeof(void*))
+
         self.grad_pointer = <np.float64_t**> stdlib.malloc((num_fields*dim)*sizeof(void*))
 
         # min/max of field value of particle
@@ -741,21 +761,24 @@ cdef class PieceWiseLinear(ReconstructionBase):
         dt : float
             Time to extrapolate reconstructed fields to.
         """
-        cdef double sepi, sepj
-        cdef int i, j, k, m, n, dim, num_passive
+        cdef int i, j, k, m, n, dim, num_fields
 
-        cdef np.float64_t vi[3], vj[3]
+        # gizmo limiter parameters
+        cdef double psi1 = 0.5, psi2 = 0.25
+        cdef double delta1, delta2
+        cdef double phi_min, phi_max
+        cdef double phibar_l, phibar_r
+        cdef double phi_minus, phi_plus
+
+        cdef double sepi, sepj
+        cdef double sepi_mag, sepj_mag, diff_mag
+
         cdef np.float64_t *vl[3], *vr[3]
         cdef np.float64_t *fij[3], *wx[3]
         cdef np.float64_t *x[3], *v[3], *dcx[3]
-        cdef np.float64_t *dd[3], *dv[9], *dp[3]
 
         cdef LongArray pair_i = mesh.faces.get_carray("pair-i")
         cdef LongArray pair_j = mesh.faces.get_carray("pair-j")
-
-        # particle primitive variables
-        cdef DoubleArray d = particles.get_carray("density")
-        cdef DoubleArray p = particles.get_carray("pressure")
 
         # left state primitive variables
         cdef DoubleArray dl = self.left_states.get_carray("density")
@@ -765,19 +788,35 @@ cdef class PieceWiseLinear(ReconstructionBase):
         cdef DoubleArray dr = self.right_states.get_carray("density")
         cdef DoubleArray pr = self.right_states.get_carray("pressure")
 
+        cdef np.float64_t** prim = self.prim_pointer
+        cdef np.float64_t** prim_l = self.priml_pointer
+        cdef np.float64_t** prim_r = self.primr_pointer
+
+        cdef np.float64_t* state_l = self.state_l
+        cdef np.float64_t* state_r = self.state_r
+
+        cdef np.float64_t** grad = self.grad_pointer
+
         phdLogger.info("PieceWiseLinear: Starting spatial reconstruction")
+
         dim = len(particles.carray_named_groups["position"])
+        num_fields = len(particles.carray_named_groups["primitive"])
 
         # resize states to hold values at each face
         self.left_states.resize(mesh.faces.get_carray_size())
         self.right_states.resize(mesh.faces.get_carray_size())
 
-        # extract pointers
+        # pointers left/right primitive values
+        self.left_states.pointer_groups(prim_l, self.left_states.carray_named_groups["primitive"])
+        self.right_states.pointer_groups(prim_r, self.right_states.carray_named_groups["primitive"])
+
+        # pointers to particle primitive, position, com, and velocity
+        particles.pointer_groups(prim, particles.carray_named_groups["primitive"])
         particles.pointer_groups(x, particles.carray_named_groups["position"])
         particles.pointer_groups(dcx, particles.carray_named_groups["dcom"])
         particles.pointer_groups(v, particles.carray_named_groups["velocity"])
 
-        # pointers to velocity states
+        # pointers to left/right velocities at face
         self.left_states.pointer_groups(vl, self.left_states.carray_named_groups["velocity"])
         self.right_states.pointer_groups(vr, self.right_states.carray_named_groups["velocity"])
 
@@ -785,22 +824,8 @@ cdef class PieceWiseLinear(ReconstructionBase):
         mesh.faces.pointer_groups(fij, mesh.faces.carray_named_groups["com"])
         mesh.faces.pointer_groups(wx, mesh.faces.carray_named_groups["velocity"])
 
-        # pointers to gradients
-        self.grad.pointer_groups(dd, self.grad.carray_named_groups["density"])
-        self.grad.pointer_groups(dv, self.grad.carray_named_groups["velocity"])
-        self.grad.pointer_groups(dp, self.grad.carray_named_groups["pressure"])
-
-        if self.has_passive_scalars:
-
-            num_passive = self.num_passive
-            particles.pointer_groups(self.passive, particles.carray_named_groups["passive-scalars"])
-
-            # pointer to passive left/right states
-            self.left_states.pointer_groups(self.passive_l, self.carray_named_groups["passive-scalars"])
-            self.right_states.pointer_groups(self.passive_r, self.carray_named_groups["passive-scalars"])
-
-            # pointer to gradients of passive scalars
-            self.grad.pointer_groups(self.dpassive, self.reconstruct_grad_groups["passive-scalars"])
+        # pointers to primitive gradients
+        self.grad.pointer_groups(grad, self.grad.carray_named_groups["primitive"])
 
         # create left/right states for each face
         for m in range(mesh.faces.get_carray_size()):
@@ -809,62 +834,90 @@ cdef class PieceWiseLinear(ReconstructionBase):
             i = pair_i.data[m]
             j = pair_j.data[m]
 
-            # density
-            dl.data[m] = d.data[i]
-            dr.data[m] = d.data[j]
+            # copy constant states
+            for n in range(num_fields):
+                prim_l[n][m] = prim[n][i]
+                prim_r[n][m] = prim[n][j]
 
-            if self.has_passive_scalars:
-                for k in range(num_passive):
-                    self.passive_l[k][m] = self.passive[k][i]
-                    self.passive_r[k][m] = self.passive[k][j]
-
-            # pressure
-            pl.data[m] = p.data[i]
-            pr.data[m] = p.data[j]
-
-            # velocity
+            # update because of boost
             for k in range(dim):
-
-                # copy velocities
                 if boost:
-                    vi[k] = v[k][i] - wx[k][m]
-                    vj[k] = v[k][j] - wx[k][m]
-                else:
-                    vi[k] = v[k][i]
-                    vj[k] = v[k][j]
+                    vl[k][m] = v[k][i] - wx[k][m]
+                    vr[k][m] = v[k][j] - wx[k][m]
 
-                vl[k][m] = vi[k]
-                vr[k][m] = vj[k]
+            # copy constant states
+            for n in range(num_fields):
+                state_l[n] = prim_l[n][m]
+                state_r[n] = prim_r[n][m]
+
+            diff_mag = 0.0
+            sepi_mag = sepj_mag = 0.0 
 
             # add spatial derivatives Eq. 27
-            for k in range(dim): # dot products
+            for k in range(dim):
 
                 # distance from particle to com of face
                 sepi = fij[k][m] - (x[k][i] + dcx[k][i])
                 sepj = fij[k][m] - (x[k][j] + dcx[k][j])
 
-                # density
-                dl.data[m] += dd[k][i]*sepi
-                dr.data[m] += dd[k][j]*sepj
+                sepi_mag += sepi*sepi
+                sepj_mag += sepj*sepj
+                diff_mag += (x[k][j] - x[k][i])**2
 
-                if self.has_passive_scalars:
-                    for n in range(num_passive):
-                        self.passive_l[n][m] += self.dpassive[n*dim+k][i]*sepi
-                        self.passive_r[n][m] += self.dpassive[n*dim+k][j]*sepj
+                # extraploate to face
+                for n in range(num_fields):
+                    prim_l[n][m] += grad[n*dim+k][i]*sepi
+                    prim_r[n][m] += grad[n*dim+k][j]*sepj
 
-                # pressure
-                pl.data[m] += dp[k][i]*sepi
-                pr.data[m] += dp[k][j]*sepj
+            sepi_mag = sqrt(sepi_mag)
+            sepj_mag = sqrt(sepj_mag)
+            diff_mag = sqrt(diff_mag)
 
-                # velocity
-                for n in range(dim):
-                    vl[n][m] += dv[n*dim+k][i]*sepi
-                    vr[n][m] += dv[n*dim+k][j]*sepj
+            # gizmo limiter: appendix B4
+            if self.gizmo_limiter:
 
-            if dl.data[m] < 0.0 or dr.data[m] < 0.0:
-                raise RuntimeError("Density less than zero in spatial reconstruction")
-            if pl.data[m] < 0.0 or pr.data[m] < 0.0:
-                raise RuntimeError("Pressure less than zero in spartial reconstruction")
+                # limit each field pairwise
+                for n in range(num_fields):
+
+                    delta1 = psi1*fabs(state_l[n] - state_r[n])
+                    delta2 = psi2*fabs(state_l[n] - state_r[n])
+
+                    phi_min = fmin(state_l[n], state_r[n])
+                    phi_max = fmax(state_l[n], state_r[n])
+
+                    phibar_l = state_l[n] + sepi_mag/diff_mag*(state_r[n] - state_l[n])
+                    phibar_r = state_r[n] + sepj_mag/diff_mag*(state_l[n] - state_r[n])
+
+                    if ((phi_max + delta1)*phi_max >= 0.):
+                        phi_plus = phi_max + delta1
+                    else:
+                        phi_plus = phi_max/(1 + delta1/fabs(phi_max))
+
+                    if ((phi_min - delta1)*phi_min >= 0.):
+                        phi_minus = phi_min - delta1
+                    else:
+                        phi_minus = phi_min/(1 + delta1/fabs(phi_min))
+
+                    if prim[n][i] < prim[n][j]:
+                        prim_l[n][m] = fmax(phi_minus, fmin(phibar_l+delta2, prim_l[n][m]))
+                        prim_r[n][m] = fmin(phi_plus,  fmax(phibar_r-delta2, prim_r[n][m]))
+
+                    elif prim[n][i] > prim[n][j]:
+                        prim_l[n][m] = fmin(phi_plus,  fmax(phibar_l-delta2, prim_l[n][m]))
+                        prim_r[n][m] = fmax(phi_minus, fmin(phibar_r+delta2, prim_r[n][m]))
+
+                    else:
+                        prim_l[n][m] = state_l[n]
+                        prim_r[n][m] = state_r[n]
+
+                # if negative reduce to constant reconstruction
+                if dl.data[m] < 0.0 or pl.data[m] < 0.0:
+                    for n in range(num_fields):
+                        prim_l[n][m] = state_l[n]
+
+                if dr.data[m] < 0.0 or pr.data[m] < 0.0:
+                    for n in range(num_fields):
+                        prim_r[n][m] = state_r[n]
 
     cpdef add_temporal(self, CarrayContainer particles, Mesh mesh,
                          double gamma, DomainManager domain_manager,
@@ -890,7 +943,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         dt : float
             Time to extrapolate reconstructed fields to.
         """
-        cdef int i, j, k, m, n, dim, num_passive
+        cdef int i, j, k, m, n, dim, num_passive, num_fields
 
         cdef np.float64_t vi[3], vj[3]
         cdef np.float64_t *v[3], *wx[3]
@@ -912,15 +965,23 @@ cdef class PieceWiseLinear(ReconstructionBase):
         cdef DoubleArray dr = self.right_states.get_carray("density")
         cdef DoubleArray pr = self.right_states.get_carray("pressure")
 
-        phdLogger.info("PieceWiseLinear: Starting temporal reconstruction")
-        dim = len(particles.carray_named_groups["position"])
+        cdef np.float64_t* state_l = self.state_l
+        cdef np.float64_t* state_r = self.state_r
 
-        # resize states to hold values at each face
-        self.left_states.resize(mesh.faces.get_carray_size())
-        self.right_states.resize(mesh.faces.get_carray_size())
+        cdef np.float64_t** prim_l = self.priml_pointer
+        cdef np.float64_t** prim_r = self.primr_pointer
+
+        phdLogger.info("PieceWiseLinear: Starting temporal reconstruction")
+
+        dim = len(particles.carray_named_groups["position"])
+        num_fields = len(particles.carray_named_groups["primitive"])
 
         # extract pointers
         particles.pointer_groups(v, particles.carray_named_groups["velocity"])
+
+        # pointers left/right primitive values
+        self.left_states.pointer_groups(prim_l, self.left_states.carray_named_groups["primitive"])
+        self.right_states.pointer_groups(prim_r, self.right_states.carray_named_groups["primitive"])
 
         # pointers to velocity states
         self.left_states.pointer_groups(vl, self.left_states.carray_named_groups["velocity"])
@@ -952,6 +1013,11 @@ cdef class PieceWiseLinear(ReconstructionBase):
             # particles that make up the face
             i = pair_i.data[m]
             j = pair_j.data[m]
+
+            # copy states before time derivatives
+            for n in range(num_fields):
+                state_l[n] = prim_l[n][m]
+                state_r[n] = prim_r[n][m]
 
             # velocity
             for k in range(dim):
@@ -995,10 +1061,14 @@ cdef class PieceWiseLinear(ReconstructionBase):
                     vl[n][m] -= dt*vi[k]*dv[n*dim+k][i]
                     vr[n][m] -= dt*vj[k]*dv[n*dim+k][j]
 
-            if dl.data[m] < 0.0 or dr.data[m] < 0.0:
-                raise RuntimeError("Density less than zero in spatial reconstruction")
-            if pl.data[m] < 0.0 or pr.data[m] < 0.0:
-                raise RuntimeError("Pressure less than zero in spartial reconstruction")
+            # if negative remove time derivative 
+            if dl.data[m] < 0.0 or pl.data[m] < 0.0:
+                for n in range(num_fields):
+                    prim_l[n][m] = state_l[n]
+
+            if dr.data[m] < 0.0 or pr.data[m] < 0.0:
+                for n in range(num_fields):
+                    prim_r[n][m] = state_r[n]
 
     cpdef compute_states(self, CarrayContainer particles, Mesh mesh,
                          double gamma, DomainManager domain_manager,
