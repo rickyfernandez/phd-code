@@ -225,6 +225,9 @@ class IntegrateBase(object):
         # compute mass, momentum ...
         self.equation_state.conservative_from_primitive(self.particles)
 
+        # compute source terms
+        self.compute_source("compute")
+
     def compute_time_step(self):
         """Compute time step for current state of simulation.
 
@@ -234,6 +237,13 @@ class IntegrateBase(object):
         # calculate new time step for integrator
         dt = self.riemann.compute_time_step(
                 self.particles, self.equation_state)
+
+        phdLogger.info("Hydro dt: %f" %dt)
+
+        # modify timestep from source terms
+        if self.source_terms:
+            for source in self.source_terms.itervalues():
+                dt = min(source.compute_time_step(self), dt)
 
         if phd._in_parallel:
 
