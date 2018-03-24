@@ -274,7 +274,7 @@ cdef class SelfGravity(MUSCLHancockSourceTerm):
             a_mag += a[k][0]**2
         a_mag = sqrt(a_mag)
 
-        dt = 2*1.5*eta*r/a_mag
+        dt = sqrt(2*1.5*eta*r/a_mag)
         for i in range(particles.get_carray_size()):
             if(tags.data[i] == REAL):
 
