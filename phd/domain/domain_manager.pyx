@@ -912,6 +912,26 @@ cdef class DomainManager:
         sort(self.export_ghost_buffer.begin(),
                 self.export_ghost_buffer.end(), ghostid_cmp)
 
+        # reset import/export counts
+        for i in range(phd._size):
+            self.send_cnts[i] = 0
+            self.recv_cnts[i] = 0
+
+        # grab indices used to create ghost particles
+        for i in range(self.export_ghost_buffer.size()):
+            # bin processor for export
+            self.send_cnts[self.export_ghost_buffer[i].proc] += 1
+
+        # total particles going to each processor
+        phd._comm.Alltoall([self.send_cnts, phd.MPI.INT],
+                [self.recv_cnts, phd.MPI.INT])
+
+        # create displacement arrays
+        self.send_disp[0] = self.recv_disp[0] = 0
+        for i in range(1, phd._size):
+            self.send_disp[i] = self.send_cnts[i-1] + self.send_disp[i-1]
+            self.recv_disp[i] = self.recv_cnts[i-1] + self.recv_disp[i-1]
+
         procs = particles.get_carray("process")
         keys = particles.get_carray("key")
 
