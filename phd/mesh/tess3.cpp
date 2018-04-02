@@ -237,29 +237,34 @@ int Tess3d::update_initial_tess(
         particles.push_back(Point(x[0][i], x[1][i], x[2][i]));
 
     // sort particles
-//    std::vector<std::ptrdiff_t> indices;
-//    indices.reserve(particles.size());
-//    std::copy(
-//            boost::counting_iterator<std::ptrdiff_t>(0),
-//            boost::counting_iterator<std::ptrdiff_t>(particles.size()),
-//            std::back_inserter(indices));
-//
-//    // sort particles by hilbert keys
-//    CGAL::spatial_sort(indices.begin(), indices.end(), Search_traits_3(&(particles[0])),
-//            CGAL::Hilbert_sort_median_policy());
-//
+    std::vector<std::ptrdiff_t> indices;
+    indices.reserve(particles.size());
+    std::copy(
+            boost::counting_iterator<std::ptrdiff_t>(0),
+            boost::counting_iterator<std::ptrdiff_t>(particles.size()),
+            std::back_inserter(indices));
+
+    // sort particles by hilbert keys
+    CGAL::spatial_sort(indices.begin(), indices.end(), Search_traits_3(&(particles[0])),
+            CGAL::Hilbert_sort_median_policy());
+
+    int new_num_particles = particles.size();
+    int old_num_particles = vt_list.size();
+
+    vt_list.resize(old_num_particles + new_num_particles);
+
+    Vertex_handle vt;
+    for (std::vector<std::ptrdiff_t>::iterator it=indices.begin(); it!=indices.end(); it++) {
+        vt = tess.insert(particles[*it]);
+        vt->info() = *it + begin_particles;
+        vt_list[*it + begin_particles] = vt;
+    }
 //    Vertex_handle vt;
-//    for (std::vector<std::ptrdiff_t>::iterator it=indices.begin(); it!=indices.end(); it++) {
-//        vt = tess.insert(particles[*it]);
-//        vt->info() = *it + begin_particles;
+//    for (int i=0, j=begin_particles; i<particles.size(); i++, j++) {
+//        vt = tess.insert(particles[i]);
+//        vt->info() = j;
 //        vt_list.push_back(vt);
 //    }
-    Vertex_handle vt;
-    for (int i=0, j=begin_particles; i<particles.size(); i++, j++) {
-        vt = tess.insert(particles[i]);
-        vt->info() = j;
-        vt_list.push_back(vt);
-    }
     return 0;
 }
 
