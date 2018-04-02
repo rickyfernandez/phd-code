@@ -4,10 +4,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
 
-# single-core solution
-file_name="sod_output/final_output/final_output0000/final_output0000.hdf5"
+# stitch back multi-core solution
+num_proc = 4
 reader = phd.Hdf5()
-sod = reader.read(file_name)
+base_name = "sod_mpi_output/final_output/final_output0000"
+for i in range(num_proc):
+
+    cpu = "_cpu" + str(i).zfill(4)
+    file_name = base_name + cpu + "/final_output0000" + cpu + ".hdf5"
+
+    if i == 0:
+        sod = io.read(file_name)
+    else:
+        sod.append_container(io.read(file_name))
 
 # exact riemann solution
 f = h5py.File("riemann_sol.hdf5", "r")
@@ -23,7 +32,7 @@ plt.suptitle("Sod Simulation")
 patch, colors = phd.vor_collection(sod, "density")
 sod.remove_tagged_particles(phd.ParticleTAGS.Ghost)
 
-p = PatchCollection(patch, edgecolor="black", linewidth=0.3, alpha=0.8)
+p = PatchCollection(patch, edgecolor="black", linewidth=0.3, alpha=0.4)
 p.set_array(np.array(colors))
 p.set_clim([0, 1.0])
 ax = axes[0,0]
@@ -59,5 +68,5 @@ ax.set_ylim(-0.1,1.1)
 ax.set_xlabel("X")
 ax.set_ylabel("Pressure")
 
-plt.savefig("sod_2d.png")
+plt.savefig("sod_2d_mpi.png")
 plt.show()
