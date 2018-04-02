@@ -95,6 +95,8 @@ from phd.utils.particle_creator import \
 from phd.utils.logger import \
         phdLogger
 
+from phd.utils.parallelize import \
+        parallelize
 
 try:
     import mpi4py.MPI as MPI
