@@ -1,12 +1,11 @@
 import phd
 import numpy as np
 
-def parallelize(create_particles, **kwargs):
+def distribute_initial_particles(create_particles, **kwargs):
     if not phd._in_parallel:
         return create_particles(**kwargs)
 
-    if phd._in_parallel:
-        print kwargs
+    else:
 
         if "dim" not in kwargs:
             raise KeyError("Dim not specified")

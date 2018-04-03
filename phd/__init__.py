@@ -96,7 +96,7 @@ from phd.utils.logger import \
         phdLogger
 
 from phd.utils.parallelize import \
-        parallelize
+        distribute_initial_particles
 
 try:
     import mpi4py.MPI as MPI
