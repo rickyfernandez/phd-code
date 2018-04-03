@@ -2,9 +2,9 @@ import phd
 import numpy as np
 
 # to run:
-# $ mpirun -n 4 python sod_3d_cartesian.py
+# $ mpirun -n 4 python sod_3d_random.py
 # for parallel or
-# $ python sod_3d_cartesian.py
+# $ python sod_3d_random.py
 # for single core
 
 def create_particles(dim=3, n=40000, diaphragm=0.5, gamma=1.4):
@@ -32,7 +32,9 @@ def create_particles(dim=3, n=40000, diaphragm=0.5, gamma=1.4):
 
     return particles
 
-particles = phd.distribute_initial_particles(create_particles, dim=3)
+dim = 3; gamma = 1.4
+particles = phd.distribute_initial_particles(
+        create_particles, dim=dim, gamma=gamma)
 
 # computation related to boundaries
 domain_manager = phd.DomainManager(
@@ -50,7 +52,7 @@ integrator.set_particles(particles)
 integrator.set_domain_manager(domain_manager)
 integrator.set_boundary_condition(phd.Reflective())
 integrator.set_reconstruction(phd.PieceWiseLinear())
-integrator.set_equation_state(phd.IdealGas(gamma=1.4))
+integrator.set_equation_state(phd.IdealGas(gamma=gamma))
 
 sim_name = "sod"
 if phd._in_parallel:
