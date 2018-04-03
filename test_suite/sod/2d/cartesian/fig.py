@@ -24,7 +24,7 @@ vel_ex = f["/velocity"][:]
 f.close()
 
 fig, axes = plt.subplots(3, 1, sharex="col", figsize=(6,12))
-fig.subplots_adjust(hspace=0, left=0.13, top=0.98, bottom=0.06)
+fig.subplots_adjust(hspace=0, left=0.13, top=0.96, bottom=0.06)
 
 ax = axes[0]
 ax.plot(sod["position-x"], sod["density"], ".", color="steelblue")
@@ -35,6 +35,7 @@ ax.set_yticks([0.0, 0.5, 1.0])
 ax.set_yticklabels([0.0, 0.5, 1.0])
 ax.set_ylabel(r"$\rho$", fontsize=18)
 ax.tick_params(direction="in", right=True, top=True)
+ax.set_title("2D", fontsize=18)
 
 ax = axes[1]
 ax.plot(sod["position-x"], sod["velocity-x"], ".", color="steelblue")

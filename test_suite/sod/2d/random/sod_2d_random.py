@@ -2,9 +2,9 @@ import phd
 import numpy as np
 
 # to run:
-# $ mpirun -n 4 python sedov_2d_cartesian.py
+# $ mpirun -n 4 python sod_2d_random.py
 # for parallel or
-# $ python sedov_2d_cartesian.py
+# $ python sod_2d_random.py
 # for single core
 
 def create_particles(dim=2, n=10000, diaphragm=0.5, gamma=1.4):
@@ -36,10 +36,10 @@ particles = phd.distribute_initial_particles(
 # computation related to boundaries
 domain_manager = phd.DomainManager(
         xmin=[0., 0.], xmax=[1., 1.],
-        initial_radius=0.1, search_radius_factor=2)
+        initial_radius=0.1)
 
 # create voronoi mesh
-mesh = phd.Mesh(relax_iterations=8, max_iterations=10)
+mesh = phd.Mesh(relax_iterations=10)
 
 # computation
 integrator = phd.MovingMeshMUSCLHancock()
