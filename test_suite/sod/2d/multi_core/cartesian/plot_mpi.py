@@ -6,8 +6,8 @@ from matplotlib.collections import PatchCollection
 
 # stitch back multi-core solution
 num_proc = 4
-reader = phd.Hdf5()
-base_name = "sod_mpi_output/final_output/final_output0000"
+io = phd.Hdf5()
+base_name = "mpi_sod_output/final_output/final_output0000"
 for i in range(num_proc):
 
     cpu = "_cpu" + str(i).zfill(4)
@@ -17,6 +17,8 @@ for i in range(num_proc):
         sod = io.read(file_name)
     else:
         sod.append_container(io.read(file_name))
+tag = np.where(sod["type"] == phd.ParticleTAGS.Interior)[0]
+sod.remove_items(tag)
 
 # exact riemann solution
 f = h5py.File("riemann_sol.hdf5", "r")
@@ -32,7 +34,7 @@ plt.suptitle("Sod Simulation")
 patch, colors = phd.vor_collection(sod, "density")
 sod.remove_tagged_particles(phd.ParticleTAGS.Ghost)
 
-p = PatchCollection(patch, edgecolor="black", linewidth=0.3, alpha=0.4)
+p = PatchCollection(patch, edgecolor="black", linewidth=0.3, alpha=0.8)
 p.set_array(np.array(colors))
 p.set_clim([0, 1.0])
 ax = axes[0,0]

@@ -15,11 +15,10 @@ def create_particles(dim=2, nx=100, Lx=1.0, diaphragm=0.5, gamma=1.4):
     # create particle container
     particles = phd.HydroParticleCreator(n, dim=2)
     part = 0
-    np.random.seed(0)
     for i in range(nx):
         for j in range(nx):
-            particles_root["position-x"][part] = np.random.rand()
-            particles_root["position-y"][part] = np.random.rand()
+            particles["position-x"][part] = (i+0.5)*dx
+            particles["position-y"][part] = (j+0.5)*dx 
             particles["ids"][part] = part
             part += 1
 
