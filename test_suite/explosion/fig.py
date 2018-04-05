@@ -38,7 +38,6 @@ ax.add_collection(p)
 
 # put position and velocity in radial coordinates
 rad = np.sqrt((sedov["position-x"]-0.5)**2 + (sedov["position-y"]-0.5)**2)
-#vel = np.sqrt(sedov["velocity-x"]**2 + sedov["velocity-y"]**2)
 vel = (sedov["velocity-x"]*(sedov["position-x"]-0.5) +\
         sedov["velocity-y"]*(sedov["position-y"]-0.5))/rad
 
@@ -49,22 +48,6 @@ ax.set_xlim(0,0.75)
 ax.set_ylim(0,1.1)
 ax.set_xlabel(r"$r$", fontsize=18)
 ax.set_ylabel(r"$\rho$", fontsize=18)
-
-#ax = axes[1,0]
-#ax.plot(rad, vel, ".", color="steelblue")
-#ax.plot(rad_ex, vel_ex, "k")
-#ax.set_xlim(0,0.75)
-#ax.set_ylim(-0.1,1.2)
-#ax.set_xlabel(r"$r$", fontsize=18)
-#ax.set_ylabel(r"$v_r$", fontsize=18)
-#
-#ax = axes[1,1]
-#ax.plot(rad, sedov["pressure"], ".", color="steelblue")
-#ax.plot(rad_ex, pre_ex, "k")
-#ax.set_xlim(0,0.75)
-#ax.set_ylim(0.,1.1)
-#ax.set_xlabel(r"$r$", fontsize=18)
-#ax.set_ylabel(r"$P$", fontsize=18)
 
 plt.tight_layout()
 plt.savefig("explosion_2d.eps")
