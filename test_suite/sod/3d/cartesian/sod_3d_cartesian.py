@@ -20,9 +20,9 @@ def create_particles(dim=3, nx=45, Lx=1.0, diaphragm=0.5, gamma=1.4):
     for i in range(nx):
         for j in range(nx):
             for k in range(nx):
-                particles["position-x"][part] = (i+0.5)*dx + 1.0e-8*dx*np.random.rand()
+                particles["position-z"][part] = (i+0.5)*dx + 1.0e-8*dx*np.random.rand()
                 particles["position-y"][part] = (j+0.5)*dx + 1.0e-8*dx*np.random.rand()
-                particles["position-z"][part] = (k+0.5)*dx + 1.0e-8*dx*np.random.rand()
+                particles["position-x"][part] = (k+0.5)*dx + 1.0e-8*dx*np.random.rand()
                 particles["ids"][part] = part
                 part += 1
 

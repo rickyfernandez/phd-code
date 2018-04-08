@@ -26,8 +26,11 @@ f.close()
 fig, axes = plt.subplots(3, 1, sharex="col", figsize=(6,12))
 fig.subplots_adjust(hspace=0, left=0.13, top=0.96, bottom=0.06)
 
+# we plot a slice at z=0
+end=45**2
+
 ax = axes[0]
-ax.plot(sod["position-x"], sod["density"], ".", color="steelblue")
+ax.plot(sod["position-x"][0:end], sod["density"][0:end], ".", color="steelblue")
 ax.plot(pos_ex, rho_ex, "red", label="exact")
 ax.set_xlim(0,1)
 ax.set_ylim(0,1.2)
@@ -38,7 +41,7 @@ ax.tick_params(direction="in", right=True, top=True)
 ax.set_title("3D", fontsize=18)
 
 ax = axes[1]
-ax.plot(sod["position-x"], sod["velocity-x"], ".", color="steelblue")
+ax.plot(sod["position-x"][0:end], sod["velocity-x"][0:end], ".", color="steelblue")
 ax.plot(pos_ex, vel_ex, "red")
 ax.set_xlim(0,1)
 ax.set_ylim(-0.2,1.2)
@@ -48,7 +51,7 @@ ax.set_ylabel(r"$v_x$", fontsize=18)
 ax.tick_params(direction="in", right=True, top=True)
 
 ax = axes[2]
-ax.plot(sod["position-x"], sod["pressure"], ".", color="steelblue")
+ax.plot(sod["position-x"][0:end], sod["pressure"][0:end], ".", color="steelblue")
 ax.plot(pos_ex, pre_ex, "red")
 ax.set_xlim(0,1)
 ax.set_ylim(-0.1,1.2)
