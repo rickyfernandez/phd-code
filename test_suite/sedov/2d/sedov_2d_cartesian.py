@@ -77,11 +77,6 @@ output = phd.TimeInterval(time_interval=0.01)
 output.set_writer(phd.Hdf5())
 simulation_time_manager.add_output(output)
 
-# output last step
-output = phd.IterationInterval(iteration_interval=1)
-output.set_writer(phd.Hdf5())
-simulation_time_manager.add_output(output)
-
 # Create simulator
 simulation = phd.Simulation(simulation_name=sim_name)
 simulation.set_integrator(integrator)

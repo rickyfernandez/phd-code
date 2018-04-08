@@ -10,7 +10,7 @@ mpl.rcParams["ytick.labelsize"] = 16
 
 # single-core solution
 file_name_2d="sedov_output/final_output/final_output0000/final_output0000.hdf5"
-file_name_3d="../../../3d/single_core/cartesian/sedov_output/final_output/final_output0000/final_output0000.hdf5"
+file_name_3d="../3d/single_core/cartesian/sedov_output/final_output/final_output0000/final_output0000.hdf5"
 reader = phd.Hdf5()
 sedov_2d = reader.read(file_name_2d)
 sedov_3d = reader.read(file_name_3d)
@@ -40,7 +40,7 @@ ax.set_ylabel(r"$\rho$", fontsize=18)
 ax.tick_params(direction="in", right=True, top=True)
 
 # exact sedov solution
-exact  = np.loadtxt("../../../3d/single_core/cartesian/sedov_3d.dat")
+exact  = np.loadtxt("../3d/single_core/cartesian/sedov_3d.dat")
 rad_ex = exact[:,1]
 rho_ex = exact[:,2]
 pre_ex = exact[:,4]
