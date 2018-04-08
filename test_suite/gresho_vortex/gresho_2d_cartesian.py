@@ -12,7 +12,6 @@ def create_particles(dim=2, nx=45, Lx=1., gamma=1.4):
     dx = Lx/nx # spacing between particles
     n = nx*nx  # number of points
 
-
     # create particle container
     particles = phd.HydroParticleCreator(n, dim=2)
     part = 0
