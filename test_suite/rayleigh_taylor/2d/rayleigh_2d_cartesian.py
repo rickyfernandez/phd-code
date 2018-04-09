@@ -1,10 +1,21 @@
 import phd
 import numpy as np
 
-def create_particles(dim=2, nx=50, ny=150, gamma=1.4):
+def create_particles(dim=2, gamma=1.4):
 
+    nx = 50
+    ny = 150
     Lx = 1.
     Ly = 3.
+
+    if phd._in_parallel:
+        # since we don't have rectangular
+        # boundaries in parallel
+        nx = 150
+        ny = 150
+        Lx = 3.
+        Ly = 3.
+
     dx = Lx/nx
     dy = Ly/ny
 
@@ -48,44 +59,55 @@ def create_particles(dim=2, nx=50, ny=150, gamma=1.4):
 
     return particles
 
-gamma = 1.4
-particles = create_particles(gamma=gamma)
+dim = 2; gamma = 1.4
+particles = phd.distribute_initial_particles(
+        create_particles, dim=dim, gamma=gamma)
+
 # computation related to boundaries
-domain_manager = phd.DomainManager(
-        xmin=[0., 0.], xmax=[1., 3.], initial_radius=0.1)
+if phd._in_parallel:
+    domain_manager = phd.DomainManager(
+            xmin=[0., 0.], xmax=[3., 3.], initial_radius=0.3)
+else:
+    domain_manager = phd.DomainManager(
+            xmin=[0., 0.], xmax=[1., 3.], initial_radius=0.1)
 
 # create voronoi mesh
 mesh = phd.Mesh()
 
 # computation
-#integrator = phd.MovingMeshMUSCLHancock()
+integrator = phd.MovingMeshMUSCLHancock()
 integrator = phd.StaticMeshMUSCLHancock()
 integrator.set_mesh(mesh)
 integrator.set_riemann(phd.HLLC())
-integrator.set_particles(create_particles())
+integrator.set_particles(particles)
 integrator.set_domain_manager(domain_manager)
 integrator.set_boundary_condition(phd.Reflective())
 integrator.set_reconstruction(phd.PieceWiseLinear())
 integrator.set_equation_state(phd.IdealGas(gamma=gamma))
+
+sim_name = "rayleigh_moving"
+if phd._in_parallel:
+    integrator.set_load_balance(phd.LoadBalance())
+    sim_name = "mpi_rayleigh"
 
 # source term
 integrator.add_source_term(phd.ConstantGravity())
 
 # add finish criteria
 simulation_time_manager = phd.SimulationTimeManager()
-simulation_time_manager.add_finish(phd.Time(time_max=3.0))
+simulation_time_manager.add_finish(phd.Time(time_max=2.0))
 
 # output last step
 output = phd.FinalOutput()
 output.set_writer(phd.Hdf5())
 simulation_time_manager.add_output(output)
 
-output = phd.TimeInterval(time_interval=0.1)
+output = phd.TimeInterval(time_interval=0.5)
 output.set_writer(phd.Hdf5())
 simulation_time_manager.add_output(output)
 
 # Create simulator
-simulation = phd.Simulation(simulation_name="rayleigh_static")
+simulation = phd.Simulation(simulation_name=sim_name)
 simulation.set_integrator(integrator)
 simulation.set_simulation_time_manager(simulation_time_manager)
 simulation.initialize()

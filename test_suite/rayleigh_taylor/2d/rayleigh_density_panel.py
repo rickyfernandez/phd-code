@@ -12,14 +12,14 @@ mpl.rcParams["ytick.labelsize"] = 16
 
 # single-core solution
 static_names=[
-        ["rayleigh_static_output/time_interval/time_interval0004/time_interval0004.hdf5",
-         "rayleigh_static_output/time_interval/time_interval0009/time_interval0009.hdf5",
-         "rayleigh_static_output/time_interval/time_interval0014/time_interval0014.hdf5",
-         "rayleigh_static_output/time_interval/time_interval0019/time_interval0019.hdf5"],
-        ["rayleigh_moving_output/time_interval/time_interval0004/time_interval0004.hdf5",
-         "rayleigh_moving_output/time_interval/time_interval0009/time_interval0009.hdf5",
-         "rayleigh_moving_output/time_interval/time_interval0014/time_interval0014.hdf5",
-         "rayleigh_moving_output/time_interval/time_interval0019/time_interval0019.hdf5"]]
+        ["rayleigh_static_output/time_interval/time_interval0000/time_interval0000.hdf5",
+         "rayleigh_static_output/time_interval/time_interval0001/time_interval0001.hdf5",
+         "rayleigh_static_output/time_interval/time_interval0002/time_interval0002.hdf5",
+         "rayleigh_static_output/time_interval/time_interval0003/time_interval0003.hdf5"],
+        ["rayleigh_moving_output/time_interval/time_interval0000/time_interval0000.hdf5",
+         "rayleigh_moving_output/time_interval/time_interval0001/time_interval0001.hdf5",
+         "rayleigh_moving_output/time_interval/time_interval0002/time_interval0002.hdf5",
+         "rayleigh_moving_output/time_interval/time_interval0003/time_interval0003.hdf5"]]
 
 fig, axes = plt.subplots(2,4, figsize=(8,12), sharey=True, sharex=True)
 plt.subplots_adjust(wspace=0.1, hspace=0.04, top=0.98, bottom=0.02, left=0.02, right=0.98)
@@ -53,5 +53,5 @@ for i in range(4): # over columns
         ax.set_yticklabels([])
         ax.set_aspect("auto")
 
-plt.savefig("rayleigh_compare.eps")
+#plt.savefig("rayleigh_compare.eps")
 plt.show()
