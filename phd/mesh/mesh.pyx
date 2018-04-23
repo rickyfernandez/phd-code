@@ -86,7 +86,7 @@ cdef class Mesh:
     """
     def __init__(self, bint regularize=True, int relax_iterations = 0,
                  double eta=0.25, int num_neighbors=128,
-                 max_iterations = 5, **kwargs):
+                 max_iterations = 20, **kwargs):
         # domain manager needs to be set
         self.particle_fields_registered = False
 
