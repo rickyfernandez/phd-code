@@ -1,6 +1,7 @@
 *.swp
 *.pdf
 *.png
+*.eps
 *.pyc
 *.c
 *.html
