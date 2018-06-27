@@ -1,5 +1,21 @@
 import numpy as np
 
+from ..mesh.mesh import Mesh
+#from ..integrate.integrate import IntegrateBase
+from ..riemann.riemann import RiemannBase
+from ..domain.domain_manager import DomainManager
+from ..domain.boundary import BoundaryConditionBase
+from ..load_balance.load_balance import LoadBalance
+from ..equation_state.equation_state import EquationStateBase
+from ..reconstruction.reconstruction import ReconstructionBase
+
+phd_core = (Mesh, BoundaryConditionBase, DomainManager, LoadBalance,
+        EquationStateBase, ReconstructionBase, RiemannBase),
+        #SimulationTimeManager, SimulationFinisherBase, SimulationOutputterBase,
+        #phe.ReaderWriterBase)
+
+
+
 def check_class(cl):
     """
     Wrapper that ensurese the setter method is given the proper type.
@@ -15,11 +31,11 @@ def check_class(cl):
     return wrapper
 
 def class_dict(cl):
-    '''
+    """
     Cycle throught each attribute of a class and store information
     in a dictionary. The key will be the class name and value if
     that class has been set.
-    '''
+    """
     dic = {}
     for attr_name, attr in cl.__dict__.iteritems():
         comp = getattr(cl, attr_name)
@@ -45,28 +61,28 @@ def class_dict(cl):
 #        if comp == None:
 #            raise RuntimeError("Component: %s not set." % attr_name)
 
-#def _create_components_timeshot(self):
-#    '''
+#def create_components_timeshot(self):
+#    """
 #    Cycle through all classes and record all attributes and store
 #    it in a dictionary, key = class name val = attributes.
-#    '''
+#    """
 #    dict_output = {}
 #    for attr_name, cl in self.__dict__.iteritems():
 #
 #        comp = getattr(self, attr_name)
+#        if isinstance(comp, phd_core):
 #
-#        # ignore parameters
-#        if isinstance(comp, (int, float, str)):
-#            continue
+#            # store components
+#            d = {}
+#            for i in dir(cl):
+#                if i.startswith("_"):
+#                    continue 
 #
-#        # store components
-#        d = {}
-#        for i in dir(cl):
-#            x = getattr(cl, i)
-#            if isinstance(x, (int, float, str)):
-#                d[i] = x
+#                x = getattr(cl, i)
+#                if isinstance(x, (int, float, str, list, dict)):
+#                    d[i] = x
 #
-#        dict_output[attr_name] = (cl.__class__.__name__, d)
+#            dict_output[attr_name] = (cl.__class__.__name__, d)
 #
 #    return dict_output
 #
