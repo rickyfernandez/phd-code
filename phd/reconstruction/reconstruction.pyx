@@ -13,7 +13,7 @@ phdLogger = logging.getLogger("phd")
 cdef int REAL = ParticleTAGS.Real
 
 cdef class ReconstructionBase:
-    def __init__(self, **kwargs):
+    def __init__(self):
         self.fields_registered = False
         self.has_passive_scalars = False
 
@@ -160,8 +160,8 @@ cdef class PieceWiseConstant(ReconstructionBase):
         of subsetting of fields.
 
     """
-    def __init__(self, **kwargs):
-        super(PieceWiseConstant, self).__init__(**kwargs)
+    def __init__(self):
+        super(PieceWiseConstant, self).__init__()
 
     def __dealloc__(self):
         """Release pointers"""
@@ -401,15 +401,16 @@ cdef class PieceWiseLinear(ReconstructionBase):
 
     """
     def __init__(self, str limiter = "arepo", bint gizmo_limiter=True, **kwargs):
-        super(PieceWiseLinear, self).__init__(**kwargs)
+        super(PieceWiseLinear, self).__init__()
 
         if limiter == "arepo":
-            self.limiter = 0
+            self.slope_limiter = 0
         elif limiter == "tess":
-            self.limiter = 1
+            self.slope_limiter = 1
         else:
             raise RuntimeError("ERROR: Unrecognized limiter")
 
+        self.limiter = limiter
         self.gizmo_limiter = gizmo_limiter
 
     def __dealloc__(self):
@@ -581,7 +582,7 @@ cdef class PieceWiseLinear(ReconstructionBase):
         cdef LongArray pair_j = mesh.faces.get_carray("pair-j")
 
         cdef int dim, num_fields
-        cdef int limiter = self.limiter
+        cdef int limiter = self.slope_limiter
 
         cdef int i, j, k, n, m, fid
         cdef double dph, psi, d_dif, d_sum

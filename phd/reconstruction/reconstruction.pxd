@@ -43,10 +43,12 @@ cdef class PieceWiseConstant(ReconstructionBase):
 
 cdef class PieceWiseLinear(ReconstructionBase):
 
-    cdef public int limiter
+    cdef public str limiter
     cdef public bint gizmo_limiter
 
     cdef public CarrayContainer grad
+
+    cdef int slope_limiter
 
     cdef dict reconstruct_grads
     cdef dict reconstruct_grad_groups
