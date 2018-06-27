@@ -9,5 +9,10 @@ cdef class ConstantGravity(MUSCLHancockSourceTerm):
 
 cdef class SelfGravity(MUSCLHancockSourceTerm):
 
-    cdef double eta
+    cdef public double eta
+    cdef public str split_type
+    cdef public double barnes_angle
+    cdef public int max_buffer_size
+    cdef public double smoothing_length
+    cdef public int calculate_potential
     cdef GravityTree gravity 
