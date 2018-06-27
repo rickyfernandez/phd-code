@@ -172,7 +172,9 @@ class IntegrateBase(object):
     def compute_source(self, term):
         if self.source_terms:
             for source in self.source_terms.itervalues():
-                if term == "primitive":
+                if term == "motion":
+                    source.apply_motion(self)
+                elif term == "primitive":
                     source.apply_primitive(self)
                 elif term == "conservative":
                     source.apply_conservative(self)
@@ -238,13 +240,6 @@ class IntegrateBase(object):
         dt = self.riemann.compute_time_step(
                 self.particles, self.equation_state)
 
-        phdLogger.info("Hydro dt: %f" %dt)
-
-        # modify timestep from source terms
-        if self.source_terms:
-            for source in self.source_terms.itervalues():
-                dt = min(source.compute_time_step(self), dt)
-
         if phd._in_parallel:
 
             self.local_dt[0] = dt
@@ -253,6 +248,27 @@ class IntegrateBase(object):
                     [self.global_dt, phd.MPI.DOUBLE],
                     op=phd.MPI.MIN)
             dt = self.global_dt[0]
+
+        self.dt = dt
+        phdLogger.info("Hydro dt: %f" %dt)
+
+        # modify timestep from source terms
+        if self.source_terms:
+            dt_source = np.inf
+            for source in self.source_terms.itervalues():
+                dt_source = min(source.compute_time_step(self), dt_source)
+
+            if phd._in_parallel:
+
+                self.local_dt[0] = dt_source
+                phd._comm.Allreduce(
+                        [self.local_dt,  phd.MPI.DOUBLE],
+                        [self.global_dt, phd.MPI.DOUBLE],
+                        op=phd.MPI.MIN)
+                dt_source = self.global_dt[0]
+
+            phdLogger.info("Source dt: %f" %dt_source)
+            dt = min(dt, dt_source)
 
         # modify time step
 #        if self.iteration == 0 and not self.restart:
@@ -373,6 +389,7 @@ class MovingMeshMUSCLHancock(StaticMeshMUSCLHancock):
 
         # assign velocities to mesh cells and faces 
         self.mesh.assign_generator_velocities(self.particles, self.equation_state)
+        self.compute_source("motion")
         self.mesh.assign_face_velocities(self.particles)
 
         # build left/right states at each face in the mesh
@@ -485,8 +502,8 @@ class Nbody(IntegrateBase):
         # hack, we don't initialize, create Null Boundary condition
         #self.domain_manager.initialize()
 
-        self.gravity_tree.register_fields(self.particles)
         self.gravity_tree.add_fields(self.particles)
+        self.gravity_tree.register_fields(self.particles)
         self.gravity_tree.set_domain_manager(self.domain_manager)
         self.gravity_tree.initialize()
 
