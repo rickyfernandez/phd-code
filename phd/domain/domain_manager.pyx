@@ -46,9 +46,14 @@ cdef inline bint ghostid_cmp(
 
 cdef class DomainManager:
     def __init__(self, list xmin, list xmax, double initial_radius,
-                 double search_radius_factor=2.0, int dim=2, **kwargs):
+                 double search_radius_factor=2.0):
 
-        self.dim = dim
+        if len(xmin) not in [2, 3]:
+            raise RuntimeError("Wrong dimension specified")
+        if len(xmin) != len(xmax):
+            raise RuntimeError("Wrong dimensions for xmin and xmax")
+
+        self.dim = len(xmin)
         self.initial_radius = initial_radius
         self.search_radius_factor = search_radius_factor
 

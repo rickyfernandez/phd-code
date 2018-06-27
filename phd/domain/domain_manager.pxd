@@ -53,7 +53,7 @@ cdef class DomainManager:
 
     cdef bint particle_fields_registered
 
-    cdef public int dim
+    cdef int dim
     cdef public list xmin
     cdef public list xmax
     cdef np.float64_t[3] translate
