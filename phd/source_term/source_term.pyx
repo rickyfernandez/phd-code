@@ -1,6 +1,11 @@
 
 cdef class MUSCLHancockSourceTerm:
 
+    cpdef apply_motion(self, object integrator):
+        """Apply terms to particle motion."""
+        msg = "MUSCLHancockSourceTerm::apply_motion called!"
+        raise NotImplementedError(msg)
+
     cpdef apply_primitive(self, object integrator):
         """Apply terms to primitive values at face."""
         msg = "MUSCLHancockSourceTerm::apply_primitive called!"

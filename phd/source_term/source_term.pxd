@@ -1,6 +1,7 @@
 
 cdef class MUSCLHancockSourceTerm:
 
+    cpdef apply_motion(self, object integrator)
     cpdef apply_primitive(self, object integrator)
     cpdef apply_conservative(self, object integrator)
     cpdef apply_flux(self, object integrator)
