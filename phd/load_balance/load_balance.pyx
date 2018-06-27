@@ -11,7 +11,7 @@ from ..hilbert.hilbert cimport hilbert_key_2d, hilbert_key_3d
 
 
 cdef class LoadBalance:
-    def __init__(self, np.float64_t factor=0.1, int min_in_leaf=32, np.int32_t order=21, **kwargs):
+    def __init__(self, np.float64_t factor=0.1, int min_in_leaf=32, np.int32_t order=18, **kwargs):
         """Constructor for load balance
 
         Parameters
@@ -214,3 +214,6 @@ cdef class LoadBalance:
                 xh[j] = <np.int32_t> ( (x[j][i] - self.tree.domain_corner[j])*self.fac )
 
             keys.data[i] = self.hilbert_func(xh[0], xh[1], xh[2], self.order)
+
+    def print_tree(self):
+        return self.tree.dump_data()
