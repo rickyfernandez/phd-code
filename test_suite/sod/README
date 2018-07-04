@@ -1,0 +1,9 @@
+For plotting scripts comparing the Sod solutions, the
+file riemann_sol.hdf5 is needed. This file is generated
+by 
+
+python riemann.py 
+
+where riemann.py is an exact solver taken from "Riemann
+Solvers and Numerical Methods for Fluid Dynamics" by
+E.F. Toro
