@@ -75,7 +75,7 @@ integrator.set_riemann(phd.HLLC(boost=True))         # riemann solver
 integrator.set_particles(create_particles())         # create initial particles
 integrator.set_equation_state(phd.IdealGas())        # equation of state
 integrator.set_domain_manager(domain_manager)        # domain manager
-integrator.set_mesh(phd.Mesh(regularize=False)       # voronoi mesh 
+integrator.set_mesh(phd.Mesh(regularize=False))       # voronoi mesh 
 integrator.set_boundary_condition(phd.Reflective())  # reflective boundary condition
 integrator.set_reconstruction(phd.PieceWiseLinear()) # primitive reconstruction
 
