@@ -2,6 +2,7 @@ this is a moving mesh code written mostly in python 2.7 and cython.
 In order to run the code you will need the following libraries
 (I used the following versions)
 
+python 2.7 (not compatible with python 3)
 numpy 1.13.1
 scipy
 matplotlib (+ qt4)
