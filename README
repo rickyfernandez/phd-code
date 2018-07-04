@@ -3,6 +3,8 @@ In order to run the code you will need the following libraries
 (I used the following versions)
 
 numpy 1.13.1
+scipy
+matplotlib (+ qt4)
 cython 0.25.2
 mpi4py 2.0.0
 cgal 4.06.3
@@ -12,3 +14,12 @@ pip install -e .
 
 * I will soon list code issues 
 
+
+On a Fedora system, the needed libraries can be installed as:
+
+```
+dnf install CGAL CGAL-devel swig
+dnf install python2-devel python2-Cython
+dnf install python2-mpi4py-mpich
+dnf install python2-numpy python2-scipy python2-matplotlib python2-matplotlib-qt4
+```
