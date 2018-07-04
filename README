@@ -1,7 +1,14 @@
-this is a moving mesh code written mostly in python and cython.
-In order to run the code you will need the following libraries.
+this is a moving mesh code written mostly in python 2.7 and cython.
+In order to run the code you will need the following libraries
+(I used the following versions)
 
-numpy
-cython
-mpi4py
-cgal
+numpy 1.13.1
+cython 0.25.2
+mpi4py 2.0.0
+cgal 4.06.3
+
+Can be installed by
+pip install -e .
+
+* I will soon list code issues 
+
