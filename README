@@ -1,12 +1,18 @@
-this is a moving mesh code written mostly in python and cython.
-In order to run the code you will need the following libraries.
+this is a moving mesh code written mostly in python 2.7 and cython.
+In order to run the code you will need the following libraries
+(I used the following versions)
 
-numpy
+numpy 1.13.1
 scipy
 matplotlib (+ qt4)
-cython
-mpi4py
-cgal (+ boost + swig)
+cython 0.25.2
+mpi4py 2.0.0
+cgal 4.06.3
+
+Can be installed by
+pip install -e .
+
+* I will soon list code issues 
 
 
 On a Fedora system, the needed libraries can be installed as:
