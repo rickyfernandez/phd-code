@@ -2,6 +2,18 @@ this is a moving mesh code written mostly in python and cython.
 In order to run the code you will need the following libraries.
 
 numpy
+scipy
+matplotlib (+ qt4)
 cython
 mpi4py
-cgal
+cgal (+ boost + swig)
+
+
+On a Fedora system, the needed libraries can be installed as:
+
+```
+dnf install CGAL CGAL-devel swig
+dnf install python2-devel python2-Cython
+dnf install python2-mpi4py-mpich
+dnf install python2-numpy python2-scipy python2-matplotlib python2-matplotlib-qt4
+```
